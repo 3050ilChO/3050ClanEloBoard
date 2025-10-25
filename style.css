@@ -1,0 +1,564 @@
+root{--bg:#fff;--fg:#222;--gold:#a78d40;--gold-soft:#efe6c7;--line:rgba(0,0,0,.08);--hl:rgba(167,141,64,.12)}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:'Noto Sans KR',system-ui,-apple-system,'Segoe UI',Roboto,'Apple SD Gothic Neo','Malgun Gothic',sans-serif}
+a{color:#000;text-decoration:none}
+.topbar{position:sticky;top:0;background:linear-gradient(180deg,#fff,rgba(255,255,255,.92));backdrop-filter:saturate(1.2) blur(8px);border-bottom:1px solid var(--line);z-index:20}
+.brand{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:16px 16px 8px 16px;justify-content:flex-start;position:relative}
+.logo{width:72px;height:72px;object-fit:contain}
+.titles{display:flex;flex-direction:column;align-items:flex-start}
+.titles .minor{font-size:14px;color:#616161;font-weight:600}
+.titles .mainline{font-size:18px;color:#3b3b3b;font-weight:700;margin-top:2px}
+.titles .league{font-size:40px;line-height:1.05;color:var(--gold);font-weight:900;margin-top:2px;letter-spacing:.2px}
+.titles .subline{font-size:14px;color:#6d6d6d;margin-top:2px}
+
+/* Hamburger */
+
+.menu{display:flex;gap:8px;padding:10px 16px 18px 16px;justify-content:center;flex-wrap:wrap}
+.menu.collapsed{display:none}
+.menu.mobile-open{display:flex;flex-direction:column;align-items:stretch;gap:10px;padding:10px 16px}
+.tab-btn{border:1px solid var(--line);background:#fff;padding:8px 12px;border-radius:999px;cursor:pointer;transition:color .15s ease,border-color .15s ease}
+.tab-btn.active{border-color:var(--gold);color:var(--gold);font-weight:700}
+.tab-btn:hover{color:var(--gold);border-color:var(--gold)}
+.container{max-width:1200px;margin:20px auto;padding:0 16px}
+.panel{display:none}
+.panel.active{display:block}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.panel-head h2{margin:0;font-size:22px}
+.actions{display:flex;gap:8px;align-items:center}
+.search{border:1px solid var(--line);border-radius:10px;padding:8px 10px;width:240px}
+.ghost{border:1px solid var(--line);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer}
+.status{font-size:14px;color:#666;margin:12px 0}
+
+.table-wrap{width:100%;max-width:100%;overflow-x:auto;border:none;border-radius:0}
+table{width:100%;border-collapse:collapse;table-layout:auto}
+thead th{position:sticky;top:0;background:linear-gradient(180deg,#fffdf3,#fff8e1);border-bottom:1px solid var(--gold);text-align:center;padding:12px;font-weight:800;color:var(--gold);white-space:nowrap}
+tbody td{padding:10px 12px;border-bottom:1px solid #f1f1f1;vertical-align:middle;white-space:nowrap;text-align:center}
+tbody tr:hover{background:rgba(167,141,64,.08)}
+.clickable tbody tr{cursor:pointer}
+
+.filters{display:flex;gap:12px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;background:#fafafa}
+.filters input{border:1px solid var(--line);border-radius:8px;padding:6px 8px;width:200px}
+.search-wide{flex:1;height:36px;border:none;background:#2e2e2e;color:#fff;border-radius:6px;cursor:pointer}
+
+.footer{display:flex;gap:8px;justify-content:center;align-items:center;padding:20px 16px;color:#8a8a8a;border-top:1px solid var(--line);margin-top:28px}
+
+/* Player detail */
+.player-body{border:1px solid var(--line);border-radius:12px;padding:14px}
+.player-body h3{margin:8px 0 6px 0}
+.badge{background:#a78d40!important;color:#fff!important;border:none!important;font-weight:600;display:inline-block;padding:2px 6px;border-radius:999px;font-size:12px;margin-right:6px}
+.team-logo{width:40px;height:40px;object-fit:contain}
+td.logo-cell img{display:block;margin:0 auto}
+
+hr.gold{border:0;border-top:1px solid rgba(167,141,64,.55);margin:12px 0}
+
+/* H2H compare */
+.h2h-compare{display:flex;justify-content:center;margin:10px 0;}
+.h2h-compare table{border-collapse:separate;border-spacing:12px 0;text-align:center;}
+.h2h-compare .race-icon{width:38px;height:38px;object-fit:contain;margin:0 6px;}
+.h2h-compare .h2h-name{font-size:16px;font-weight:700;}
+.h2h-compare .h2h-stat{font-size:12px;color:#666;font-weight:500;}
+.h2h-compare .vs{padding:0 8px;font-weight:900;letter-spacing:1px;color:#333;}
+
+/* Floating gold FABs */
+.scroll-fab{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:30}
+.fab-btn{width:46px;height:46px;border-radius:50%;border:1px solid var(--gold);background:var(--gold);color:#fff;font-weight:900;cursor:pointer;box-shadow:0 6px 14px rgba(0,0,0,.12)}
+.fab-btn:hover{filter:brightness(0.97)}
+
+/* Responsive */
+@media (max-width: 900px){
+  
+  .menu{padding-top:8px}
+  .menu.collapsed{display:none}
+  .titles .league{font-size:28px}
+  .brand{justify-content:flex-start}
+}
+
+/* v9.23 FinalProEdition */
+.league.gold-text{color:#a78d40!important}
+#rank,#h2h,#proRank,#sched,#all,#members{border:1px solid #ccc!important;border-radius:12px;background:#fff;padding:10px}
+table{border:1px solid #ccc;border-radius:12px;overflow:hidden;background:#fff}
+thead th{background:#f3f3f3;color:#222!important}
+tbody tr:hover td{background:#f6f6f6}
+.player-body .row{background:#fff!important;border:none!important;color:#222!important}
+.badge{background:#a78d40!important;color:#fff!important;border:none!important;font-weight:600;display:inline-block;padding:2px 6px;border-radius:999px;font-size:12px;margin-right:6px}
+button,.ghost,.action-btn{background:#000!important;color:#fff!important;border:1px solid #000!important;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+button:hover,.ghost:hover,.action-btn:hover{background:#333!important}
+
+.fab-btn{background:#000!important;color:#fff!important;border:1px solid #000!important}
+.fab-btn:hover{background:#333!important}
+#h2h .filters{background:#fff;border:1px solid #ccc!important}
+#h2h table{border:1px solid #ccc!important}
+#h2h tbody td{background:#fff}
+#h2h tbody tr:hover td{background:#f6f6f6}
+
+.brand.center{justify-content:center!important;flex-direction:column!important;text-align:center}
+
+/* v9.30 Topbar center alignment + font 9pt */
+.top-left-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px 16px;
+}
+.btn-flat, .yt-link {
+  font-size: 9pt !important;
+}
+.brand.center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+  text-align: center;
+  gap: 8px;
+}
+.brand.center img.logo {
+  height: 42px;
+  width: auto;
+}
+
+/* v9.32 Header layout */
+.top-left-bar.left{max-width:1200px;margin:0 auto;padding:6px 16px;display:flex;gap:10px;align-items:center;justify-content:flex-start}
+.btn-flat,.yt-link{font-size:9pt!important}
+.btn-flat{background:#fff;color:#000;border:1px solid #ccc;border-radius:8px;padding:6px 10px;cursor:pointer}
+.btn-flat:hover{background:#f5f5f5}
+.yt-link{display:inline-flex;align-items:center;gap:6px;color:#000;text-decoration:none;border:1px solid #ccc;border-radius:8px;padding:6px 10px}
+.yt-link:hover{background:#f5f5f5}
+.yt-icon{height:18px;width:auto}
+.brand.center{display:flex;flex-direction:row;align-items:center;justify-content:center;gap:10px;text-align:center}
+.brand.center .titles{display:flex;flex-direction:column;align-items:flex-start}
+.brand.center img.logo{height:42px;width:auto}
+
+/* v9.32 Player detail chips */
+.player-body .row{background:#fff!important;border:none!important;color:#222!important}
+.player-body .row *{color:#fff!important}
+.badge{background:#a78d40!important;color:#fff!important;border:none!important;font-weight:600;display:inline-block;padding:2px 6px;border-radius:999px;font-size:12px;margin-right:6px}
+
+/* v9.32 H2H left labels */
+.h2h-graph-wrap{display:flex;align-items:stretch;gap:8px}
+.h2h-left-labels{display:flex;flex-direction:column;justify-content:space-between;font-weight:800;color:#333}
+.h2h-left-labels .top{content:'승'}
+.h2h-left-labels .bottom{content:'패'}
+
+/* v9.32 Members header highlight */
+th.th-gray{background:#e9e9e9!important;color:#222!important}
+
+
+/* === Final 1~6차 Tweaks === */
+.top-left-bar .yt-link, a.yt-link { border:none !important; background:transparent !important; box-shadow:none !important; }
+.brand.center{ display:flex; align-items:center; flex-direction:column; gap:6px; text-align:center; }
+.brand.center .logo{ height:96px; width:auto; }
+.brand.center .titles .league{ color:var(--gold, #a78d40); font-weight:900; }
+#membersTable thead tr{ background:#f2f2f2; }
+#membersTable thead th{ color:#222; font-weight:600; }
+#playerBody .row{ background:#fff; }
+#playerBody .row.highlight { background:#fff !important; color:#222 !important; border:none !important; }
+#membersTable tbody tr.role-master-row{ background:#fff2cc; }
+#membersTable tbody tr.role-sub-row{ background:#dbe5f1; }
+#membersTable tbody tr.role-ops-row{ background:#e2f0d9; }
+
+.player-detail .info-box.highlight {
+  background-color: #3498db;
+  border-radius: 8px;
+  color: white;
+  padding: 6px 10px;
+}
+
+#membersTable td.role,
+#membersTable td.id,
+#membersTable td.tier,
+#membersTable td.battlecode {
+  background-color: #f2f2f2;
+}
+
+
+/* --- Brand center rules (enforced) --- */
+.brand.center{display:flex;gap:12px;align-items:center;justify-content:center;margin:12px auto;text-align:left;max-width:1100px}
+.brand.center .titles{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+.brand.center .brand-logo{width:72px;height:72px;object-fit:contain}
+@media (max-width:900px){
+  .brand.center{padding:8px 12px}
+  .brand.center .brand-logo{width:60px;height:60px}
+}
+
+/* Player detail emphasis */
+#playerBody .chip-blue{background:#3498db;color:#fff;border-radius:10px;padding:4px 8px;display:inline-flex;gap:6px;margin-right:6px}
+
+.player-body .row.highlight strong {color:#000!important;}
+
+
+.player-body .row.highlight strong,
+#playerBody .row strong { color:#000 !important; }
+
+
+
+/* v9_51 Search & Reset Buttons */
+.search-button, .reset-button {
+  background-color: #000 !important;
+  color: #fff !important;
+  border: none !important;
+  padding: 6px 12px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  font-size: 0.9rem !important;
+  margin-left: 4px !important;
+  transition: background 0.2s ease;
+}
+.search-button:hover, .reset-button:hover {
+  background-color: #333 !important;
+}
+
+
+/* v9_52 Search & Reset Buttons */
+.search-button, .reset-button {
+  background-color: #000 !important;
+  color: #fff !important;
+  border: none !important;
+  padding: 6px 12px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  margin-left: 4px !important;
+  font-size: 0.9rem !important;
+  transition: background 0.2s ease;
+}
+.search-button:hover, .reset-button:hover {
+  background-color: #333 !important;
+}
+
+
+/* v9_53 Search & Reset Buttons */
+.search-button, .reset-button {
+  background-color: #000 !important;
+  color: #fff !important;
+  border: none !important;
+  padding: 6px 12px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  margin-left: 4px !important;
+  font-size: 0.9rem !important;
+  transition: background 0.2s ease;
+}
+.search-button:hover, .reset-button:hover {
+  background-color: #333 !important;
+}
+
+/* v9_56 Search & Reset Buttons */
+.search-button, .reset-button {
+  background-color:#000 !important;
+  color:#fff !important;
+  border:none !important;
+  padding:6px 12px !important;
+  border-radius:4px !important;
+  cursor:pointer !important;
+  margin-left:4px !important;
+  font-size:0.9rem !important;
+  transition:background .2s ease;
+}
+.search-button:hover,.reset-button:hover{ background-color:#333 !important; }
+
+/* === v9_55 Fix: H2H header hidden & Members header gray === */
+#h2hTable thead tr:first-child {
+  display: none !important;
+}
+
+#membersTable thead tr {
+  background-color: #f2f2f2 !important;
+}
+#membersTable thead th {
+  color: #222 !important;
+  font-weight: 600 !important;
+}
+
+/* === v9_56 Logo-Text Horizontal Alignment === */
+.brand.center {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+  text-align: left !important;
+}
+
+/* === v9_57 Logo Resize to 80x80 === */
+.brand.center .logo {
+  width: 80px !important;
+  height: 80px !important;
+  object-fit: contain !important;
+}
+
+/* === v9_58 Logo Resize to 100x100 === */
+.brand.center .logo {
+  width: 100px !important;
+  height: 100px !important;
+  object-fit: contain !important;
+}
+
+/* === v9_59 Members list first 2 rows gray === */
+#membersTable tbody tr:nth-child(-n+2) {
+  background-color: #f9f9f9 !important;
+}
+
+/* === v9_60 Members Role Highlight === */
+#membersTable tbody tr:nth-child(1) {
+  background-color: #f3f3f3 !important;
+}
+#membersTable tbody tr:nth-child(2) {
+  background-color: #f9f9f9 !important;
+}
+
+/* === v9_61 Members Role Only Highlight === */
+#membersTable tbody tr:nth-child(1) {
+  background-color: #f3f3f3 !important;
+}
+
+/* === v9_62 Second Row White === */
+#membersTable tbody tr:nth-child(2) {
+  background-color: #ffffff !important;
+}
+
+/* v9_65: keep row1 #f3f3f3 and row2 #fff ensured by prior rules */
+
+/* === v9_66 Role classes override (ensures master color applies even on row1) === */
+#membersTable tbody tr.role-master { background-color: #fff2cc !important; }
+#membersTable tbody tr.role-submaster { background-color: #dbe5f1 !important; }
+#membersTable tbody tr.role-ops { background-color: #e2f0d9 !important; }
+
+
+/* === 클랜원명단 강조: 2행(#f3f3f3), 3행(#fff9d9) === */
+#membersTable tbody tr:nth-child(1) {
+  background-color: #f3f3f3 !important;
+}
+#membersTable tbody tr:nth-child(2) {
+  background-color: #fff9d9 !important;
+}
+
+
+/* === 햄버거 메뉴 작동 전용 === */
+.menu.collapsed {
+  display: none !important;
+}
+@media (max-width: 900px) {
+  .menu {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    background: #fff;
+    border-top: 1px solid #ccc;
+    padding: 10px 0;
+  }
+}
+
+
+/* === v9_78 Mobile Center Align ===
+       - Maintain all UI and data identical.
+       - On mobile (≤600px), menus and filters stay horizontal but are centered.
+       - Prevent vertical stacking that hides elements.
+    */
+@media (max-width:600px){
+  .brand.center{justify-content:center !important; align-items:center !important; text-align:center !important;}
+  .container{padding:0 10px !important;}
+  .panel-head{justify-content:center !important; align-items:center !important; text-align:center !important;}
+  .actions, .filters{justify-content:center !important; align-items:center !important; flex-wrap:wrap !important; gap:6px !important;}
+  .search{width:auto !important;}
+  .filters input{width:auto !important;}
+  .table-wrap{overflow-x:visible !important;}
+  table{table-layout:fixed !important; width:100% !important; word-break:break-word !important;}
+  thead th, tbody td{white-space:normal !important; padding:8px 6px !important; font-size:12px !important;}
+  td, th{overflow-wrap:anywhere !important;}
+  .chart-wrap canvas{max-width:100% !important; height:auto !important;}
+}
+@media (max-width: 600px){
+  /* Header: center stack without changing branding */
+  .brand.center{flex-direction:column !important; align-items:center !important; text-align:center !important; gap:6px !important;}
+  .brand.center .titles{align-items:center !important;}
+  .brand.center .logo{max-width:28vw !important; height:auto !important; width:auto !important;}
+
+  .container{padding:0 10px !important;}
+  .panel-head{flex-direction:column !important; align-items:stretch !important; gap:6px !important;}
+  .actions{flex-wrap:wrap !important;}
+  .filters{flex-direction:column !important; align-items:stretch !important; gap:8px !important;}
+  .search{width:100% !important;}
+  .filters input{width:100% !important;}
+
+  /* Tables: wrap text, fixed layout, no horizontal scroll */
+  .table-wrap{overflow-x:visible !important;}
+  table{table-layout:fixed !important; width:100% !important; word-break:break-word !important;}
+  thead th, tbody td{white-space:normal !important; padding:8px 6px !important; font-size:12px !important;}
+  td, th{overflow-wrap:anywhere !important;}
+
+  /* Charts fill width */
+  .chart-wrap canvas{max-width:100% !important; height:auto !important;}
+}
+
+
+/* === v9_79 Mobile Fixed Menu ===
+   Keep menu buttons horizontally aligned on mobile, centered, no wrapping.
+   Preserve full PC layout and spacing.
+*/
+@media (max-width:600px){
+  .panel-head, .actions, .filters, .menu{
+    flex-direction:row !important;
+    justify-content:center !important;
+    align-items:center !important;
+    flex-wrap:nowrap !important;
+    gap:8px !important;
+    text-align:center !important;
+  }
+  .menu button, .actions button, .filters button{
+    width:auto !important;
+    min-width:80px !important;
+  }
+  .brand.center{justify-content:center !important; align-items:center !important; text-align:center !important;}
+  .chart-wrap canvas{max-width:100% !important; height:auto !important;}
+}
+
+
+/* === v9_81 Mobile Auto Wrap Menu ===
+   - Keep all styles identical.
+   - On narrow screens, menu buttons wrap naturally into 2 lines.
+   - Maintain centered alignment and spacing.
+*/
+@media (max-width:600px){
+  .menu, .panel-head, .actions, .filters{
+    display:flex !important;
+    flex-wrap:wrap !important;
+    justify-content:center !important;
+    align-items:center !important;
+    gap:8px !important;
+    text-align:center !important;
+  }
+  .menu button, .actions button, .filters button{
+    flex:1 1 40% !important; /* auto 2 columns */
+    min-width:120px !important;
+  }
+}
+
+
+/* === v9_82 Scrollable Menu ===
+   - Make menu scroll with page instead of being fixed.
+   - Prevent content from hiding behind the menu.
+*/
+.menu, .panel-head{
+  position:relative !important;
+  top:auto !important;
+  z-index:auto !important;
+}
+
+
+/* === v9_83 Menu Overlap Fix ===
+   - Ensure menu and content never overlap.
+   - Add margin below menu for spacing.
+*/
+.menu, .panel-head{
+  position:relative !important;
+  top:auto !important;
+  z-index:1 !important;
+}
+
+.container, .panel, .content{
+  position:relative !important;
+  z-index:0 !important;
+  margin-top:20px !important;
+}
+
+
+/* === v9_84 Full Scroll Mode ===
+   - Entire page (logo, title, menu, content) scrolls together.
+   - Remove all fixed/sticky positioning and ensure smooth scroll.
+*/
+header, .brand, .menu, .panel-head, .container, .content {
+  position: relative !important;
+  top: auto !important;
+  z-index: auto !important;
+}
+
+body, html {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  height: auto !important;
+}
+
+.menu, .panel-head {
+  margin-bottom: 20px !important; /* spacing below menu */
+}
+
+.panel, .container, .content {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+
+/* === v9_92 Scroll Button Always Clickable === */
+.scrollTop, .scrollBottom, #scrollTop, #scrollBottom {
+  position: fixed;
+  right: 20px;
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  background: black;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 9999;
+  pointer-events: auto;
+}
+
+.scrollTop { bottom: 80px; }
+.scrollBottom { bottom: 20px; }
+
+
+/* === v9_93 Scroll Button Always Visible === */
+.scrollTop, .scrollBottom, #scrollTop, #scrollBottom {
+  position: fixed;
+  right: 20px;
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  background: black;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 9999;
+  pointer-events: auto; /* 클릭 차단 방지 */
+}
+
+.scrollTop { bottom: 80px; }
+.scrollBottom { bottom: 20px; }
+
+
+/* === v9_94 Ensure scroll buttons clickable and on top === */
+#scrollTop, .scrollTop, #scrollBottom, .scrollBottom{
+  position: fixed;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  display:flex; align-items:center; justify-content:center;
+  cursor: pointer;
+  z-index: 2147483647; /* max */
+  pointer-events: auto;
+}
+#scrollTop, .scrollTop{ bottom: 76px; }
+#scrollBottom, .scrollBottom{ bottom: 20px; }
+
+/* === v9_95 Scroll Button UI === */
+#scrollTop, .scrollTop, #scrollBottom, .scrollBottom {
+  position: fixed;
+  right: 20px;
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  background: black;
+  color: white;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 99999;
+  opacity: 0.85;
+  pointer-events: auto;
+}
+.scrollTop { bottom: 80px; }
+.scrollBottom { bottom: 20px; }
