@@ -38,11 +38,17 @@
   </script>
 </head>
 <body>
+<div id="loadingScreen">
+  <img src="./043920ae-ba42-4e25-924f-1ea262316b26.png" alt="Loading" />
+</div>
 <header class="topbar">
-<div class="top-left-bar left" id="topLeftBar">
-<a class="yt-link" href="https://www.youtube.com/@3050clan" target="_blank">
-<img alt="YouTube" class="yt-icon" src="./youtube.png"/> 3050공식유튜브
-      </a>
+<div class="top-left-bar left">
+  <a class="yt-link" href="https://www.youtube.com/@3050clan" target="_blank">
+    <img alt="YouTube" class="yt-icon" src="./youtube.png"/>
+    <span class="yt-text">3050공식유튜브</span>
+  </a>
+  <span class="divider">/</span>
+  <span id="currentDate" class="current-date"></span>
 </div>
 <div class="brand center">
 <img alt="logo" class="logo" src="./logo.png"/>
@@ -152,5 +158,25 @@
 <button aria-label="아래로" class="fab-btn" id="scrollDown">▼</button>
 </div>
 <script src="app.js?v=112"></script>
+<script>
+  (function(){
+    var dateEl = document.getElementById("currentDate");
+    if (dateEl){
+      var today = new Date();
+      var yoils = ['일','월','화','수','목','금','토'];
+      var yoil = yoils[today.getDay()];
+      var y = today.getFullYear();
+      var m = String(today.getMonth()+1).padStart(2,'0');
+      var d = String(today.getDate()).padStart(2,'0');
+      dateEl.textContent = y + "-" + m + "-" + d + " (" + yoil + ")";
+    }
+    window.addEventListener('load', function(){
+      setTimeout(function(){
+        var el = document.getElementById('loadingScreen');
+        if (el) el.remove();
+      }, 3000);
+    });
+  })();
+</script>
 </body>
 </html>
