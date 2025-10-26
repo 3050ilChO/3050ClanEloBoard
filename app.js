@@ -227,56 +227,52 @@ async function openPlayer(bCellValue){
     `);
   });
   // === 공식/이벤트 대회 성적 집계 ===
+// I열(리그명)을 '그대로' 사용하여 대회명별 전적을 집계합니다.
+// 승패 판정: C열(승자 선수) == 본인 → 승, F열(패자 선수) == 본인 → 패
+// 출력 형식: `<리그명> 총전/승/패/승률` 예) 프로리그 20전 18승 2패 (90%)
   const iLeague = findIdx(MH, /리그명|league/i);
-  function tallyByLeague(rows, type){
-    const out = {w:0, l:0};
-    rows.forEach(rr=>{
-      const lg = String(iLeague>=0 ? rr[iLeague] : '');
-      const isOfficial = /공식/i.test(lg);
-      const isEvent    = /이벤트|event/i.test(lg);
-      let ok = false;
-      if(type==='official') ok = isOfficial;
-      else if(type==='event') ok = isEvent;
-      if(!ok) return;
-      const r = computeResultForYou(MH, rr, you);
-      if(r==='W') out.w++; else if(r==='L') out.l++;
-    });
-    return out;
-  }
-  function fmtWL(obj){
-    const t = obj.w + obj.l;
-    const pct = t ? Math.round(obj.w*1000/t)/10 : 0;
-    return { total:t, wins:obj.w, losses:obj.l, pct };
-  }
-  const leagueOfficial = fmtWL(tallyByLeague(yourRows, 'official'));
-  const leagueEvent    = fmtWL(tallyByLeague(yourRows, 'event'));
+  const iWinner = findIdx(MH, /승자\s*선수|winner/i);
+  const iLoser  = findIdx(MH, /패자\s*선수|loser/i);
+
+  // 안전 가드
+  const leagueAgg = {}; // {"리그명": {w, l}}
+  yourRows.forEach(rr => {
+    const lg = String(iLeague >= 0 ? rr[iLeague] : "").trim();
+    if (!lg) return;
+    const winName = lc(rr[iWinner] || "");
+    const loseName = lc(rr[iLoser]  || "");
+    const res = (winName === you) ? 'W' : (loseName === you ? 'L' : '');
+    if (!res) return;
+    leagueAgg[lg] = leagueAgg[lg] || { w:0, l:0 };
+    if (res === 'W') leagueAgg[lg].w++;
+    else if (res === 'L') leagueAgg[lg].l++;
+  });
+
+  // 표용 HTML 생성 (총전 많은 순으로 정렬)
+  const leagueRows = Object.entries(leagueAgg)
+    .map(([name, v]) => ({ name, total: v.w + v.l, w: v.w, l: v.l, pct: (v.w+v.l) ? Math.round(v.w*1000/(v.w+v.l))/10 : 0 }))
+    .sort((a, b) => b.total - a.total);
+
   const leagueHtml = `
-    <h3>공식 및 이벤트대회 성적</h3>
+    <hr class="gold"/>
+    <h3>공식 및 이벤트대회 성적 (리그명 기준)</h3>
     <div class="table-wrap">
       <table class="detail">
         <thead>
-          <tr><th>구분</th><th>총전적</th><th>승</th><th>패</th><th>승률</th></tr>
+          <tr><th>리그명</th><th>총전적</th><th>승</th><th>패</th><th>승률</th></tr>
         </thead>
         <tbody>
-          <tr>
-            <td>공식</td>
-            <td>\${leagueOfficial.total}전</td>
-            <td>\${leagueOfficial.wins}</td>
-            <td>\${leagueOfficial.losses}</td>
-            <td>\${leagueOfficial.pct}%</td>
-          </tr>
-          <tr>
-            <td>이벤트</td>
-            <td>\${leagueEvent.total}전</td>
-            <td>\${leagueEvent.wins}</td>
-            <td>\${leagueEvent.losses}</td>
-            <td>\${leagueEvent.pct}%</td>
-          </tr>
+          ${leagueRows.map(r => `<tr>
+            <td>${r.name}</td>
+            <td>${r.total}전</td>
+            <td>${r.w}</td>
+            <td>${r.l}</td>
+            <td>${r.pct}%</td>
+          </tr>`).join("")}
         </tbody>
       </table>
     </div>
   `;
-
 
   if(body){
     const cz=curStats.counts.Z, cp=curStats.counts.P, ct=curStats.counts.T, ctot=curStats.total;
