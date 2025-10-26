@@ -55,12 +55,19 @@ async function fetchGVIZ(cfg){
     const res = await fetch(gvizURL(cfg), { cache: 'no-store' });
     const txt = await res.text();
     const json = JSON.parse(txt.replace(/^[^{]+/, '').replace(/\);?\s*$/, ''));
-    const headers = (json.table.cols||[]).map(c=>c.label||'');
+    // Parse rows
     const rows = (json.table.rows||[]).map(r => (r.c||[]).map(c => {
       if (!c) return '';
-      // Prefer formatted string if available (keeps % like 66.7%)
+      // Keep formatted strings (e.g., percentages) if provided
       return (c.f != null ? c.f : (c.v != null ? c.v : ''));
     }));
+    // Prefer GVIZ-provided column labels
+    let headers = (json.table.cols||[]).map(c => c.label || '');
+    // If column labels are empty or look wrong, try to detect header from the first row
+    const headerHints = ['경기일자','승자','패자','맵','리그명','승자티어','패자티어','승자종족','패자종족','티어차이'];
+    const firstRow = rows[0] || [];
+    const hit = headerHints.some(h => firstRow.join('|').includes(h));
+    if (hit) { headers = firstRow; rows.shift(); }
     return [headers, ...rows];
   }catch(e){
     console.error('GVIZ error:', e);
@@ -428,7 +435,7 @@ $('playerClose')?.addEventListener('click', ()=> activate('rank'));
 
 
 // ===== H2H (FINAL: 요약 2색 + 맵별 가로형) =====
-const customHeaders = ["경기일자","승자티어","승자선수","승자종족","패자티어","패자선수","패자종족","맵","리그명","티어차이"];
+const h2hHeaders = ["경기일자","승자티어","승자선수","승자종족","패자티어","패자선수","패자종족","맵","리그명","티어차이"];
 let h2hOutcomeChart = null, h2hMapChart = null;
 
 function destroyChartSafe(chartRef){
@@ -449,6 +456,7 @@ $('h2hRun')?.addEventListener('click', async () => {
 
   const C = findIdx(H, /승자\s*선수|winner/i);
   const F = findIdx(H, /패자\s*선수|loser/i);
+  const L = findIdx(H, /리그명|league/i);
   const M = findIdx(H, /맵|map/i);
 
   // 필수: 두 선수 모두 입력 시만 요약 + 맵별 그래프를 그림
@@ -457,7 +465,8 @@ $('h2hRun')?.addEventListener('click', async () => {
       (normalize(r[C])===p1 && normalize(r[F])===p2) ||
       (normalize(r[C])===p2 && normalize(r[F])===p1)
     );
-    if (qMap && M >= 0) filtered = filtered.filter(r => lc(r[M]).includes(qMap));
+    const L = findIdx(H, /리그명|league/i);
+    if (qMap && L >= 0) filtered = filtered.filter(r => lc(r[L]).includes(qMap));
 
     // 승수 집계
     const p1Wins = rows.filter(r => normalize(r[C])===p1 && normalize(r[F])===p2).length;
@@ -527,7 +536,7 @@ $('h2hRun')?.addEventListener('click', async () => {
     }
 
     // 표: 그대로
-    renderTable($('h2hTable'), [customHeaders, ...filtered]);
+    renderTable($('h2hTable'), [h2hHeaders, ...filtered]);
   } else {
     // 한 명만 입력된 경우엔 표만 필터
     let rows2 = rows;
@@ -536,7 +545,7 @@ $('h2hRun')?.addEventListener('click', async () => {
     if (qMap && M>=0) rows2 = rows2.filter(r => lc(r[M]).includes(qMap));
     $('h2hOutcomeWrap').style.display = 'none';
     $('h2hMapWrap').style.display = 'none';
-    renderTable($('h2hTable'), [customHeaders, ...rows2]);
+    renderTable($('h2hTable'), [h2hHeaders, ...rows2]);
   }
 });
 
@@ -549,7 +558,7 @@ $('h2hReset')?.addEventListener('click', () => {
   ['h2hP1','h2hP2','h2hMap'].forEach(id => { const el=$(id); if(el) el.value=''; });
   $('h2hOutcomeWrap').style.display = 'none';
   $('h2hMapWrap').style.display = 'none';
-  renderTable($('h2hTable'), [customHeaders]);
+  renderTable($('h2hTable'), [h2hHeaders]);
 });
 // ===== Pro Rank (AS-IS) =====
 async function loadProRank(){
@@ -586,8 +595,8 @@ $('schedOpenSheet')?.addEventListener('click', ()=>{
 
 // ===== All matches =====
 const allStatus=$('allStatus'); const allTable=$('allTable');
-async function loadAll(){ if(allStatus) allStatus.textContent='불러오는 중…'; ALL_CACHE=await fetchGVIZ(SHEETS.all); if(!ALL_CACHE.length){ if(allStatus) allStatus.textContent='데이터 없음/권한/CORS 문제'; return;} renderTable(allTable,[ALL_CACHE[0], ...ALL_CACHE.slice(1)]); if(allStatus) allStatus.textContent=`불러오기 완료 • ${ALL_CACHE.length-1}행`; }
-function filterAll(q){ if(!ALL_CACHE.length) return; const Q=lc(q||''); if(!Q){ renderTable(allTable,[ALL_CACHE[0],...ALL_CACHE.slice(1)]); return;} const rows=ALL_CACHE.slice(1).filter(r=> (r||[]).some(c=> lc(c).includes(Q))); renderTable(allTable,[ALL_CACHE[0],...rows]); }
+async function loadAll(){ if(allStatus) allStatus.textContent='불러오는 중…'; ALL_CACHE=await fetchGVIZ(SHEETS.all); if(!ALL_CACHE.length){ if(allStatus) allStatus.textContent='데이터 없음/권한/CORS 문제'; return;} renderTable(allTable, ALL_CACHE); if(allStatus) allStatus.textContent=`불러오기 완료 • ${ALL_CACHE.length-1}행`; }
+function filterAll(q){ if(!ALL_CACHE.length) return; const Q=lc(q||''); if(!Q){ renderTable(allTable, ALL_CACHE); return;} const rows=ALL_CACHE.slice(1).filter(r=> (r||[]).some(c=> lc(c).includes(Q))); renderTable(allTable,[ALL_CACHE[0],...rows]); }
 $('allSearchBtn')?.addEventListener('click', ()=> filterAll($('allQuery')?.value));
 $('allResetBtn')?.addEventListener('click', ()=>{ const i=$('allQuery'); if(i) i.value=''; filterAll(''); });
 $('allQuery')?.addEventListener('keydown', e=>{ if(e.key==='Enter') $('allSearchBtn').click(); });
@@ -642,7 +651,7 @@ $('h2hRun')?.addEventListener('click', async ()=>{
   const H=data[0]||[], rows=data.slice(1);
   const C = findIdx(H, /승자\s*선수|winner/i);
   const F = findIdx(H, /패자\s*선수|loser/i);
-  const mapIdx = findIdx(H, /맵|map/i);
+  const mapIdx = findIdx(H, /리그명|league/i);
   const dateIdx = findIdx(H, /경기일자|date/i);
 
   if(p1 && p2){
@@ -681,7 +690,7 @@ if (ctx1) {
 }
 
 
-renderTable($('h2hTable'), [customHeaders, ...filtered]);
+renderTable($('h2hTable'), [h2hHeaders, ...filtered]);
   }
 });
 
@@ -690,7 +699,7 @@ $('h2hReset')?.addEventListener('click', () => {
     const el = $(id);
     if (el) el.value = '';
   });
-  renderTable($('h2hTable'), [customHeaders]);
+  renderTable($('h2hTable'), [h2hHeaders]);
   $('h2hOutcomeWrap').style.display = 'none';
   $('h2hMapWrap').style.display = 'none';
 });
@@ -832,7 +841,7 @@ if (hamburger && mainMenu) {
       }
 
       if(typeof renderTable==="function")
-        renderTable($("#h2hTable"),[customHeaders,...filtered]);
+        renderTable($("#h2hTable"),[h2hHeaders,...filtered]);
     });
   });
 })();
@@ -947,7 +956,7 @@ if (hamburger && mainMenu) {
         });
       }
 
-      if(typeof renderTable==="function")renderTable($("#h2hTable"),[customHeaders,...filtered]);
+      if(typeof renderTable==="function")renderTable($("#h2hTable"),[h2hHeaders,...filtered]);
     });
   });
 })();
@@ -1324,3 +1333,59 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 })();
+
+// === v9_65 Final Fix: Global Button Handlers Restored ===
+function reset() {
+  try {
+    document.getElementById("h2hPlayer1").value = "";
+    document.getElementById("h2hPlayer2").value = "";
+    document.getElementById("h2hMap").value = "";
+    document.getElementById("h2hResult").innerHTML = "";
+  } catch (e) {
+    console.error("Reset failed:", e);
+  }
+}
+
+function compare() {
+  try {
+    compareDiv();
+  } catch (e) {
+    console.error("Compare failed:", e);
+  }
+}
+
+function compareDiv() {
+  const btn = document.querySelector("#compareButton");
+  if (btn) btn.click();
+}
+
+// === Date Formatting Helper ===
+function formatDate(value) {
+  if (!value) return "";
+  try {
+    const d = new Date(value);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+    return value;
+  } catch (e) {
+    return value;
+  }
+}
+
+function formatDateSafe(value){
+  if(!value)return"";
+  try{
+    const d=new Date(value);
+    if(!isNaN(d.getTime())){
+      const y=d.getFullYear();
+      const m=String(d.getMonth()+1).padStart(2,'0');
+      const day=String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${day}`;
+    }
+    return value;
+  }catch(e){return value;}
+}
