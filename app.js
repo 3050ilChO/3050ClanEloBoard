@@ -281,7 +281,7 @@ async function openPlayer(bCellValue){
         <div class="row"><span class="badge">플레이어</span> <strong>${playerName}</strong></div>
         <div class="row"><span class="badge">주종</span> ${currentRace}</div>
         <div class="row"><span class="badge">티어</span> ${tier||'-'}</div>
-        <div class="row"><span class="badge">ELO</span> ${eloText}</div>
+        <div class="row"><span class="badge">ELO</span> ${eloText} (${row[0] ? row[0] + "위" : "-위"})</div>
       </div>
       <h3>상대 종족별 성적 (주종: ${currentRace})</h3>
       <table class="detail"><thead>
