@@ -38,9 +38,8 @@
   </script>
 </head>
 <body>
-<div id="loadingScreen">
-  <img src="./043920ae-ba42-4e25-924f-1ea262316b26.png" alt="Loading" />
-</div>
+<div id="loadingScreen"><img src="./043920ae-ba42-4e25-924f-1ea262316b26.png" alt="Loading" /></div>
+
 <header class="topbar">
 <div class="top-left-bar left">
   <a class="yt-link" href="https://www.youtube.com/@3050clan" target="_blank">
@@ -159,24 +158,16 @@
 </div>
 <script src="app.js?v=112"></script>
 <script>
-  (function(){
-    var dateEl = document.getElementById("currentDate");
-    if (dateEl){
-      var today = new Date();
-      var yoils = ['일','월','화','수','목','금','토'];
-      var yoil = yoils[today.getDay()];
-      var y = today.getFullYear();
-      var m = String(today.getMonth()+1).padStart(2,'0');
-      var d = String(today.getDate()).padStart(2,'0');
-      dateEl.textContent = y + "-" + m + "-" + d + " (" + yoil + ")";
-    }
-    window.addEventListener('load', function(){
-      setTimeout(function(){
-        var el = document.getElementById('loadingScreen');
-        if (el) el.remove();
-      }, 3000);
-    });
-  })();
+window.addEventListener('load', () => {
+  const dateEl = document.getElementById("currentDate");
+  if (dateEl) {
+    const today = new Date();
+    const yoil = ['일','월','화','수','목','금','토'][today.getDay()];
+    const formatted = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')} (${yoil})`;
+    dateEl.textContent = formatted;
+  }
+  setTimeout(() => document.getElementById('loadingScreen')?.remove(), 3000);
+});
 </script>
 </body>
 </html>
