@@ -226,6 +226,57 @@ async function openPlayer(bCellValue){
       </tbody></table>
     `);
   });
+  // === 공식/이벤트 대회 성적 집계 ===
+  const iLeague = findIdx(MH, /리그명|league/i);
+  function tallyByLeague(rows, type){
+    const out = {w:0, l:0};
+    rows.forEach(rr=>{
+      const lg = String(iLeague>=0 ? rr[iLeague] : '');
+      const isOfficial = /공식/i.test(lg);
+      const isEvent    = /이벤트|event/i.test(lg);
+      let ok = false;
+      if(type==='official') ok = isOfficial;
+      else if(type==='event') ok = isEvent;
+      if(!ok) return;
+      const r = computeResultForYou(MH, rr, you);
+      if(r==='W') out.w++; else if(r==='L') out.l++;
+    });
+    return out;
+  }
+  function fmtWL(obj){
+    const t = obj.w + obj.l;
+    const pct = t ? Math.round(obj.w*1000/t)/10 : 0;
+    return { total:t, wins:obj.w, losses:obj.l, pct };
+  }
+  const leagueOfficial = fmtWL(tallyByLeague(yourRows, 'official'));
+  const leagueEvent    = fmtWL(tallyByLeague(yourRows, 'event'));
+  const leagueHtml = `
+    <h3>공식 및 이벤트대회 성적</h3>
+    <div class="table-wrap">
+      <table class="detail">
+        <thead>
+          <tr><th>구분</th><th>총전적</th><th>승</th><th>패</th><th>승률</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>공식</td>
+            <td>\${leagueOfficial.total}전</td>
+            <td>\${leagueOfficial.wins}</td>
+            <td>\${leagueOfficial.losses}</td>
+            <td>\${leagueOfficial.pct}%</td>
+          </tr>
+          <tr>
+            <td>이벤트</td>
+            <td>\${leagueEvent.total}전</td>
+            <td>\${leagueEvent.wins}</td>
+            <td>\${leagueEvent.losses}</td>
+            <td>\${leagueEvent.pct}%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+
 
   if(body){
     const cz=curStats.counts.Z, cp=curStats.counts.P, ct=curStats.counts.T, ctot=curStats.total;
@@ -252,6 +303,8 @@ async function openPlayer(bCellValue){
       <hr class="gold"/>
       <h3>주요성적</h3>
       <div class="awards">${awardsRaw || '-'}</div>
+      <hr class="gold"/>
+      ${leagueHtml}
     `;
   }
 
