@@ -615,3 +615,42 @@ body, html {
 .yt-text { font-size: 9pt; font-weight: 600; }
 .divider { color: #999; }
 .current-date { color: #555; font-weight: 600; }
+
+
+/* === 전체경기기록 테이블: J열(리그명) 텍스트에 딱 맞게 자동폭 + 스크롤 제거 === */
+#allTable {
+  table-layout: auto !important;
+  width: 100% !important;
+  border-collapse: collapse !important;
+}
+
+#allTable th:nth-child(10),
+#allTable td:nth-child(10) {
+  width: 1% !important;
+  min-width: fit-content !important;
+  max-width: fit-content !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+  padding: 4px 8px !important;
+}
+
+.table-wrap {
+  overflow-x: hidden !important;
+}
+
+
+/* === 전체경기기록 J열 너비 자동조정 === */
+#allTable td:nth-child(10),
+#allTable th:nth-child(10) {
+  white-space: normal !important;
+  width: auto !important;
+  max-width: 120px !important;
+  word-break: keep-all !important;
+  overflow-wrap: anywhere !important;
+}
+#allTable {
+  table-layout: auto !important;
+}
+.table-wrap.full {
+  overflow-x: hidden !important;
+}
