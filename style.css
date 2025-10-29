@@ -654,3 +654,106 @@ body, html {
 .table-wrap.full {
   overflow-x: hidden !important;
 }
+
+
+/* === v9_80 Menu Rect Bar + Hamburger === */
+.hamburger {
+  position: absolute; left: 10px; top: 52px;
+  background: #000; color: #fff; border: none;
+  width: 44px; height: 44px; border-radius: 8px;
+  font-size: 22px; line-height: 44px; text-align: center;
+  cursor: pointer; z-index: 25;
+}
+.hamburger:active{ transform:scale(0.98); }
+
+/* Equal-width rectangular menu bar */
+.menu{ display:flex; gap:0 !important; padding:0 !important; margin:12px auto 16px; max-width:1100px; width:100%; }
+.menu .tab-btn, .menu .home-btn{
+  flex:1 1 0; border-radius:0 !important;
+  background:#f0f0f0 !important; color:#111 !important;
+  border:1px solid #d9d9d9 !important; padding:12px 10px !important;
+  height:46px; display:flex; align-items:center; justify-content:center;
+  font-weight:700; letter-spacing:0.2px;
+}
+.menu .tab-btn + .tab-btn{ border-left:none !important; }
+.menu .home-btn{ background:#fff !important; }
+.menu .tab-btn.active{ background:#d9d9d9 !important; color:#000 !important; border-color:#c9c9c9 !important; }
+
+/* Mobile: collapse bar; use overlay */
+@media (max-width: 900px){
+  .menu{ display:none !important; }
+  .hamburger {
+  position: absolute; left: 10px; top: 52px;
+  background: #000; color: #fff; border: none;
+  width: 44px; height: 44px; border-radius: 8px;
+  font-size: 22px; line-height: 44px; text-align: center;
+  cursor: pointer; z-index: 25;
+}
+}
+@media (min-width: 901px){
+  .hamburger {
+  position: absolute; left: 10px; top: 52px;
+  background: #000; color: #fff; border: none;
+  width: 44px; height: 44px; border-radius: 8px;
+  font-size: 22px; line-height: 44px; text-align: center;
+  cursor: pointer; z-index: 25;
+}
+}
+
+/* Mobile overlay */
+.mobile-menu{
+  position:fixed; inset:0; background:rgba(0,0,0,.55);
+  display:none; align-items:flex-start; justify-content:flex-start; z-index:60;
+}
+.mobile-menu.open{ display:flex; }
+.mobile-menu .mobile-menu-inner{
+  background:#000; color:#fff; width:78%; max-width:360px; min-height:100%;
+  padding:12px 14px 20px 14px; box-shadow:4px 0 16px rgba(0,0,0,.3);
+}
+.mobile-menu .mobile-close{
+  background:#222; color:#fff; border:none; border-radius:8px;
+  width:44px; height:36px; font-size:20px; cursor:pointer;
+}
+.mobile-menu .mobile-list{ list-style:none; padding:10px 0 0; margin:0; display:flex; flex-direction:column; gap:8px; }
+.mobile-menu .mobile-item{
+  width:100%; background:#111; color:#fff; border:1px solid #333; border-radius:10px;
+  padding:12px; text-align:left; font-size:16px; cursor:pointer;
+}
+.mobile-menu .mobile-item:active{ background:#1b1b1b; }
+
+
+/* === v9_81 Menu Black Background Fix === */
+.menu .tab-btn, .menu .home-btn {
+  background: #000 !important;
+  color: #fff !important;
+  border: 1px solid #333 !important;
+}
+.menu .tab-btn.active, .menu .home-btn.active {
+  background: var(--gold, #a78d40) !important;
+  color: #fff !important;
+  border-color: var(--gold, #a78d40) !important;
+}
+
+
+/* === v9_83 Blur Hover + Mobile Hamburger Only === */
+.menu .tab-btn:hover,
+.menu .tab-btn.active {
+  backdrop-filter: blur(4px);
+  filter: brightness(1.2);
+  background: rgba(0, 0, 0, 0.75) !important;
+  color: #fff !important;
+  border-color: #222 !important;
+  transition: all 0.25s ease;
+}
+
+/* 햄버거 버튼 표시 조건 */
+@media (min-width: 901px) {
+  .hamburger {
+    display: none !important;
+  }
+}
+@media (max-width: 900px) {
+  .hamburger {
+    display: flex !important;
+  }
+}

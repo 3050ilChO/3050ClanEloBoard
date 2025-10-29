@@ -1,4 +1,3 @@
-
 // --- cmp undefined fix ---
 if (typeof cmp !== 'function') {
   function cmp(a, b) {
@@ -9,6 +8,7 @@ if (typeof cmp !== 'function') {
   }
 }
 let recent5Chart = null;
+let eloChart = null;
 
 /* v9_107 datalabels */
 try{
@@ -311,27 +311,90 @@ async function openPlayer(bCellValue){
     `;
   }
 
-  // Graph untouched except safety
+  
+  
+  // === ELO 변동추이 (정밀 v4: 전용 시트 '(개인전)경기기록데이터'에서 계산, 전체 기간) ===
   try{
-    const iDate = findIdx(MH, /경기일자|date/i);
-    const iWinN = findIdx(MH, /승자\s*선수|winner/i);
-    const seq = yourRows.map(r=>({d:String(iDate>=0? r[iDate]:''), v:(lc(r[iWinN]||'')===you)?1:-1})).sort((a,b)=> (a.d>b.d?1:-1));
-    const labels = seq.map(s=>s.d);
-    let cur = Number(String(eloText).replace(/,/g,'')) || 1500;
-    const vals=[]; seq.forEach(x=>{ cur+=x.v*8; vals.push(Math.round(cur*10)/10); });
-    // [ELO 그래프 캔버스 참조 제거]
-    if(ctx){
-      if(eloChart) // [ELO 그래프 객체 제거]
+    // 1) 전용 소스에서 원본 데이터 로드
+    const eloSrc = { id:"1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet:"(개인전)경기기록데이터", range:"A:Z" };
+    const E = await fetchGVIZ(eloSrc);
+    if (!E.length) throw new Error("개인전 시트 비어있음");
+    const EH = E[0]||[]; const ER = E.slice(1);
+    const idxDate = EH.findIndex(h=>/날짜|경기일자|date/i.test(h));
+    const idxWinN = EH.findIndex(h=>/승자\s*선수|winner/i.test(h)); // C
+    const idxLoseN = EH.findIndex(h=>/패자\s*선수|loser/i.test(h)); // F
+    // 고정 인덱스: A:0 ... J:9, K:10, L:11, M:12, N:13, O:14, P:15
+    const K_PRE_WIN = 10, M_POST_WIN = 12, N_PRE_LOSE = 13, P_POST_LOSE = 15;
 
-      eloChart = new Chart(ctx, { type:'line',
-        data:{ labels, datasets:[{ label:'ELO POINT', data: vals, fill:false, tension:0, pointRadius:3 }]},
-        options:{ responsive:true, plugins:{ legend:{display:true}, title:{display:true,text:'ELO 변동 추이'} },
-                  scales:{ y:{ title:{display:true,text:'ELO'} } } }
+    const cleanNum = x => {
+      const s = String(x??'').replace(/[^0-9.\-]/g,'').trim();
+      if (!s) return NaN;
+      const n = Number(s);
+      return Number.isFinite(n) ? n : NaN;
+    };
+    const toDate = s => {
+      const t = String(s||'').replace(/\./g,'-').replace(/\.$/,'').trim();
+      const d = new Date(t);
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+
+    // 2) 본인 경기만 필터 + 날짜/전후ELO 추출
+    const rowsMine = ER.map(r=>{
+      const dStr = String(idxDate>=0 ? r[idxDate] : "");
+      const d = toDate(dStr);
+      const isWin  = lc(r[idxWinN]||"")  === you;
+      const isLose = lc(r[idxLoseN]||"") === you;
+      let pre = NaN, post = NaN;
+      if (isWin)  { pre = cleanNum(r[K_PRE_WIN]); post = cleanNum(r[M_POST_WIN]); }
+      if (isLose) { pre = cleanNum(r[N_PRE_LOSE]); post = cleanNum(r[P_POST_LOSE]); }
+      return { dStr, d, pre, post, isMine: (isWin||isLose) };
+    }).filter(x=> x.isMine && x.d).sort((a,b)=> (a.d>b.d?1:-1));
+
+    // 3) 날짜별 최종 경기후 ELO만 사용
+    const byDay = new Map();
+    rowsMine.forEach(m => byDay.set(m.dStr, m)); // 같은 날 마지막 경기로 덮어쓰기
+    const daily = Array.from(byDay.entries())
+                  .sort((a,b)=> (new Date(a[0]) > new Date(b[0]) ? 1 : -1))
+                  .map(([dStr, m])=> ({ dStr, pre: m.pre, post: m.post }));
+
+    if (body && daily.length){
+      body.insertAdjacentHTML('beforeend', `
+        <hr class="gold"/>
+        <h3>ELO 변동추이</h3>
+        <div class="chart-wrap"><canvas id="eloChart" height="170"></canvas></div>
+      `);
+
+      const labels = daily.map(x=>x.dStr);
+      const series = [];
+      let carry = Number(String(eloText).replace(/[^0-9.]/g,''));
+      if (!Number.isFinite(carry) || carry<300) carry = 1500;
+      daily.forEach(x=>{
+        let v = Number.isFinite(x.post) ? x.post : (Number.isFinite(x.pre) ? x.pre : carry);
+        if (!Number.isFinite(v)) v = carry;
+        series.push(Math.round(v*10)/10);
+        carry = v;
       });
-    }
-  }catch(e){ console.warn('chart err', e); }
 
-  // --- 최근 5경기 승패 그래프 (ELO 그래프 없이 추가) ---
+      const ctx = document.getElementById('eloChart')?.getContext('2d');
+      if (ctx){
+        if (eloChart && typeof eloChart.destroy==='function'){ try{ eloChart.destroy(); }catch(e){} }
+        eloChart = new Chart(ctx, {
+          type:'line',
+          data:{ labels, datasets:[{ label:'경기후 ELO', data: series, fill:false, tension:0.15, pointRadius:2 }]},
+          options:{
+            responsive:true,
+            plugins:{
+              legend:{ display:true },
+              title:{ display:true, text:'ELO 변동 추이 (전체 기간, 날짜별 최종값)' },
+              datalabels:{ display:false }
+            },
+            scales:{ y:{ title:{display:true,text:'ELO'} } }
+          }
+        });
+      }
+    }
+  }catch(e){ console.warn('elo v4 error', e); }
+// --- 최근 5경기 승패 그래프 (ELO 그래프 없이 추가) ---
   try {
     const iDate = findIdx(MH, /경기일자|date/i);
     const iWinN = findIdx(MH, /승자\s*선수|winner/i);
@@ -561,11 +624,65 @@ $('h2hReset')?.addEventListener('click', () => {
   renderTable($('h2hTable'), [h2hHeaders]);
 });
 // ===== Pro Rank (AS-IS) =====
+
+// ===== Pro Rank (IMAGE() 대응 & 중괄호 수정 완료 버전) =====
 async function loadProRank(){
-  const t=$('proRankTable'); const d=await fetchGVIZ(SHEETS.proRank);
-  if(!d.length){ if(t) t.outerHTML='<div class="status err">프로리그순위 데이터 없음</div>'; return; }
-  renderTable(t, d); // No sorting, no transforms
+  const t = $('proRankTable');
+  const d = await fetchGVIZ(SHEETS.proRank);
+  if (!d.length){
+    if (t) t.outerHTML = '<div class="status err">프로리그순위 데이터 없음</div>';
+    return;
+  }
+
+  const thead = t.querySelector('thead');
+  const tbody = t.querySelector('tbody');
+  thead.innerHTML = '';
+  tbody.innerHTML = '';
+
+  // 헤더
+  const hr = document.createElement('tr');
+  d[0].forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h || '';
+    hr.appendChild(th);
+  });
+  thead.appendChild(hr);
+
+  // 본문 데이터
+  d.slice(1).forEach(r => {
+    const tr = document.createElement('tr');
+    r.forEach((v, i) => {
+      const td = document.createElement('td');
+
+      // 2번째 열: 팀 로고 처리
+      if (i === 1 && typeof v === 'string') {
+        const match = v.match(/https?:\/\/[^\s")]+/i);
+        if (match) {
+          const img = document.createElement('img');
+          img.src = match[0];
+          img.alt = '팀로고';
+          img.className = 'team-logo';
+          td.classList.add('logo-cell');
+          td.appendChild(img);
+        } else if (v.startsWith('https://')) {
+          const img = document.createElement('img');
+          img.src = v;
+          img.alt = '팀로고';
+          img.className = 'team-logo';
+          td.classList.add('logo-cell');
+          td.appendChild(img);
+        } else {
+          td.textContent = v ?? '';
+        }
+      } else {
+        td.textContent = v ?? '';
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
 }
+
 
 // ===== Schedule (AS-IS + popup open) =====
 const schedStatus=$('schedStatus'); const schedTable=$('schedTable');
@@ -1260,6 +1377,8 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("load",bindScroll);
 
   function moveCompare(){
+    const cmp=document.getElementById('h2hOutcomeWrap');
+    const reset=document.getElementById('h2hReset');
     if(cmp && reset && !cmp.dataset.moved){
       reset.parentNode.insertBefore(cmp,reset.nextSibling);
       cmp.dataset.moved="1";
@@ -1389,3 +1508,32 @@ function formatDateSafe(value){
     return value;
   }catch(e){return value;}
 }
+
+
+// === v9_80 Hamburger + Home ===
+(function(){
+  const hamb = document.getElementById('hamburgerBtn');
+  const mobile = document.getElementById('mobileMenu');
+  const closeBtn = document.getElementById('mobileMenuClose');
+  const homeTop = document.getElementById('homeBtnTop');
+
+  if (homeTop) homeTop.addEventListener('click', (e)=>{ e.preventDefault(); activate('rank'); });
+
+  function openMobile(){ if(mobile){ mobile.classList.add('open'); mobile.setAttribute('aria-hidden','false'); } }
+  function closeMobile(){ if(mobile){ mobile.classList.remove('open'); mobile.setAttribute('aria-hidden','true'); } }
+
+  if (hamb) hamb.addEventListener('click', openMobile);
+  if (closeBtn) closeBtn.addEventListener('click', closeMobile);
+  if (mobile){
+    mobile.addEventListener('click', (e)=>{ if(e.target === mobile) closeMobile(); });
+    mobile.querySelectorAll('.mobile-item').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const tgt = btn.getAttribute('data-target');
+        if (tgt){ activate(tgt); }
+        // 홈으로는 rank
+        if (!tgt && /홈/.test(btn.textContent)) activate('rank');
+        closeMobile();
+      });
+    });
+  }
+})();
