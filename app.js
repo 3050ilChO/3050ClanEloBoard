@@ -8,6 +8,7 @@ if (typeof cmp !== 'function') {
   }
 }
 let recent5Chart = null;
+let tierTrendChart = null;
 let eloChart = null;
 
 /* v9_107 datalabels */
@@ -24,6 +25,11 @@ try{
     });
   }
 }catch(e){}
+
+
+// === v9_113 TierMap: 갓(1)~히든(7) & label only ===
+const TIER_TO_NUM = {'갓':1,'킹':2,'퀸':3,'잭':4,'스페이드':5,'조커':6,'히든':7};
+const NUM_TO_TIER = {1:'갓',2:'킹',3:'퀸',4:'잭',5:'스페이드',6:'조커',7:'히든'};
 
 
 /* 3050ClanEloBoard — v9_75_Final_FixAll
@@ -63,12 +69,20 @@ async function fetchGVIZ(cfg){
     }));
     // Prefer GVIZ-provided column labels
     let headers = (json.table.cols||[]).map(c => c.label || '');
-    // If column labels are empty or look wrong, try to detect header from the first row
-    const headerHints = ['경기일자','승자','패자','맵','리그명','승자티어','패자티어','승자종족','패자종족','티어차이'];
-    const firstRow = rows[0] || [];
-    const hit = headerHints.some(h => firstRow.join('|').includes(h));
-    if (hit) { headers = firstRow; rows.shift(); }
-    return [headers, ...rows];
+// If column labels are empty or look wrong, try to detect header from the first row
+const firstRow = rows[0] || [];
+// Heuristic A: if GViz labels are ALL empty, treat first row as headers
+const allEmpty = headers.every(h => !String(h||'').trim());
+if (allEmpty && firstRow.length){
+  headers = firstRow;
+  rows.shift();
+}else{
+  // Heuristic B: known ELOboard-style headers
+  const headerHints = ['경기일자','승자','패자','맵','리그명','승자티어','패자티어','승자종족','패자종족','티어차이'];
+  const hit = firstRow.join('|').includes('경기일자') || headerHints.some(h => firstRow.join('|').includes(h));
+  if (hit) { headers = firstRow; rows.shift(); }
+}
+return [headers, ...rows];
   }catch(e){
     console.error('GVIZ error:', e);
     return [];
@@ -261,7 +275,6 @@ async function openPlayer(bCellValue){
     .sort((a, b) => b.total - a.total);
 
   const leagueHtml = `
-    <hr class="gold"/>
     <h3>공식 및 이벤트대회 성적 (리그명 기준)</h3>
     <div class="table-wrap">
       <table class="detail">
@@ -305,15 +318,109 @@ async function openPlayer(bCellValue){
       ${offBlocks.join('')}
       <hr class="gold"/>
       <h3>주요성적</h3>
-      <div class="awards">${awardsRaw || '-'}</div>
+      <div class="awards">${awardsRaw || '-'}
+      <hr class="gold"/>
+      <h3>티어 변동추이</h3>
+      <div class="chart-wrap"><canvas id="tierTrendChart" height="85"></canvas></div>
+      <script>/* placeholder to keep HTML validators happy */</script>
       <hr class="gold"/>
       ${leagueHtml}
+
     `;
   }
 
   
   
-  // === ELO 변동추이 (정밀 v4: 전용 시트 '(개인전)경기기록데이터'에서 계산, 전체 기간) ===
+  
+  // === 티어 변동추이 (PlayerTier 시트 D~마지막 + 현재티어 A열 추가, Y축: 갓(1)~히든(7)) ===
+try {
+  const tierSrc = { id:"1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet:"PlayerTier", range:"A:ZZ" };
+  const T = await fetchGVIZ(tierSrc);
+  if (T.length) {
+    const T_HEADERS = (T[0] || []).map(x => String(x||"").trim());
+    const T_ROWS = T.slice(1);
+
+    // 현재 선수 행 찾기 (B열: 이름)
+    let rowMine = null;
+    for (const r of T_ROWS) {
+      const nm = String((r[1]||'')).split('/')[0].trim().toLowerCase();
+      if (nm === you) { rowMine = r; break; }
+    }
+
+    if (rowMine) {
+      // A열 = 현재티어(문자), D~last = 변동회차
+      const currentTierNameA = String(rowMine[0]||'').trim();
+      const labels = [];
+      const dataVals = [];
+      const startCol = 3; // D=3 (0-indexed)
+
+      for (let c = startCol; c < rowMine.length; c++) {
+        const head = String(T_HEADERS[c]||'').trim();
+        const val  = String(rowMine[c]||'').trim();
+        if (!head) continue;                 // 헤더 없는 열 제외
+        if (!val || val === '-') continue;   // 빈칸/하이픈 제외
+        const mapped = TIER_TO_NUM[val];
+        if (!mapped) continue;
+        labels.push(head);
+        dataVals.push(mapped);
+      }
+
+      // 마지막 열 뒤에 "현재티어" (A열) 추가
+      if (currentTierNameA) {
+        const mappedA = TIER_TO_NUM[currentTierNameA];
+        if (mappedA) {
+          labels.push('현재티어');
+          dataVals.push(mappedA);
+        }
+      }
+
+      // 그래프 렌더
+      if (labels.length) {
+        const el2 = document.getElementById('tierTrendChart')?.getContext('2d');
+        if (el2){
+          if (tierTrendChart && typeof tierTrendChart.destroy==='function'){ try{ tierTrendChart.destroy(); }catch(e){} }
+          const lastVal = dataVals[dataVals.length-1];
+          const lastTierName = NUM_TO_TIER[lastVal] || currentTierNameA || '-';
+          tierTrendChart = new Chart(el2, {
+            type: 'line',
+            data: {
+              labels,
+              datasets: [{
+                label: `티어변동추이 : ${lastTierName}`,
+                data: dataVals,
+                pointRadius: 3,
+                fill: false,
+                tension: 0.12,
+                borderColor: '#e74c3c',
+                backgroundColor: '#e74c3c'
+              }]
+            },
+            options: {
+              responsive: true,
+              plugins: {
+                legend: { display: true, labels:{usePointStyle:true} },
+                datalabels: { display: false }
+              },
+              scales: {
+                y: {
+                  min: 1, max: 7,
+                  reverse: true, // 갓(1) 맨 위 ~ 히든(7) 맨 아래
+                  ticks: {
+                    stepSize: 1,
+                    callback: v => NUM_TO_TIER[v] || v
+                  }
+                }
+              },
+              layout: { padding: { top: 8, bottom: 8 } }
+            }
+          });
+        }
+      }
+    }
+  }
+} catch(e){ console.warn('tier trend error', e); }
+
+// === ELO 변동추이 (정밀 v4: 전용 시트 '(개인전)경기기록데이터'에서 계산, 전체 기간) ===
   try{
     // 1) 전용 소스에서 원본 데이터 로드
     const eloSrc = { id:"1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet:"(개인전)경기기록데이터", range:"A:Z" };
@@ -394,104 +501,99 @@ async function openPlayer(bCellValue){
       }
     }
   }catch(e){ console.warn('elo v4 error', e); }
-// --- 최근 5경기 승패 그래프 (ELO 그래프 없이 추가) ---
-  try {
-    const iDate = findIdx(MH, /경기일자|date/i);
-    const iWinN = findIdx(MH, /승자\s*선수|winner/i);
-    const seq = yourRows.map(r=>({ d:String(iDate>=0? r[iDate]:""), res:(lc(r[iWinN]||"")===you)?"W":"L" }));
-    seq.sort((a,b)=> (a.d > b.d ? 1 : (a.d < b.d ? -1 : 0)));
-    const last5 = seq.slice(-5);
+// --- 최근 5경기 승패 그래프 및 테이블 (중복 제거 버전) ---
+try {
+  const iDate = findIdx(MH, /경기일자|date/i);
+  const iWinN = findIdx(MH, /승자\s*선수|winner/i);
+  const iLoseN = findIdx(MH, /패자\s*선수|loser/i);
+  const iMap = findIdx(MH, /맵|map/i);
 
-    if (body && last5.length){
-      body.insertAdjacentHTML('beforeend', `
-        <hr class="gold"/>
-        <h3>최근 5경기 승패</h3>
-        <div class="chart-wrap"><canvas id="recent5Chart" height="120"></canvas></div>
-      `);
+  const seq = yourRows.map(r=>({
+    d:String(iDate>=0? r[iDate]:""),
+    res:(lc(r[iWinN]||"")===you)?"W":"L"
+  })).sort((a,b)=> (a.d > b.d ? 1 : -1));
+  const last5 = seq.slice(-5);
 
+  if (body && last5.length){
+    // 그래프
+    body.insertAdjacentHTML('beforeend', `
+      <hr class="gold"/>
+      <h3>최근 5경기 승패</h3>
+      <div class="chart-wrap"><canvas id="recent5Chart" height="120"></canvas></div>
+    `);
+
+    // 테이블 (중복방지)
+    const rows5 = (yourRows.map(r=>({
+      d:String(iDate>=0? r[iDate]:""),
+      res:(lc(r[iWinN]||"")===you)?"W":"L",
+      w:String(r[iWinN]||""),
+      l:String(iLoseN>=0? r[iLoseN]:""),
+      m:String(iMap>=0? r[iMap]:"")
+    })).sort((a,b)=> (a.d > b.d ? 1 : -1))).slice(-5);
+
+    const rowHtml = rows5.map(r=>{
+      const opp = (lc(r.w)===you) ? r.l : r.w;
+      const resTxt = r.res === "W" ? "승" : "패";
+      return `<tr><td>${r.d||""}</td><td>${opp||""}</td><td>${resTxt}</td><td>${r.m||""}</td></tr>`;
+    }).join("");
+
+    body.insertAdjacentHTML('beforeend', `
+      <hr class="gold"/>
+      <h3>최근 5경기 (테이블)</h3>
+      <div class="table-wrap">
+        <table id="recent5Table">
+          <thead>
+            <tr><th>경기일자</th><th>상대</th><th>결과</th><th>맵</th></tr>
+          </thead>
+          <tbody>${rowHtml}</tbody>
+        </table>
+      </div>
+    `);
+
+    // 그래프 생성
+    const ctxR = document.getElementById('recent5Chart')?.getContext('2d');
+    if (ctxR) {
+      if (recent5Chart && typeof recent5Chart.destroy === 'function') {
+        try { recent5Chart.destroy(); } catch(e){}
+      }
       const labels = last5.map((_,i)=>`G${i+1}`);
       const data = last5.map(g => g.res === 'W' ? 1 : -1);
       const colors = last5.map(g => g.res === 'W' ? '#3498db' : '#e74c3c');
 
-      
-      // --- 구분선 + 최근 5경기 테이블 ---
-      if (body && last5.length){
-        // Collect richer info for the last 5
-        const iDate2 = iDate;
-        const iWinN2 = iWinN;
-        const iLoseN2 = findIdx(MH, /패자\s*선수|loser/i);
-        const iMap2 = findIdx(MH, /맵|map/i);
-        const rows5 = (yourRows.map(r=>({ 
-          d:String(iDate2>=0? r[iDate2]:""), 
-          res:(lc(r[iWinN2]||"")===you)?"W":"L",
-          w:String(r[iWinN2]||""),
-          l:String(iLoseN2>=0? r[iLoseN2]:""),
-          m:String(iMap2>=0? r[iMap2]:"")
-        })).sort((a,b)=> (a.d > b.d ? 1 : (a.d < b.d ? -1 : 0)))).slice(-5);
-
-        const rowHtml = rows5.map(r=>{
-          const opp = (lc(r.w)===you) ? r.l : r.w;
-          const resTxt = r.res === "W" ? "승" : "패";
-          return `<tr><td>${r.d||""}</td><td>${opp||""}</td><td>${resTxt}</td><td>${r.m||""}</td></tr>`;
-        }).join("");
-
-        body.insertAdjacentHTML('beforeend', `
-          <hr class="gold"/>
-          <h3>최근 5경기 (테이블)</h3>
-          <div class="table-wrap">
-            <table id="recent5Table">
-              <thead>
-                <tr><th>경기일자</th><th>상대</th><th>결과</th><th>맵</th></tr>
-              </thead>
-              <tbody>${rowHtml}</tbody>
-            </table>
-          </div>
-        `);
-      }
-    
-      const ctxR = document.getElementById('recent5Chart')?.getContext('2d');
-      if (ctxR) {
-        if (recent5Chart && typeof recent5Chart.destroy === 'function') {
-          try { recent5Chart.destroy(); } catch(e){}
-        }
-        recent5Chart = new Chart(ctxR, {
-          type: 'bar',
-          data: {
-            labels,
-            datasets: [{
-              label: '승(1) / 패(-1)',
-              data,
-              backgroundColor: colors,
-              borderRadius: 6
-            }]
+      recent5Chart = new Chart(ctxR, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: '승(1) / 패(-1)',
+            data,
+            backgroundColor: colors,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: '최근 5경기' },
+            datalabels: { display: true, formatter: (v) => v > 0 ? 'W' : 'L' }
           },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: { display: false },
-              title: { display: true, text: '최근 5경기' },
-              datalabels: {
-                display: true,
-                formatter: (v) => v > 0 ? 'W' : 'L'
-              }
-            },
-            scales: {
-              y: {
-                min: -1,
-                max: 1,
-                ticks: { stepSize: 1 },
-                title: { display: true, text: '결과' }
-              }
+          scales: {
+            y: {
+              min: -1,
+              max: 1,
+              ticks: { stepSize: 1 },
+              title: { display: true, text: '결과' }
             }
           }
-        });
-      }
+        }
+      });
     }
-  } catch(e) {
-    console.warn('recent5 chart error', e);
   }
-
-  activate('player');
+} catch(e) {
+  console.warn('recent5 chart error', e);
+}
+activate('player');
 }
 window.openPlayer = openPlayer;
 $('playerClose')?.addEventListener('click', ()=> activate('rank'));
