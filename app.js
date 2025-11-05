@@ -2254,9 +2254,50 @@ function setupTierButtons(){
         await loadRanking();
       }
       if(tierName === '전체'){
-        drawRankRows(RANK_SRC.slice(1));
+        // === v9_83: 전체 탭도 ELO 정렬 + 5경기 미만 아래로 ===
+        const rows = RANK_SRC.slice(1);
+        const IDX_ELO  = 9; // J
+        const IDX_NAME = 1; // B
+
+        const MH = (MATCH_SRC && MATCH_SRC[0]) ? MATCH_SRC[0] : [];
+        const MR = (MATCH_SRC && MATCH_SRC.length>1) ? MATCH_SRC.slice(1) : [];
+        const iW = findIdx(MH, /승자\s*선수|winner/i);
+        const iL = findIdx(MH, /패자\s*선수|loser/i);
+        function gamesOf(rawName){
+          const name = String(rawName||'').split('/')[0].trim().toLowerCase();
+          if(!name) return 0;
+          let c = 0;
+          for(const r of MR){
+            const w = lc(r[iW]||''); const l = lc(r[iL]||'');
+            if(w===name || l===name) c++;
+          }
+          return c;
+        }
+
+        const cloned = rows.map(r => r.slice(0));
+        const qualified = [];
+        const unqualified = [];
+
+        cloned.forEach(r => {
+          const games = gamesOf(r[IDX_NAME]);
+          if (games >= 5) qualified.push(r);
+          else unqualified.push(r);
+        });
+
+        qualified.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
+
+        qualified.forEach((r,i)=> { r[0] = i+1; });
+        unqualified.forEach(r => { r[0] = '–'; });
+
+        const finalRows = [...qualified, ...unqualified];
+        drawRankRows(finalRows);
+
         const st = document.getElementById('rankStatus');
-        if(st) st.textContent = `전체 • ${RANK_SRC.length-1}명`;
+        if(st){
+          const q = qualified.length;
+          const u = unqualified.length;
+          st.textContent = `전체 • 총 ${q+u}명 (랭킹 대상 ${q}명 / 5경기 미만 ${u}명)`;
+        }
         return;
       }
 
