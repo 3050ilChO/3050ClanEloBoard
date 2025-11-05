@@ -31,6 +31,30 @@ try{
 const TIER_TO_NUM = {'갓':1,'킹':2,'퀸':3,'잭':4,'스페이드':5,'조커':6,'히든':7};
 const NUM_TO_TIER = {1:'갓',2:'킹',3:'퀸',4:'잭',5:'스페이드',6:'조커',7:'히든'};
 
+// === Hall of Fame popup links (configurable) ===
+const HOF_LINKS = {
+  pro: "https://docs.google.com/spreadsheets/d/1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE/edit?gid=2109029745#gid=2109029745",
+  tst: "https://docs.google.com/spreadsheets/d/1ThjVC2q7BwN5__wEcDPc-bBnnrHxL7wTng-pn8rOMnw/edit?gid=1085175922#gid=1085175922",
+  tsl: "https://docs.google.com/spreadsheets/d/1r-4eqB14QW0v5BiH4cCC9kGFb7-EJ5Lv63iihaXV79k/edit?gid=1176021631#gid=1176021631"
+};
+function initHOFButtons(){
+  const feat = "width=1200,height=800,menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes";
+  const map = { hofPro: HOF_LINKS.pro, hofTST: HOF_LINKS.tst, hofTSL: HOF_LINKS.tsl };
+  Object.entries(map).forEach(([id, url])=>{
+    const el = document.getElementById(id);
+    if(!el || !url) return;
+    // strip all existing listeners by cloning
+    const clone = el.cloneNode ? el.cloneNode(true) : el;
+    el.parentNode.replaceChild(clone, el);
+    clone.addEventListener('click', (e)=>{
+      e.preventDefault(); e.stopImmediatePropagation();
+      try{window.open(url, id, feat);}catch(e){console.warn('popup suppressed')}
+      return false;
+    });
+  });
+}
+
+
 
 /* 3050ClanEloBoard — v9_75_Final_FixAll
    - Keep data bindings in index.html (SHEETS) exactly as-is.
@@ -42,7 +66,9 @@ const NUM_TO_TIER = {1:'갓',2:'킹',3:'퀸',4:'잭',5:'스페이드',6:'조커'
      * Members: highlight rows by column B value (클랜마스터=연한노랑, 클랜 부마스터=연한파랑, 운영진=연한초록)
 */
 
-function $(id){ return document.getElementById(id); }
+function $(id){
+  return document.getElementById(id) || null;
+}
 const lc = s => String(s ?? '').toLowerCase();
 const normalize = (s) => String(s || '').trim().toLowerCase();
 
@@ -112,31 +138,66 @@ function getRaceIcon(r){ const x=String(r||'').trim().toUpperCase(); if(x==='Z')
 // Caches
 let RANK_SRC=[], MATCH_SRC=[], ALL_CACHE=[], MEMBERS_CACHE=[], SCHED_CACHE=[];
 
-// ===== Rank (list) =====
-const rankStatus=$('rankStatus'); 
-const rankTable=$('rankTable');
-function drawRankRows(rows){
-  if(!rankTable) return;
-  const header=RANK_SRC[0]||[];
-  const thead=rankTable.querySelector('thead'); const tbody=rankTable.querySelector('tbody');
-  thead.innerHTML=''; tbody.innerHTML='';
-  const hr=document.createElement('tr'); 
-  (header.slice(0,10)||[]).forEach(h=>{ const th=document.createElement('th'); th.textContent=h??''; hr.appendChild(th);}); 
-  thead.appendChild(hr);
-  rows.forEach(r=>{
-    const tr=document.createElement('tr');
-    (r.slice(0,10)||[]).forEach((v,i)=>{
-      const td=document.createElement('td');
-      if(i===1 && v){
-        const id=String(v).split('/')[0].trim();
-        const a=document.createElement('a'); a.href='#'; a.textContent=id; a.addEventListener('click',(e)=>{e.preventDefault(); openPlayer(String(v));});
-        td.appendChild(a);
-      } else td.textContent=v??'';
-      tr.appendChild(td);
+
+// === Dashboard: Race vs Race winrates with mirror counts note ===
+
+
+
+
+
+
+async function buildRaceWinrate(){
+  try{
+    const data = MATCH_SRC.length ? MATCH_SRC : await fetchGVIZ(SHEETS.matches);
+    if(!data.length) return;
+    const H=data[0]||[];
+    const rows=data.slice(1);
+    const iWr=H.indexOf('승자종족');
+    const iLr=H.indexOf('패자종족');
+    if(iWr<0||iLr<0){console.warn('승자종족/패자종족 열을 찾지 못했습니다');return;}
+    const races=['Z','P','T'];
+    const stat={Z:{Z:{w:0,l:0},P:{w:0,l:0},T:{w:0,l:0}},
+                P:{Z:{w:0,l:0},P:{w:0,l:0},T:{w:0,l:0}},
+                T:{Z:{w:0,l:0},P:{w:0,l:0},T:{w:0,l:0}}};
+    let mirrors={ZZ:0,PP:0,TT:0};
+    rows.forEach(r=>{
+      const wr=String(r[iWr]||'').trim().toUpperCase();
+      const lr=String(r[iLr]||'').trim().toUpperCase();
+      if(!['Z','P','T'].includes(wr)||!['Z','P','T'].includes(lr))return;
+      if(wr===lr){
+        if(wr==='Z')mirrors.ZZ++;
+        if(wr==='P')mirrors.PP++;
+        if(wr==='T')mirrors.TT++;
+      }
+      stat[wr][lr].w++;stat[lr][wr].l++;
     });
-    tbody.appendChild(tr);
-  });
+    const tbody=document.querySelector('#raceTable tbody');
+    if(!tbody)return;
+    tbody.innerHTML='';
+    const fmt=o=>{const t=o.w+o.l;return `${t}전 ${o.w}승 ${o.l}패 (${t?Math.round(o.w*1000/t)/10:0}%)`;};
+    races.forEach(R=>{
+      const row=document.createElement('tr');
+      const th=document.createElement('td');th.textContent=R;row.appendChild(th);
+      let w=0,l=0;
+      races.forEach(C=>{
+        const td=document.createElement('td');
+        const c=stat[R][C];
+        if(R===C){const m=(R==='Z'?mirrors.ZZ:(R==='P'?mirrors.PP:mirrors.TT));td.textContent=`${m}전`;}
+        else{td.textContent=fmt(c);w+=c.w;l+=c.l;}
+        row.appendChild(td);
+      });
+      const sum=document.createElement('td');const t=w+l;
+      sum.textContent=`${t}전 ${w}승 ${l}패 (${t?Math.round(w*1000/t)/10:0}%)`;row.appendChild(sum);
+      tbody.appendChild(row);
+    });
+  }catch(e){console.error('buildRaceWinrate error',e);}
 }
+
+
+
+
+
+
 async function loadRanking(){
   if(rankStatus) rankStatus.textContent='시트에서 데이터를 불러오는 중…';
   [RANK_SRC, MATCH_SRC] = await Promise.all([ fetchGVIZ(SHEETS.rank), fetchGVIZ(SHEETS.matches) ]);
@@ -182,8 +243,12 @@ function computeResultForYou(H,row,you){
 function fmtCell(obj){ const t=obj.w+obj.l; return `${t}전 ${obj.w}승 ${obj.l}패 (${t? Math.round(obj.w*1000/t)/10 : 0}%)`; }
 
 async function openPlayer(bCellValue){
+  if (window.__openingPlayer) return;
+  window.__openingPlayer = true;
+  try{
+
   const id = String(bCellValue||'').split('/')[0].trim();
-  const body=$('playerBody'); const title=$('playerTitle'); if(title) title.textContent=id;
+  const body=$('playerBody'); const title=$('playerTitle'); if(title) title.textContent=id; if(body) body.innerHTML='';
   if(!RANK_SRC.length) await loadRanking();
   const header = RANK_SRC[0]||[]; const rows = RANK_SRC.slice(1);
   const row = rows.find(r=> lc(String(r[1]||'').split('/')[0].trim())===lc(id));
@@ -548,7 +613,51 @@ try {
           <tbody>${rowHtml}</tbody>
         </table>
       </div>
+      <!-- 맵별 종족전 전적/승률 표 -->
+      <div id="mapStatsWrap"></div>
+
     `);
+
+    // === Map-by-opponent-race stats for last 5 games ===
+    try{
+      const mapWrap = document.getElementById('mapStatsWrap');
+      if (mapWrap){
+        const counts = {}; // {map: {Z:{w:0,l:0}, P:{w:0,l:0}, T:{w:0,l:0}}}
+        yourRows.forEach(r0=>{
+          const m = (iMap>=0 ? String(r0[iMap]||'') : '') || '(맵미상)';
+          const oppRace = computeOpponentRaceFromRow(MH, r0, you);
+          const key = /^[ZPT]/i.test(oppRace) ? oppRace[0].toUpperCase() : null;
+          if(!key) return;
+          counts[m] = counts[m] || {Z:{w:0,l:0},P:{w:0,l:0},T:{w:0,l:0}};
+          const res = computeResultForYou(MH, r0, you);
+          if (res==='W') counts[m][key].w++; else if(res==='L') counts[m][key].l++;
+        });
+        const rowsHtml = Object.entries(counts).map(([m,v])=>{
+          const tot = ['Z','P','T'].reduce((acc,k)=> acc + v[k].w + v[k].l, 0);
+          const wins = ['Z','P','T'].reduce((acc,k)=> acc + v[k].w, 0);
+          const pct = tot ? Math.round(wins*1000/tot)/10 : 0;
+          function cell(o){ const t=o.w+o.l; return `${t}전 ${o.w}승 ${o.l}패`; }
+          return `<tr>
+            <td>${m}</td>
+            <td>${cell(v.Z)}</td>
+            <td>${cell(v.P)}</td>
+            <td>${cell(v.T)}</td>
+            <td>${tot}전</td>
+            <td>${pct}%</td>
+          </tr>`;
+        }).join("");
+        mapWrap.innerHTML = `
+          <h3>맵별데이터</h3>
+          <div class="table-wrap">
+            <table class="detail">
+              <thead><tr><th>맵</th><th>저그전</th><th>프로토스전</th><th>테란전</th><th>총</th><th>승률</th></tr></thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+        `;
+      }
+    }catch(e){ console.warn('mapStats error', e); }
+
 
     // 그래프 생성
     const ctxR = document.getElementById('recent5Chart')?.getContext('2d');
@@ -594,6 +703,9 @@ try {
   console.warn('recent5 chart error', e);
 }
 activate('player');
+
+  } catch(e){ console.warn('openPlayer error', e); }
+  finally { window.__openingPlayer = false; }
 }
 window.openPlayer = openPlayer;
 $('playerClose')?.addEventListener('click', ()=> activate('rank'));
@@ -809,7 +921,7 @@ $('schedResetBtn')?.addEventListener('click', ()=>{ const i=$('schedQuery'); if(
 $('schedQuery')?.addEventListener('keydown', e=>{ if(e.key==='Enter') $('schedSearchBtn').click(); });
 $('schedOpenSheet')?.addEventListener('click', ()=>{
   const url='https://docs.google.com/spreadsheets/d/1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE/edit?gid=1796534117#gid=1796534117';
-  window.open(url, 'schedPopup', 'width=1200,height=800,noopener');
+  try{window.open(url, 'schedPopup', 'width=1200,height=800,noopener');}catch(e){console.warn('popup suppressed')}
 });
 
 // ===== All matches =====
@@ -938,16 +1050,31 @@ if (hamburger && mainMenu) {
 /* === v9_97_FinalDualColor_MapCompareFix === */
 (function(){
   function lc(s){ return String(s ?? '').toLowerCase(); }
-  function $(id){ return document.getElementById(id); }
+  function $(id){
+  const el = document.getElementById(id);
+  if (el) return el;
+  // Safe stub to avoid 'Cannot set properties of undefined'
+  const stub = {
+    style: {},
+    dataset: {},
+    addEventListener: ()=>{},
+    removeEventListener: ()=>{},
+    appendChild: ()=>{},
+    querySelector: ()=>null,
+    querySelectorAll: ()=>[],
+    getContext: ()=>null
+  };
+  return stub;
+}
 
   // Scroll buttons
   document.addEventListener("DOMContentLoaded", () => {
     const up=$("#scrollUp"), down=$("#scrollDown");
-    if(up && !up.dataset.bound){
+    if(up && up.dataset && !up.dataset.bound){
       up.dataset.bound="1";
       up.addEventListener("click", ()=>window.scrollTo({top:0,behavior:"smooth"}));
     }
-    if(down && !down.dataset.bound){
+    if(down && down.dataset && !down.dataset.bound){
       down.dataset.bound="1";
       down.addEventListener("click", ()=>window.scrollTo({top:document.documentElement.scrollHeight,behavior:"smooth"}));
     }
@@ -957,10 +1084,13 @@ if (hamburger && mainMenu) {
   document.addEventListener("DOMContentLoaded", ()=>{
     const runBtn=$("#h2hRun");
     if(!runBtn) return;
-    const fresh=runBtn.cloneNode(true);
-    runBtn.parentNode.replaceChild(fresh,runBtn);
-
-    fresh.addEventListener("click", async ()=>{
+    if (runBtn && typeof runBtn.cloneNode === "function" && runBtn.parentNode){
+      const fresh = runBtn.cloneNode(true);
+      runBtn.parentNode.replaceChild(fresh, runBtn);
+      runBtn = fresh;
+    }
+    if (!runBtn) return;
+    runBtn.addEventListener("click", async ()=>{
       const p1El=$("#h2hP1"), p2El=$("#h2hP2");
       const p1Label=p1El?.value?.trim()||"플레이어1";
       const p2Label=p2El?.value?.trim()||"플레이어2";
@@ -1081,7 +1211,7 @@ if (hamburger && mainMenu) {
   // H2H DualColor Summary + Map Summary
   document.addEventListener("DOMContentLoaded",()=>{
     const run=$("#h2hRun");if(!run)return;
-    const fresh=run.cloneNode(true);run.parentNode.replaceChild(fresh,run);
+    const fresh=run.cloneNode ? cloneNode(true) : (el => el);run.parentNode.replaceChild(fresh,run);
 
     fresh.addEventListener("click",async()=>{
       const p1El=$("#h2hP1"),p2El=$("#h2hP2");
@@ -1211,10 +1341,10 @@ if (hamburger && mainMenu) {
     if (!runBtn) return;
 
     // 2.1 Remove all previous listeners by cloning
-    const freshRun = runBtn.cloneNode(true);
+    const freshRun = runBtn.cloneNode ? cloneNode(true) : (el => el);
     runBtn.parentNode.replaceChild(freshRun, runBtn);
 
-    const freshReset = resetBtn ? resetBtn.cloneNode(true) : null;
+    const freshReset = resetBtn ? resetBtn.cloneNode ? cloneNode(true) : (el => el) : null;
     if (resetBtn) resetBtn.parentNode.replaceChild(freshReset, resetBtn);
 
     // 2.2 Attach fresh click handler
@@ -1639,3 +1769,430 @@ function formatDateSafe(value){
     });
   }
 })();
+
+/* === v12 Full Data Connect Patch === */
+/* GViz helper: accept full Google Sheets URL with edit?gid=... */
+async function fetchGVIZbyUrl_v12b(fullUrl){
+  try{
+    const m = String(fullUrl).match(/spreadsheets\/d\/([^/]+)\/edit.*?[?&#]gid=(\d+)/);
+    if(!m) throw new Error("Invalid sheet URL: "+fullUrl);
+    const id=m[1], gid=m[2];
+    const gviz = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&gid=${gid}`;
+    const res = await fetch(gviz, {cache:'no-store'});
+    const text = await res.text();
+    const json = JSON.parse(text.replace(/^[^{]+/, '').replace(/;?}$/,''));
+    const table = json.table || {};
+    const rows = (table.rows||[]).map(r => (r.c||[]).map(c => (c && (c.f ?? c.v)) ?? ''));
+    return rows;
+  }catch(e){ console.error('fetchGVIZbyUrl error', e); return []; }
+}
+
+/* Format helpers */
+function fmtNum(n){ const x=Number(n||0); return isNaN(x)?'-':x.toLocaleString('ko-KR'); }
+function fmtPct(win,total){ const t=Number(total||0), w=Number(win||0); if(!t) return '0%'; return ((w/t)*100).toFixed(1)+'%'; }
+function toDateKR(s){
+  const str=String(s||'').trim();
+  let m=str.match(/(\d{4})[^\d](\d{1,2})[^\d](\d{1,2})/);
+  if(m){ return new Date(`${m[1]}-${('0'+m[2]).slice(-2)}-${('0'+m[3]).slice(-2)}`); }
+  m=str.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if(m){ return new Date(`${m[1]}-${m[2]}-${m[3]}`); }
+  const d=new Date(str); return isNaN(d)?null:d;
+}
+
+/* User-provided Google Sheets */
+const URLS_V12 = {
+  active: "https://docs.google.com/spreadsheets/d/18m01CS5kUZKByQHmusXMN54Pa0SXwozgPGp92Q2Nnwo/edit?gid=829552378#gid=829552378",
+  matches: "https://docs.google.com/spreadsheets/d/1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs/edit?gid=1297807009#gid=1297807009",
+  schedule: "https://docs.google.com/spreadsheets/d/1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE/edit?gid=1796534117#gid=1796534117"
+};
+
+/* 1) 활동인원 & 총경기수 */
+async function v12_loadCounts(){
+  const [activeRows, matchRows] = await Promise.all([
+    fetchGVIZbyUrl_v12b(URLS_V12.active),
+    fetchGVIZbyUrl_v12b(URLS_V12.matches)
+  ]);
+  try{
+    // active: ClanMembers!A2:A -> numeric count
+    const active = activeRows.slice(1).map(r=>String(r[0]||'').trim()).filter(Boolean).length;
+    const elA = document.getElementById('activeCount');
+    if(elA) elA.textContent = fmtNum(active)+'명';
+  }catch(e){ console.error('activeCount set error', e); }
+  try{
+    // total matches: (개인전)경기기록데이터!A2:A
+    const total = matchRows.length ? matchRows.slice(1).filter(r=> String(r[0]||'').trim()).length : 0;
+    const elT = document.getElementById('totalMatches');
+    if(elT) elT.textContent = fmtNum(total)+'경기';
+  }catch(e){ console.error('totalMatches set error', e); }
+  return {activeRows, matchRows};
+}
+
+
+/* v12f normalize race tags: map 저그/프로토스/테란 and variants to Z/P/T */
+function normalizeRaceTag(v){
+  const s = String(v||'').trim().toLowerCase();
+  if(!s) return '';
+  if(['z','저그','zerg'].includes(s)) return 'Z';
+  if(['p','프로토스','protoss','tos','토스'].includes(s)) return 'P';
+  if(['t','테란','terran'].includes(s)) return 'T';
+  return s.toUpperCase();
+}
+
+/* 2) 종족별 상대 승률: D=승자종족, G=패자종족 */
+function v12_calcRaceStats(rows){
+  const R=['Z','P','T'];
+  const B={Z:{vs:{Z:{total:0},P:{total:0,win:0,lose:0},T:{total:0,win:0,lose:0}}},
+           P:{vs:{Z:{total:0,win:0,lose:0},P:{total:0},T:{total:0,win:0,lose:0}}},
+           T:{vs:{Z:{total:0,win:0,lose:0},P:{total:0,win:0,lose:0},T:{total:0}}}};
+  rows.slice(1).forEach(r=>{
+    const w=normalizeRaceTag(r[3]);
+    const l=normalizeRaceTag(r[6]);
+    if(!R.includes(w) || !R.includes(l)) return;
+    if(w===l){ /* mirror match excluded */ return; }
+    else{
+      B[w].vs[l].total += 1; B[w].vs[l].win = (B[w].vs[l].win||0)+1;
+      B[l].vs[w].total += 1; B[l].vs[w].lose = (B[l].vs[w].lose||0)+1;
+    }
+  });
+  return B;
+}
+function v12_renderRace(B){
+  const tbl = document.getElementById('raceTable');
+  if(!tbl) return;
+  const tbody = tbl.querySelector('tbody'); if(!tbody) return;
+  tbody.innerHTML='';
+  const order=['Z','P','T'];
+  order.forEach(race=>{
+    const tr=document.createElement('tr');
+    const make = (t)=>{const td=document.createElement('td'); td.textContent=t; return td;};
+    tr.appendChild(make(race));
+    // vs Z/P/T columns
+    order.forEach(opp=>{
+      if(race===opp){
+        const tot=B[race].vs[opp].total||0;
+        tr.appendChild(make(`${fmtNum(tot)}전`));
+      }else{
+        const cell=B[race].vs[opp]||{total:0,win:0,lose:0};
+        const txt = `${fmtNum(cell.total)}전 ${fmtNum(cell.win)}승 ${fmtNum(cell.lose)}패 (${fmtPct(cell.win, cell.total)})`;
+        tr.appendChild(make(txt));
+      }
+    });
+    // 합계
+    let sum=0;
+    order.forEach(opp=>{ sum += (B[race].vs[opp].total||0); });
+    tr.appendChild(make(v12e_renderRaceSumRow(B, race)));
+    tbody.appendChild(tr);
+  });
+}
+
+/* 3) 다음 프로리그 일정: A:H, D & H present, today onward, take next 3
+      Columns: A Round, B Date, C 요일, D HOME, (VS blank), H AWAY */
+async function v12_loadNextSchedule(){
+  const rows = await fetchGVIZbyUrl_v12b(URLS_V12.schedule);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const filtered = rows.slice(1).filter(r=>{
+    const d = toDateKR(r[1]);
+    const home = String(r[3]||'').trim();
+    const away = String(r[7]||'').trim();
+    return d && d>=today && home && away;
+  }).sort((a,b)=> toDateKR(a[1]) - toDateKR(b[1])).slice(0,3);
+  const tbl=document.getElementById('dashSched'); if(!tbl) return;
+  const tbody=tbl.querySelector('tbody'); if(!tbody) return;
+  tbody.innerHTML='';
+  filtered.forEach(r=>{
+    const tr=document.createElement('tr');
+    const cells=[r[0]||'', r[1]||'', r[2]||'', r[3]||'', 'VS', r[7]||''];
+    cells.forEach(v=>{ const td=document.createElement('td'); td.textContent=String(v||''); tr.appendChild(td); });
+    tbody.appendChild(tr);
+  });
+}
+
+/* 4) 전적랭킹에서 선수 클릭 → 선수상세 이동 */
+(function v12_bindRankClick(){
+  const table = document.getElementById('rankTable');
+  if(!table) return;
+  table.addEventListener('click', (e)=>{
+    const tr = e.target.closest('tr'); if(!tr) return;
+    const nameCell = tr.querySelector('td,th'); if(!nameCell) return;
+    const name = String(nameCell.textContent || '').trim();
+    if(!name) return;
+    if(typeof openPlayer === 'function'){ openPlayer(name); }
+    else {
+      // fallback: try hash or activate player panel
+      if(typeof activate === 'function') activate('player');
+      const input = document.getElementById('playerQuery') || document.getElementById('playerSearch');
+      if(input){ input.value=name; input.dispatchEvent(new Event('change')); }
+    }
+  });
+})();
+
+/* 5) Bootstrap loader on DOM ready */
+document.addEventListener('DOMContentLoaded', async ()=>{
+  try{
+    const {matchRows} = await v12_loadCounts();
+    if(matchRows && matchRows.length){
+      const stats = v12_calcRaceStats(matchRows);
+      /* disabled duplicate race render */
+    }
+    await v12_loadNextSchedule();
+  }catch(e){ console.error('v12 boot error', e); }
+});
+/* === end of v12 patch === */
+
+/* robust GViz parser (v12b) */
+async function fetchGVIZbyUrl_v12b(fullUrl){
+  try{
+    const m = String(fullUrl).match(/spreadsheets\/d\/([^/]+)\/edit.*?[?&#]gid=(\d+)/);
+    if(!m) throw new Error("Invalid sheet URL: "+fullUrl);
+    const id=m[1], gid=m[2];
+    const gviz = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&gid=${gid}`;
+    const res = await fetch(gviz,{cache:'no-store'});
+    const text = await res.text();
+    const body = (text.match(/setResponse\((.*)\);?\s*$/s)||[])[1];
+    const json = JSON.parse(body);
+    const table=json.table||{};
+    const rows=(table.rows||[]).map(r=>(r.c||[]).map(c=>(c&&(c.f??c.v))??''));
+    return rows;
+  }catch(e){ console.error('fetchGVIZbyUrl_v12b error', e); return []; }
+}
+
+/* v12e rank row click strong */
+(function(){
+  document.addEventListener('click', (e)=>{
+    const tr = e.target.closest('#rankTable tbody tr');
+    if(!tr) return;
+    let name = tr.querySelector('.playerName')?.textContent?.trim() || '';
+    if(!name){
+      const cells = Array.from(tr.querySelectorAll('td')).map(td=>td.textContent.trim());
+      const pick = cells.find(txt => /[A-Za-z가-힣]{2,}/.test(txt) && !/^\d+(\s*[-.:])?/.test(txt));
+      name = (pick || '').replace(/^\d+\s*[-.:]?\s*/,'').replace(/\s+\(.*\)$/, '');
+    }
+    if(!name) return;
+    if(typeof openPlayer==='function'){ openPlayer(name); return; }
+    try{ if(typeof activate==='function') activate('player'); }catch(_){}
+    const inputs = ['playerQuery','playerSearch','playerInput'].map(id=>document.getElementById(id)).filter(Boolean);
+    if(inputs[0]){ inputs[0].value = name; inputs[0].dispatchEvent(new Event('change')); }
+  }, false);
+})();
+
+/* v12e race sum override */
+function v12e_renderRaceSumRow(stat, race){
+  const races=['Z','P','T'];
+  const sum = races.reduce((acc,x)=>{
+    const o = (race===x) ? {total:0,win:0,lose:0} : ((stat[race]&&stat[race].vs&&stat[race].vs[x])? stat[race].vs[x] : {total:0,win:0,lose:0});
+    acc.total += o.total||0;
+    acc.win   += o.win||0;
+    acc.lose  += o.lose||0;
+    return acc;
+  },{total:0,win:0,lose:0});
+  const pct = sum.total ? Math.round(sum.win*1000/sum.total)/10 : 0;
+  return `${sum.total}전 ${sum.win}승 ${sum.lose}패 (${pct}%)`;
+};
+
+/* v12e hide sched loading */
+(function(){
+  const hide = ()=>{ try{ const n=document.getElementById('schedLoading')||document.getElementById('schedStatus'); if(n){ n.textContent=''; n.style.display='none'; } }catch(e){} };
+  
+
+// === Hall of Fame (HOF) popup ===
+async function openHOF(type){
+  try{
+    let cfg = null;
+    if(type==='pro') cfg = (SHEETS.hof && SHEETS.hof.pro);
+    else if(type==='tst') cfg = (SHEETS.hof && SHEETS.hof.tst);
+    else if(type==='tsl') cfg = (SHEETS.hof && SHEETS.hof.tsl);
+    if(!cfg) console.warn('HOF: missing config'); return;
+    const data = await fetchGVIZ(cfg);
+    if(!data.length) console.warn('HOF: empty data'); return;
+    const html = `
+      <div class="hof-wrap">
+        <h2>3050클랜 </button>
+      </div>`;
+    const dlg = ensureHOFModal();
+    if(!dlg){ console.warn('HOF: no dialog'); return; }
+    dlg.innerHTML = html;
+    dlg.showModal();
+  }catch(e){
+    console.error('HOF error', e);
+    console.warn('HOF: open error');
+  }
+}
+
+document.getElementById('hofPro')?.addEventListener('click', ()=>openHOF('pro'));
+document.getElementById('hofTST')?.addEventListener('click', ()=>openHOF('tst'));
+document.getElementById('hofTSL')?.addEventListener('click', ()=>openHOF('tsl'));
+
+// === Global search -> open player ===
+document.getElementById('globalSearchBtn')?.addEventListener('click', ()=>{
+  try{
+    const q = String(document.getElementById('globalSearch')?.value||'').trim().toLowerCase();
+    if(!q) return;
+    if(!Array.isArray(RANK_SRC) || !RANK_SRC.length){ if(typeof loadRanking==='function') loadRanking(); }
+    const row = (RANK_SRC.slice? RANK_SRC.slice(1) : []).find(r=> String(r[1]||'').toLowerCase().includes(q));
+    if(row && typeof openPlayer==='function') openPlayer(row[1]);
+  }catch(e){ console.warn('global search error', e); }
+});
+document.getElementById('globalSearch')?.addEventListener('keydown', e=>{
+  if(e.key==='Enter') document.getElementById('globalSearchBtn')?.click();
+});
+
+document.addEventListener('DOMContentLoaded', hide);
+  setTimeout(hide, 1500);
+})();
+
+
+/* === Hall of Fame (프로리그/TST/TSL) modal === */
+(function(){
+  const cfg = {
+  pro: { id:"1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE", sheet:"HallofFame", range:"A:Z", title:"프로리그 명예의전당" },
+  TST: { id:"1ThjVC2q7BwN5__wEcDPc-bBnnrHxL7wTng-pn8rOMnw", sheet:"명예의전당", range:"A:Z", title:"TST 명예의전당" },
+  TSL: { id:"1r-4eqB14QW0v5BiH4cCC9kGFb7-EJ5Lv63iihaXV79k", sheet:"명예의전당", range:"A:Z", title:"TSL 명예의전당" }
+};
+  const modal = document.getElementById('hofModal');
+  const backdrop = document.getElementById('hofBackdrop');
+  const closeBtn = document.getElementById('hofClose');
+  const tbl = document.getElementById('hofTable');
+  const title = document.getElementById('hofTitle');
+  function open(){ if(modal){ modal.setAttribute('aria-hidden','false'); } }
+  function close(){ if(modal){ modal.setAttribute('aria-hidden','true'); } }
+  backdrop?.addEventListener('click', close);
+  closeBtn?.addEventListener('click', close);
+
+  async function openHof(key){
+    const c = key==='pro'? cfg.pro : (key==='TST'? cfg.TST : cfg.TSL);
+    if(!c) return;
+    if (title) title.textContent = c.title;
+    const data = await fetchGVIZ({id:c.id, sheet:c.sheet, range:c.range});
+    renderTable(tbl, data);
+    open();
+  }
+  document.getElementById('hofPro')?.addEventListener('click', ()=> openHof('pro'));
+  document.getElementById('hofTST')?.addEventListener('click', ()=> openHof('TST'));
+  document.getElementById('hofTSL')?.addEventListener('click', ()=> openHof('TSL'));
+})();
+
+// Ensure HOF modal exists
+function ensureHOFModal(){
+  let dlg = document.getElementById('hofModal');
+  if(!dlg){
+    dlg = document.createElement('dialog');
+    dlg.id = 'hofModal';
+    dlg.className = 'hof-modal';
+    document.body.appendChild(dlg);
+  }
+  return dlg;
+}
+
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  try{ initHOFButtons(); }catch(e){}
+  try{ buildRaceWinrate(); }catch(e){}
+});
+
+
+
+// === Utility: renderOnce to prevent duplicate sections ===
+function renderOnce(sel, html) {
+  const box = document.querySelector(sel);
+  if (!box) return;
+  box.innerHTML = '';
+  box.insertAdjacentHTML('beforeend', html);
+}
+
+
+// === 안전 복구용: drawRankRows 함수 재선언 (중복 방지) ===
+function drawRankRows(rows){
+  try {
+    const rankTable = document.getElementById('rankTable');
+    if (!rankTable) return;
+    const header = RANK_SRC[0] || [];
+    const thead = rankTable.querySelector('thead');
+    const tbody = rankTable.querySelector('tbody');
+    if (!thead || !tbody) return;
+    thead.innerHTML = '';
+    tbody.innerHTML = '';
+
+    const hr = document.createElement('tr');
+    (header.slice(0, 10) || []).forEach(h => {
+      const th = document.createElement('th');
+      th.textContent = h ?? '';
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      (r.slice(0, 10) || []).forEach((v, i) => {
+        const td = document.createElement('td');
+        if (i === 1 && v) {
+          const id = String(v).split('/')[0].trim();
+          const a = document.createElement('a');
+          a.href = '#';
+          a.textContent = id;
+          a.addEventListener('click', e => {
+            e.preventDefault();
+            openPlayer(String(v));
+          });
+          td.appendChild(a);
+        } else {
+          td.textContent = v ?? '';
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  } catch(e){
+    console.error('drawRankRows error', e);
+  }
+}
+
+
+
+// === Safe menu toggle only for mobile menu ===
+document.addEventListener('DOMContentLoaded', ()=>{
+  const menuBtn = document.getElementById('menuBtn');
+  const mobileMenu = document.getElementById('mobileMenu');
+  if(menuBtn && mobileMenu){
+    menuBtn.addEventListener('click', ()=>{
+      if(mobileMenu.style.display==='block'){
+        mobileMenu.style.display='none';
+      } else {
+        mobileMenu.style.display='block';
+      }
+    });
+  }
+});
+
+window.addEventListener("load",()=>{
+  // Scroll buttons
+  const up=document.getElementById("scrollUp");
+  const down=document.getElementById("scrollDown");
+  if(up&&!up.dataset.bound){
+    up.dataset.bound="1";
+    up.addEventListener("click",()=>window.scrollTo({top:0,behavior:"smooth"}));
+  }
+  if(down&&!down.dataset.bound){
+    down.dataset.bound="1";
+    down.addEventListener("click",()=>window.scrollTo({top:document.documentElement.scrollHeight,behavior:"smooth"}));
+  }
+  // HOF Buttons
+  const hofLinks={
+    hofPro:"https://docs.google.com/spreadsheets/d/1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE/edit?gid=2109029745#gid=2109029745",
+    hofTST:"https://docs.google.com/spreadsheets/d/1ThjVC2q7BwN5__wEcDPc-bBnnrHxL7wTng-pn8rOMnw/edit?gid=1085175922#gid=1085175922",
+    hofTSL:"https://docs.google.com/spreadsheets/d/1r-4eqB14QW0v5BiH4cCC9kGFb7-EJ5Lv63iihaXV79k/edit?gid=1176021631#gid=1176021631"
+  };
+  document.querySelectorAll("button[id^='hof']").forEach(btn=>{
+    const url=hofLinks[btn.id];
+    if(!url) return;
+    btn.addEventListener("click",e=>{
+      e.preventDefault();
+      try{window.open(url,"_blank","width=1200,height=800,scrollbars=yes,resizable=yes");}catch(e){console.warn('popup suppressed')}
+    });
+  });
+  // Run button guard
+  const run=document.getElementById("h2hRun");
+  if(run && run.dataset && !run.dataset.bound){
+    run.dataset.bound="1";
+    run.addEventListener("click",async()=>{await buildRaceWinrate();});
+  }
+});

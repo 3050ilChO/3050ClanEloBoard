@@ -38,8 +38,6 @@
   </script>
 </head>
 <body>
-<div id="loadingScreen"><img src="./intro.png" alt="Loading" /></div>
-
 <header class="topbar">
 <button id="hamburgerBtn" class="hamburger" aria-label="메뉴 열기">☰</button>
 <div class="top-left-bar left">
@@ -59,9 +57,14 @@
 <div class="subline">그들만의리그</div>
 </div>
 </div>
+
+<div class="dash-search">
+  <input id="globalSearch" class="search" placeholder="플레이어 검색…"/>
+  <button id="globalSearchBtn" class="ghost">검색</button>
+</div>
 <nav class="menu" id="mainMenu">
-<button class="tab-btn home-btn" id="homeBtnTop">🏠 홈으로</button>
-<button class="tab-btn active" data-target="rank">전적랭킹</button>
+<button class="tab-btn home-btn" data-target="dashboard">대시보드</button>
+<button class="tab-btn" data-target="rank">전적랭킹</button>
 <button class="tab-btn" data-target="player" style="display:none">선수상세</button>
 <button class="tab-btn" data-target="h2h">상대전적검색</button>
 <button class="tab-btn" data-target="proRank">프로리그순위</button>
@@ -69,13 +72,59 @@
 <button class="tab-btn" data-target="all">전체경기기록</button>
 <button class="tab-btn" data-target="members">클랜원명단</button>
 </nav>
+
+<section class="panel active" id="dashboard">
+  <div class="dash-wrap">
+    <div class="cards">
+      <div class="dash-card gold">
+        <div class="card-title">현재진행시즌</div>
+        <div class="card-value">S10</div>
+      </div>
+      <div class="dash-card gold">
+        <div class="card-title">활동인원</div>
+        <div class="card-value" id="activeCount">-명</div>
+      </div>
+      <div class="dash-card gold">
+        <div class="card-title">총경기수</div>
+        <div class="card-value" id="totalMatches">-경기</div>
+      </div>
+      <div class="dash-card gold">
+        <div class="card-title">3050클랜 명예의전당</div>
+        <div class="card-actions">
+          <button class="mini-btn" id="hofPro">프로리그</button>
+          <button class="mini-btn" id="hofTST">TST</button>
+          <button class="mini-btn" id="hofTSL">TSL</button>
+        </div>
+      </div>
+    </div>
+
+    <h3>종족별 상대 승률</h3>
+    <table id="raceTable" class="table">
+      <thead>
+        <tr><th>종족</th><th>vs Z</th><th>vs P</th><th>vs T</th><th>합계</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h3>다음 프로리그 일정</h3>
+    <div class="loading" id="schedLoading"></div>
+    <table id="dashSched" class="table">
+      <thead>
+        <tr><th>라운드</th><th>날짜</th><th>요일</th><th>HOME</th><th></th><th>AWAY</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div id="raceNote" class="status"></div>
+  </div>
+</section>
+
 </header>
 
 <div id="mobileMenu" class="mobile-menu" aria-hidden="true">
   <div class="mobile-menu-inner">
     <button class="mobile-close" id="mobileMenuClose" aria-label="닫기">×</button>
     <ul class="mobile-list">
-      <li><button class="mobile-item" data-target="rank">🏠 홈으로</button></li>
+      <li><button class="mobile-item" data-target="dashboard">🏠 대시보드</button></li>
       <li><button class="mobile-item" data-target="rank">전적랭킹</button></li>
       <li><button class="mobile-item" data-target="player">선수상세</button></li>
       <li><button class="mobile-item" data-target="h2h">상대전적검색</button></li>
@@ -88,7 +137,7 @@
 </div>
 
 <main class="container">
-<section class="panel active" id="rank">
+<section class="panel" id="rank">
 <div class="panel-head">
 <h2>전적랭킹</h2>
 <div class="actions">
@@ -97,7 +146,7 @@
 <button class="ghost" id="rankRefresh">새로고침</button>
 </div>
 </div>
-<div class="status" id="rankStatus">시트에서 데이터를 불러오는 중…</div>
+<div class="status" id="rankStatus">시트에서 데이터를 </div>
 <div class="table-wrap full"><table class="clickable" id="rankTable"><thead><tr></tr></thead><tbody></tbody></table></div>
 </section>
 <section class="panel" id="player">
@@ -140,7 +189,7 @@
 <button class="ghost" id="schedOpenSheet">🗓️ 일정 자세히 보기</button>
 </div>
 </div>
-<div class="status" id="schedStatus">불러오는 중…</div>
+<div class="status" id="schedStatus"></div>
 <div class="table-wrap full"><table id="schedTable"><thead><tr></tr></thead><tbody></tbody></table></div>
 </section>
 <section class="panel" id="all">
@@ -152,7 +201,7 @@
 <button class="ghost" id="allResetBtn">초기화</button>
 </div>
 </div>
-<div class="status" id="allStatus">불러오는 중…</div>
+<div class="status" id="allStatus"></div>
 <div class="table-wrap full"><table id="allTable"><thead><tr></tr></thead><tbody></tbody></table></div>
 </section>
 <section class="panel" id="members">
@@ -164,7 +213,7 @@
 <button class="ghost" id="memberResetBtn">초기화</button>
 </div>
 </div>
-<div class="status" id="membersStatus">불러오는 중…</div>
+<div class="status" id="membersStatus"></div>
 <div class="table-wrap"><table id="membersTable"><thead><tr></tr></thead><tbody></tbody></table></div>
 </section>
 </main>
@@ -175,7 +224,7 @@
 <button aria-label="위로" class="fab-btn" id="scrollUp">▲</button>
 <button aria-label="아래로" class="fab-btn" id="scrollDown">▼</button>
 </div>
-<script src="app.js?v=112"></script>
+<script src="app.js?v=113"></script>
 <script>
 window.addEventListener('load', () => {
   const dateEl = document.getElementById("currentDate");
@@ -186,6 +235,20 @@ window.addEventListener('load', () => {
     dateEl.textContent = formatted;
   }
   setTimeout(() => document.getElementById('loadingScreen')?.remove(), 3000);
+});
+</script>
+</div>
+
+
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+  anchor.addEventListener('click', function (e) {
+    const target = document.querySelector(this.getAttribute('href'));
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
 });
 </script>
 </body>
