@@ -2488,3 +2488,162 @@ window.openPlayer = async function(bCellValue){
     decoratePlayerEloWithCrown(eloRow, cRank);
   }catch(e){ console.warn('openPlayer v980 add-ons failed', e); }
 };
+
+
+
+/* === v9_81: 전체경기기록 200행 페이지 버튼 (처음으로/맨마지막 버튼만) === */
+(function(){
+  const ROWS_PER_PAGE = 200;
+  let __ALL_DATA = null;
+  let __ALL_HEADERS = null;
+  let __ALL_ROWS = null;
+  let __ALL_PAGE = 1;
+  let __ALL_TOTAL_PAGES = 1;
+
+  function ensureAllPaginationContainer(){
+    const wrap = document.querySelector('#all .table-wrap.full');
+    if(!wrap) return null;
+    let pag = document.getElementById('allPagination');
+    if(!pag){
+      pag = document.createElement('div');
+      pag.id = 'allPagination';
+      pag.style.display = 'flex';
+      pag.style.gap = '6px';
+      pag.style.justifyContent = 'center';
+      pag.style.alignItems = 'center';
+      pag.style.margin = '14px 0 6px 0';
+      pag.style.flexWrap = 'wrap';
+      wrap.after(pag);
+    }
+    return pag;
+  }
+
+  function renderAllPage(page){
+    if (!__ALL_ROWS || !__ALL_HEADERS) return;
+    const table = document.getElementById('allTable');
+    if(!table) return;
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+    if(thead) {
+      thead.innerHTML = '<tr>' + __ALL_HEADERS.map(h=>`<th>${h??''}</th>`).join('') + '</tr>';
+    }
+    if(tbody){
+      tbody.innerHTML = '';
+      const start = (page-1)*ROWS_PER_PAGE;
+      const end = Math.min(start + ROWS_PER_PAGE, __ALL_ROWS.length);
+      for(let i=start;i<end;i++){
+        const r = __ALL_ROWS[i] || [];
+        const tr = document.createElement('tr');
+        r.forEach(v=>{
+          const td = document.createElement('td');
+          td.textContent = (v==null?'':v);
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      }
+    }
+    __ALL_PAGE = page;
+    renderAllPagination();
+  }
+
+  function renderAllPagination(){
+    const pag = ensureAllPaginationContainer();
+    if(!pag) return;
+    pag.innerHTML = '';
+
+    const first = document.createElement('button');
+    first.textContent = '처음으로';
+    first.disabled = (__ALL_PAGE === 1);
+    first.onclick = ()=>renderAllPage(1);
+    pag.appendChild(first);
+
+    const prev = document.createElement('button');
+    prev.textContent = '이전';
+    prev.disabled = (__ALL_PAGE <= 1);
+    prev.onclick = () => renderAllPage(Math.max(1, __ALL_PAGE-1));
+    pag.appendChild(prev);
+
+    const MAX_BTN = 9;
+    let start = Math.max(1, __ALL_PAGE - Math.floor(MAX_BTN/2));
+    let end = Math.min(__ALL_TOTAL_PAGES, start + MAX_BTN - 1);
+    if (end - start + 1 < MAX_BTN){
+      start = Math.max(1, end - MAX_BTN + 1);
+    }
+    if (start > 1){
+      const firstNum = document.createElement('button');
+      firstNum.textContent = '1';
+      firstNum.onclick = ()=>renderAllPage(1);
+      pag.appendChild(firstNum);
+      if (start > 2){
+        const dots = document.createElement('span');
+        dots.textContent = '…';
+        dots.style.padding = '0 4px';
+        pag.appendChild(dots);
+      }
+    }
+
+    for(let i=start;i<=end;i++){
+      const btn = document.createElement('button');
+      btn.textContent = String(i);
+      if(i===__ALL_PAGE){
+        btn.style.fontWeight = '900';
+        btn.style.border = '1px solid #a78d40';
+        btn.style.color = '#a78d40';
+      }
+      btn.onclick = ()=>renderAllPage(i);
+      pag.appendChild(btn);
+    }
+
+    if (end < __ALL_TOTAL_PAGES){
+      if (end < __ALL_TOTAL_PAGES - 1){
+        const dots2 = document.createElement('span');
+        dots2.textContent = '…';
+        dots2.style.padding = '0 4px';
+        pag.appendChild(dots2);
+      }
+      const lastNum = document.createElement('button');
+      lastNum.textContent = String(__ALL_TOTAL_PAGES);
+      lastNum.onclick = ()=>renderAllPage(__ALL_TOTAL_PAGES);
+      pag.appendChild(lastNum);
+    }
+
+    const next = document.createElement('button');
+    next.textContent = '다음';
+    next.disabled = (__ALL_PAGE >= __ALL_TOTAL_PAGES);
+    next.onclick = () => renderAllPage(Math.min(__ALL_TOTAL_PAGES, __ALL_PAGE+1));
+    pag.appendChild(next);
+
+    const last = document.createElement('button');
+    last.textContent = '맨마지막';
+    last.disabled = (__ALL_PAGE === __ALL_TOTAL_PAGES);
+    last.onclick = ()=>renderAllPage(__ALL_TOTAL_PAGES);
+    pag.appendChild(last);
+  }
+
+  async function buildAllMatchesPaged(force=false){
+    try{
+      const table = document.getElementById('allTable');
+      if(!table) return;
+      if(__ALL_DATA && !force){
+        __ALL_TOTAL_PAGES = Math.max(1, Math.ceil(__ALL_ROWS.length / ROWS_PER_PAGE));
+        renderAllPage(__ALL_PAGE || 1);
+        return;
+      }
+      const src = window.SHEETS && window.SHEETS.all;
+      if(!src) return;
+      __ALL_DATA = await fetchGVIZ(src);
+      if(!__ALL_DATA.length) return;
+      __ALL_HEADERS = __ALL_DATA[0] || [];
+      __ALL_ROWS = __ALL_DATA.slice(1) || [];
+      __ALL_TOTAL_PAGES = Math.max(1, Math.ceil(__ALL_ROWS.length / ROWS_PER_PAGE));
+      __ALL_PAGE = 1;
+      renderAllPage(1);
+    }catch(e){
+      console.warn('buildAllMatchesPaged error', e);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', ()=>{ buildAllMatchesPaged(); });
+  window.buildAllMatchesPaged = buildAllMatchesPaged;
+})();
+
