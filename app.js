@@ -2196,3 +2196,211 @@ window.addEventListener("load",()=>{
     run.addEventListener("click",async()=>{await buildRaceWinrate();});
   }
 });
+
+
+// === v9_79: Tier filters + Tier-rank crowns ===
+
+// Compute numeric ELO from text like "1,234.5"
+function parseEloText(s){
+  const n = Number(String(s||'').replace(/[^0-9.]/g,''));
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Return {tierRank, totalInTier}
+function getTierRankForPlayer(playerRow, allRows, H){
+  try{
+    const IDX_TIER = 3; // D
+    const IDX_ELO  = 9; // J
+    const IDX_NAME = 1; // B
+    const myName = String(playerRow[IDX_NAME]||'').split('/')[0].trim().toLowerCase();
+    const myTier = String(playerRow[IDX_TIER]||'').trim();
+    // same-tier rows
+    const same = allRows.filter(r => String(r[IDX_TIER]||'').trim() === myTier);
+    // sort by ELO desc
+    same.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
+    const rank = same.findIndex(r => String(r[IDX_NAME]||'').split('/')[0].trim().toLowerCase() === myName) + 1;
+    return {tierRank: rank>0?rank:null, totalInTier: same.length, tierName: myTier};
+  }catch(e){ console.warn('getTierRankForPlayer error', e); return {tierRank:null, totalInTier:0, tierName:''}; }
+}
+
+// Decorate player ELO line with crown if tierRank 1~3; expects an element already rendered
+function decoratePlayerEloWithCrown(containerEl, tierRank){
+  if(!containerEl) return;
+  const img = document.createElement('img');
+  if (tierRank === 1){ img.src='./crown_gold.png'; }
+  else if (tierRank === 2){ img.src='./crown_silver.png'; }
+  else if (tierRank === 3){ img.src='./crown_bronze.png'; }
+  else return;
+  img.className = 'crown';
+  containerEl.appendChild(img);
+}
+
+// Hook Tier buttons in Rank page
+function setupTierButtons(){
+  const host = document.getElementById('tierFilters');
+  if(!host) return;
+  host.addEventListener('click', (e)=>{
+    const btn = e.target.closest('.tier-btn');
+    if(!btn) return;
+    // UI state
+    host.querySelectorAll('.tier-btn').forEach(b=> b.classList.remove('active'));
+    btn.classList.add('active');
+    const tierName = btn.dataset.tier;
+    // Ensure data
+    (async () => {
+      if(!RANK_SRC.length) await loadRanking();
+      const H = RANK_SRC[0]||[]; const rows = RANK_SRC.slice(1);
+      const IDX_TIER = 3; // D
+      const IDX_ELO  = 9; // J
+      const IDX_NAME = 1; // B
+      // same-tier rows
+      const same = rows.filter(r => String(r[IDX_TIER]||'').trim() === tierName);
+      same.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
+      // Re-number first column (overall rank col 0) to tier rank
+      same.forEach((r,i)=>{ r[0] = i+1; });
+      // Render tier-only
+      drawRankRows(same);
+      // Status text (optional)
+      const st = document.getElementById('rankStatus');
+      if(st) st.textContent = `${tierName} 티어 • ${same.length}명`;
+    })();
+  });
+}
+document.addEventListener('DOMContentLoaded', setupTierButtons);
+
+// Patch openPlayer to show "(조커:1위)" style + crown
+const __orig_openPlayer = window.openPlayer;
+window.openPlayer = async function(bCellValue){
+  if(!RANK_SRC.length) await loadRanking();
+  const H = RANK_SRC[0]||[]; const rows = RANK_SRC.slice(1);
+  // we need tier rank for the selected player
+  let id = String(bCellValue||'').split('/')[0].trim();
+  // Find the row
+  const row = rows.find(r=> String(r[1]||'').split('/')[0].trim().toLowerCase() === id.toLowerCase());
+  // Call original logic
+  await __orig_openPlayer(bCellValue);
+  try{
+    if(!row) return;
+    const info = getTierRankForPlayer(row, rows, H);
+    // Find the ELO row container we rendered earlier
+    const body = document.getElementById('playerBody');
+    if(!body) return;
+    // Find the line that contains "ELO"
+    const rowsEls = Array.from(body.querySelectorAll('.row'));
+    const eloRow = rowsEls.find(el => /ELO/i.test(el.textContent||''));
+    if(eloRow){
+      // Append "(티어:순위)" if missing
+      const tierText = info.tierName ? ` (${info.tierName}:${info.tierRank??'-'}위)` : '';
+      if (!eloRow.textContent.includes(tierText)){
+        eloRow.innerHTML = eloRow.innerHTML + tierText;
+      }
+      // Append crown image if 1~3
+      decoratePlayerEloWithCrown(eloRow, info.tierRank);
+    }
+  }catch(e){ console.warn('decorate crown failed', e); }
+};
+
+
+// === v9_80: '전체' filter + overall rank label + single-crown guard ===
+function getOverallRankForPlayer(playerRow, allRows){
+  const IDX_ELO = 9; // J
+  const IDX_NAME = 1; // B
+  const me = String(playerRow[IDX_NAME]||'').split('/')[0].trim().toLowerCase();
+  const all = [...allRows];
+  all.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
+  const pos = all.findIndex(r=> String(r[IDX_NAME]||'').split('/')[0].trim().toLowerCase() === me) + 1;
+  return {overallRank: pos>0?pos:null, total: all.length};
+}
+
+// Remove any existing crown in ELO line
+function clearExistingCrown(containerEl){
+  if(!containerEl) return;
+  containerEl.querySelectorAll('img.crown').forEach(n=>n.remove());
+}
+
+// Format "(전체:n위) (티어:n위)" and avoid duplication
+
+function appendRankBadges(eloRowEl, infoOverall, infoTier){
+  if(!eloRowEl) return;
+  const overallText = infoOverall.overallRank? ` (전체:${infoOverall.overallRank}위)` : '';
+  const tierText    = infoTier.tierName && infoTier.tierRank? ` (${infoTier.tierName}:${infoTier.tierRank}위)` : '';
+  const want = overallText + tierText;
+  if(!want) return;
+  const txt = eloRowEl.textContent || '';
+  // Order: 전체 먼저, 그 다음 티어
+  if(!txt.includes('(전체:') && overallText) eloRowEl.innerHTML += overallText;
+  if(infoTier.tierName && !txt.includes(`(${infoTier.tierName}:`)) eloRowEl.innerHTML += tierText;
+}
+
+// Decide a single crown: prefer tier rank if <=3; else overall if <=3
+function pickSingleCrownRank(tierRank, overallRank){
+  if (tierRank && tierRank<=3) return tierRank;
+  if (overallRank && overallRank<=3) return overallRank;
+  return null;
+}
+
+// Enhance tier buttons to support "전체"
+(function enhanceTierButtons_v980(){
+  const host = document.getElementById('tierFilters');
+  if(!host) return;
+  if(!host.dataset.enhanced){
+    host.dataset.enhanced = '1';
+    host.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.tier-btn');
+      if(!btn) return;
+      host.querySelectorAll('.tier-btn').forEach(b=> b.classList.remove('active'));
+      btn.classList.add('active');
+      const name = btn.dataset.tier;
+      (async ()=>{
+        if(!RANK_SRC.length) await loadRanking();
+        const H = RANK_SRC[0]||[]; const rows = RANK_SRC.slice(1);
+        const IDX_ELO = 9, IDX_TIER=3;
+        let out = [];
+        if(name === '전체'){
+          out = [...rows].sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
+          out.forEach((r,i)=> r[0]=i+1);
+        }else{
+          out = rows.filter(r=> String(r[IDX_TIER]||'').trim()===name)
+                    .sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
+          out.forEach((r,i)=> r[0]=i+1);
+        }
+        drawRankRows(out);
+        const st = document.getElementById('rankStatus');
+        if(st) st.textContent = `${name} • ${out.length}명`;
+      })();
+    });
+  }
+})();
+
+
+// === v9_82: Remove old (n위) after ELO ===
+function cleanOldRankPattern(eloRowEl){
+  if(!eloRowEl) return;
+  // Remove patterns like (1위), (23위) etc that appear right after ELO numbers
+  eloRowEl.innerHTML = eloRowEl.innerHTML.replace(/\(\d+위\)/g,'');
+}
+
+// Override openPlayer once more to add overall + tier ranks and single crown
+const __prev_openPlayer_v979 = window.openPlayer;
+window.openPlayer = async function(bCellValue){
+  if(!RANK_SRC.length) await loadRanking();
+  const rows = RANK_SRC.slice(1);
+  const nameKey = String(bCellValue||'').split('/')[0].trim().toLowerCase();
+  const row = rows.find(r=> String(r[1]||'').split('/')[0].trim().toLowerCase() === nameKey);
+  await __prev_openPlayer_v979(bCellValue);
+  try{
+    const body = document.getElementById('playerBody');
+    if(!body || !row) return;
+    const infoTier = getTierRankForPlayer(row, rows);
+    const infoOverall = getOverallRankForPlayer(row, rows);
+    const eloRow = Array.from(body.querySelectorAll('.row')).find(el => /ELO/i.test(el.textContent||''));
+    if(!eloRow) return;
+    cleanOldRankPattern(eloRow);
+    // badges
+    appendRankBadges(eloRow, infoOverall, infoTier);
+    // single crown
+    clearExistingCrown(eloRow);
+    const cRank = pickSingleCrownRank(infoTier.tierRank, infoOverall.overallRank);
+    decoratePlayerEloWithCrown(eloRow, cRank);
+  }catch(e){ console.warn('openPlayer v980 add-ons failed', e); }
+};
