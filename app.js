@@ -1,36 +1,51 @@
-// === Rank Search Enhancement v115 (Exact-First) ===
-$('rankSearchBtn')?.addEventListener('click', ()=>{
-  const q = lc($('rankSearch').value || '').trim();
-  if (!q) {
-    drawRankRows(RANK_SRC.slice(1));
-    return;
-  }
+// search_patch_v115.js
+// Safe patch: exact-first + prefix search without touching the big app.js
+// Load this AFTER app.js in index.html
 
-  // 정확 일치 우선 필터링
-  const exactMatches = RANK_SRC.slice(1).filter(r => {
-    const playerName = lc(String(r[1] || '').split('/')[0].trim());
-    return playerName === q;
+// 1) Guard: define $ if missing (prevents '$ is not defined')
+if (typeof $ !== 'function') {
+  function $(id){ return document.getElementById(id) || null; }
+}
+
+(function(){
+  const btn = $('rankSearchBtn');
+  if (!btn) return;
+
+  // 2) Remove existing listeners by cloning the button
+  const clone = btn.cloneNode(true);
+  btn.parentNode.replaceChild(clone, btn);
+
+  // 3) New handler: exact match first, then prefix matches
+  clone.addEventListener('click', ()=>{
+    try{
+      const q = ( ($('rankSearch')?.value || '').trim().toLowerCase() );
+      if (!q) { drawRankRows(RANK_SRC.slice(1)); return; }
+
+      const exactMatches = RANK_SRC.slice(1).filter(r => {
+        const name = String(r[1] || '').split('/')[0].trim().toLowerCase();
+        return name === q;
+      });
+
+      const prefixMatches = RANK_SRC.slice(1).filter(r => {
+        const name = String(r[1] || '').split('/')[0].trim().toLowerCase();
+        return name.startsWith(q);
+      });
+
+      const combined = [...exactMatches, ...prefixMatches.filter(r => !exactMatches.includes(r))];
+
+      const sorted = combined.sort((a,b)=>{
+        const aName = String(a[1] || '').split('/')[0].trim().toLowerCase();
+        const bName = String(b[1] || '').split('/')[0].trim().toLowerCase();
+        return aName.localeCompare(bName, 'ko', {numeric:true});
+      });
+
+      drawRankRows(sorted);
+
+      if (exactMatches.length === 1) {
+        openPlayer(exactMatches[0][1]);
+      }
+    }catch(e){
+      console.warn('rank search patch error', e);
+    }
   });
-
-  const prefixMatches = RANK_SRC.slice(1).filter(r => {
-    const playerName = lc(String(r[1] || '').split('/')[0].trim());
-    return playerName.startsWith(q);
-  });
-
-  // 정확 일치 먼저, 그 다음 시작 일치
-  const combined = [...exactMatches, ...prefixMatches.filter(r => !exactMatches.includes(r))];
-
-  // 정렬은 가나다 순 유지
-  const sorted = combined.sort((a, b) => {
-    const aName = lc(String(a[1] || '').split('/')[0].trim());
-    const bName = lc(String(b[1] || '').split('/')[0].trim());
-    return aName.localeCompare(bName, 'ko', {numeric:true});
-  });
-
-  drawRankRows(sorted);
-
-  // 정확히 일치하는 플레이어가 있을 경우 자동으로 해당 선수 열기
-  if (exactMatches.length === 1) {
-    openPlayer(exactMatches[0][1]);
-  }
-});
+})();
