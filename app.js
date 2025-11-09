@@ -208,10 +208,47 @@ async function loadRanking(){
 }
 $('rankRefresh')?.addEventListener('click', loadRanking);
 $('rankSearchBtn')?.addEventListener('click', ()=>{
-  const q=lc($('rankSearch').value||''); if(!q){ drawRankRows(RANK_SRC.slice(1)); return; }
-  const rows=RANK_SRC.slice(1).filter(r=> lc(r.join(' ')).includes(q)); drawRankRows(rows);
+  const q = lc($('rankSearch').value || '').trim();
+  if (!q) { drawRankRows(RANK_SRC.slice(1)); return; }
+
+  // 정확 일치 결과만
+  const rows = (RANK_SRC.slice(1) || []).filter(r => {
+    const id = lc(String(r[1] || '').split('/')[0].trim());
+    return id === q;
+  });
+
+  if (rows.length) {
+    drawRankRows(rows);
+  } else {
+    // 없으면 추천 (시작문자 일치)만 보여줌
+    const suggest = (RANK_SRC.slice(1) || []).filter(r => {
+      const id = lc(String(r[1] || '').split('/')[0].trim());
+      return id.startsWith(q);
+    });
+    drawRankRows(suggest);
+  }
 });
-$('rankSearch')?.addEventListener('keydown', e=>{ if(e.key==='Enter') $('rankSearchBtn').click(); });
+$('rankSearch')?.addEventListener('keydown', e=>{
+  if (e.key === 'Enter') {
+    const q = lc($('rankSearch').value || '').trim();
+    if (!q) return;
+    // 정확 일치 우선 이동
+    const matchRow = (RANK_SRC.slice(1) || []).find(r => {
+      const id = lc(String(r[1] || '').split('/')[0].trim());
+      return id === q; // exact match only
+    });
+    if (matchRow) {
+      openPlayer(matchRow[1]);
+      return;
+    }
+    // 일치 없으면 추천(시작문자 일치) 목록만 표로 표시
+    const suggest = (RANK_SRC.slice(1) || []).filter(r => {
+      const id = lc(String(r[1] || '').split('/')[0].trim());
+      return id.startsWith(q);
+    });
+    drawRankRows(suggest);
+  }
+});
 
 // ===== Player Detail =====
 function findIdx(header, regex){ return header.findIndex(h=> regex.test(String(h))); }
