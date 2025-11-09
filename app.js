@@ -223,13 +223,14 @@ $('rankSearchBtn')?.addEventListener('click', ()=>{
     // 없으면 추천 (시작문자 일치)만 보여줌
     const suggest = (RANK_SRC.slice(1) || []).filter(r => {
       const id = lc(String(r[1] || '').split('/')[0].trim());
-      return id.startsWith(q);
+      return id === q; // 수정: 정확히 일치할 때만 이동 (자동이동 버그 수정)
     });
     drawRankRows(suggest);
   }
 });
 $('rankSearch')?.addEventListener('keydown', e=>{
   if (e.key === 'Enter') {
+    e.preventDefault(); // datalist 자동완성 방지 (JE 검색 시 jelka로 자동선택되지 않게)
     const q = lc($('rankSearch').value || '').trim();
     if (!q) return;
     // 정확 일치 우선 이동
@@ -244,7 +245,7 @@ $('rankSearch')?.addEventListener('keydown', e=>{
     // 일치 없으면 추천(시작문자 일치) 목록만 표로 표시
     const suggest = (RANK_SRC.slice(1) || []).filter(r => {
       const id = lc(String(r[1] || '').split('/')[0].trim());
-      return id.startsWith(q);
+      return id === q; // 수정: 정확히 일치할 때만 이동 (자동이동 버그 수정)
     });
     drawRankRows(suggest);
   }
@@ -2684,3 +2685,100 @@ window.openPlayer = async function(bCellValue){
   window.buildAllMatchesPaged = buildAllMatchesPaged;
 })();
 
+
+
+
+// === v9_63_patch: Enter-only & exact-match search, disable auto navigation ===
+(function(){
+  function lc(s){ try { return String(s||'').toLowerCase(); } catch(e){ return ''; } }
+  function getIdOnly(x){ return String(x||'').split('/')[0].trim(); }
+
+  function waitForRankData(cb, tries=0){
+    if (typeof RANK_SRC !== 'undefined' && Array.isArray(RANK_SRC) && RANK_SRC.length > 1){
+      return cb();
+    }
+    if (tries > 20) return; // ~10s
+    setTimeout(function(){ waitForRankData(cb, tries+1); }, 500);
+  }
+
+  function attachSearch(id){
+    var el = document.getElementById(id);
+    if(!el) return;
+
+    // kill inline auto triggers if any
+    el.removeAttribute('oninput');
+    el.removeAttribute('onchange');
+    el.removeAttribute('onkeyup');
+
+    // do not navigate while typing
+    el.addEventListener('input', function(e){ /* no auto move while typing */ });
+
+    // Enter -> exact match only
+    el.addEventListener('keydown', function(e){
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        var q = lc(el.value).trim();
+        if(!q) return;
+        var row = (RANK_SRC.slice(1)||[]).find(function(r){
+          var idv = lc(getIdOnly(r[1]));
+          return idv === q; // exact match only
+        });
+        if(row){ openPlayer(row[1]); }
+      }
+    });
+
+    // datalist / manual change -> exact match only
+    el.addEventListener('change', function(){
+      var q = lc(el.value).trim();
+      if(!q) return;
+      var row = (RANK_SRC.slice(1)||[]).find(function(r){
+        var idv = lc(getIdOnly(r[1]));
+        return idv === q;
+      });
+      if(row){ openPlayer(row[1]); }
+    });
+  }
+
+  function populatePlayerList(){
+    var list = document.getElementById('playerList');
+    if(!list) return;
+    list.innerHTML='';
+    var seen = {};
+    (RANK_SRC.slice(1)||[]).forEach(function(r){
+      var id = getIdOnly(r[1]);
+      var key = lc(id);
+      if(!key || seen[key]) return;
+      seen[key]=1;
+      var opt = document.createElement('option');
+      opt.value = id;    // browser handles case-insensitive suggestion visually
+      list.appendChild(opt);
+    });
+  }
+
+  function init(){
+    try{
+      // neutralize legacy globals that may auto-navigate
+      window.searchPlayer = function(){};
+      window.openPlayerByInput = function(){};
+    }catch(e){}
+
+    attachSearch('globalSearch');
+    attachSearch('rankSearch');
+    attachSearch('h2hSearch');
+    attachSearch('leagueSearch');
+
+    if (typeof RANK_SRC !== 'undefined'){
+      populatePlayerList();
+    } else {
+      waitForRankData(function(){
+        populatePlayerList();
+      });
+    }
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  }else{
+    init();
+  }
+})();
