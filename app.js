@@ -33,9 +33,9 @@ const NUM_TO_TIER = {1:'갓',2:'킹',3:'퀸',4:'잭',5:'스페이드',6:'조커'
 
 // === Hall of Fame popup links (configurable) ===
 const HOF_LINKS = {
-  pro: "https://docs.google.com/spreadsheets/d/1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE/edit?gid=2109029745#gid=2109029745",
-  tst: "https://docs.google.com/spreadsheets/d/1ThjVC2q7BwN5__wEcDPc-bBnnrHxL7wTng-pn8rOMnw/edit?gid=1085175922#gid=1085175922",
-  tsl: "https://docs.google.com/spreadsheets/d/1r-4eqB14QW0v5BiH4cCC9kGFb7-EJ5Lv63iihaXV79k/edit?gid=1176021631#gid=1176021631"
+  pro: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=381201435#gid=381201435",
+  tst: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=381201435#gid=381201435",
+  tsl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=2130451924#gid=2130451924"
 };
 function initHOFButtons(){
   const feat = "width=1200,height=800,menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes";
