@@ -236,6 +236,27 @@
 <button aria-label="위로" class="fab-btn" id="scrollUp">▲</button>
 <button aria-label="아래로" class="fab-btn" id="scrollDown">▼</button>
 </div>
+<!-- Hall of Fame Popup -->
+<div id="hofPopup" class="popup" aria-hidden="true">
+  <div class="popup-backdrop" id="hofPopupBackdrop"></div>
+  <div class="popup-panel" role="dialog" aria-modal="true" aria-labelledby="hofPopupTitle">
+    <div class="popup-head">
+      <div class="popup-title" id="hofPopupTitle">명예의전당</div>
+      <button class="popup-close" id="hofPopupClose" aria-label="닫기">닫기</button>
+    </div>
+    <div class="popup-body">
+      <div class="status" id="hofPopupStatus"></div>
+      <div class="table-wrap full">
+        <table class="table" id="hofPopupTable">
+          <thead><tr></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <script src="app.js?v=113"></script>
 <script>
 window.addEventListener('load', () => {
@@ -249,7 +270,6 @@ window.addEventListener('load', () => {
   setTimeout(() => document.getElementById('loadingScreen')?.remove(), 3000);
 });
 </script>
-</div>
 
 
 <script>

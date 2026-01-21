@@ -33,7 +33,7 @@ const NUM_TO_TIER = {1:'갓',2:'킹',3:'퀸',4:'잭',5:'스페이드',6:'조커'
 
 // === Hall of Fame popup links (configurable) ===
 const HOF_LINKS = {
-  pro: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=381201435#gid=381201435",
+  pro: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=1658280214#gid=1658280214",
   tst: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=381201435#gid=381201435",
   tsl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=2130451924#gid=2130451924"
 };
@@ -2032,34 +2032,6 @@ function v12e_renderRaceSumRow(stat, race){
   const hide = ()=>{ try{ const n=document.getElementById('schedLoading')||document.getElementById('schedStatus'); if(n){ n.textContent=''; n.style.display='none'; } }catch(e){} };
   
 
-// === Hall of Fame (HOF) popup ===
-async function openHOF(type){
-  try{
-    let cfg = null;
-    if(type==='pro') cfg = (SHEETS.hof && SHEETS.hof.pro);
-    else if(type==='tst') cfg = (SHEETS.hof && SHEETS.hof.tst);
-    else if(type==='tsl') cfg = (SHEETS.hof && SHEETS.hof.tsl);
-    if(!cfg) console.warn('HOF: missing config'); return;
-    const data = await fetchGVIZ(cfg);
-    if(!data.length) console.warn('HOF: empty data'); return;
-    const html = `
-      <div class="hof-wrap">
-        <h2>3050클랜 </button>
-      </div>`;
-    const dlg = ensureHOFModal();
-    if(!dlg){ console.warn('HOF: no dialog'); return; }
-    dlg.innerHTML = html;
-    dlg.showModal();
-  }catch(e){
-    console.error('HOF error', e);
-    console.warn('HOF: open error');
-  }
-}
-
-document.getElementById('hofPro')?.addEventListener('click', ()=>openHOF('pro'));
-document.getElementById('hofTST')?.addEventListener('click', ()=>openHOF('tst'));
-document.getElementById('hofTSL')?.addEventListener('click', ()=>openHOF('tsl'));
-
 // === Global search -> open player ===
 document.getElementById('globalSearchBtn')?.addEventListener('click', ()=>{
   try{
@@ -2079,51 +2051,7 @@ document.addEventListener('DOMContentLoaded', hide);
 })();
 
 
-/* === Hall of Fame (프로리그/TST/TSL) modal === */
-(function(){
-  const cfg = {
-  pro: { id:"1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE", sheet:"HallofFame", range:"A:Z", title:"프로리그 명예의전당" },
-  TST: { id:"1ThjVC2q7BwN5__wEcDPc-bBnnrHxL7wTng-pn8rOMnw", sheet:"명예의전당", range:"A:Z", title:"TST 명예의전당" },
-  TSL: { id:"1r-4eqB14QW0v5BiH4cCC9kGFb7-EJ5Lv63iihaXV79k", sheet:"명예의전당", range:"A:Z", title:"TSL 명예의전당" }
-};
-  const modal = document.getElementById('hofModal');
-  const backdrop = document.getElementById('hofBackdrop');
-  const closeBtn = document.getElementById('hofClose');
-  const tbl = document.getElementById('hofTable');
-  const title = document.getElementById('hofTitle');
-  function open(){ if(modal){ modal.setAttribute('aria-hidden','false'); } }
-  function close(){ if(modal){ modal.setAttribute('aria-hidden','true'); } }
-  backdrop?.addEventListener('click', close);
-  closeBtn?.addEventListener('click', close);
-
-  async function openHof(key){
-    const c = key==='pro'? cfg.pro : (key==='TST'? cfg.TST : cfg.TSL);
-    if(!c) return;
-    if (title) title.textContent = c.title;
-    const data = await fetchGVIZ({id:c.id, sheet:c.sheet, range:c.range});
-    renderTable(tbl, data);
-    open();
-  }
-  document.getElementById('hofPro')?.addEventListener('click', ()=> openHof('pro'));
-  document.getElementById('hofTST')?.addEventListener('click', ()=> openHof('TST'));
-  document.getElementById('hofTSL')?.addEventListener('click', ()=> openHof('TSL'));
-})();
-
-// Ensure HOF modal exists
-function ensureHOFModal(){
-  let dlg = document.getElementById('hofModal');
-  if(!dlg){
-    dlg = document.createElement('dialog');
-    dlg.id = 'hofModal';
-    dlg.className = 'hof-modal';
-    document.body.appendChild(dlg);
-  }
-  return dlg;
-}
-
-
 document.addEventListener('DOMContentLoaded', ()=>{
-  try{ initHOFButtons(); }catch(e){}
   try{ buildRaceWinrate(); }catch(e){}
 });
 
@@ -2782,3 +2710,131 @@ window.openPlayer = async function(bCellValue){
     init();
   }
 })();
+
+
+// === HOF Popup v13 (프로리그/TST/TSL) ===
+(function(){
+  // 기존 프로젝트에서 사용하던(연동되던) HOF_LINKS URL을 그대로 사용
+  const cfg={
+    pro:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.pro : ''), title:"3050클랜 명예의전당 > 프로리그" },
+    tst:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tst : ''), title:"3050클랜 명예의전당 > TST" },
+    tsl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tsl : ''), title:"3050클랜 명예의전당 > TSL" }
+  };
+
+  const $ = (id)=>document.getElementById(id);
+
+  function openPopup(){ const el=$("hofPopup"); if(el) el.setAttribute('aria-hidden','false'); }
+  function closePopup(){ const el=$("hofPopup"); if(el) el.setAttribute('aria-hidden','true'); }
+
+  function normData(data){
+    if(!Array.isArray(data) || !data.length) return [];
+    let maxCols = 0
+    for(const r of data){ maxCols = Math.max(maxCols, (r||[]).length); }
+    // detect last useful col
+    let last = maxCols - 1;
+    while(last>=0){
+      let allEmpty = true;
+      for(const r of data){
+        const v = (r||[])[last];
+        if(v!=null && String(v).trim()!==''){ allEmpty=false; break; }
+      }
+      if(!allEmpty) break;
+      last -= 1;
+    }
+    if(last < 0) return [];
+    return data.map(r => (r||[]).slice(0, last+1));
+  }
+
+  async function openHOF(key){
+    const c = cfg[key];
+    if(!c) return;
+    if(!c.url){
+      console.warn('HOF: missing url', key);
+      return;
+    }
+
+    const titleEl = $("hofPopupTitle");
+    const statusEl = $("hofPopupStatus");
+    const tableEl = $("hofPopupTable");
+
+    if(titleEl) titleEl.textContent = c.title;
+    if(statusEl){ statusEl.style.display='block'; statusEl.textContent = '시트에서 데이터를 불러오는 중…'; }
+
+    openPopup();
+
+    try{
+      // URL(edit?gid=...) 기반으로 그대로 로딩 → 기존 연동 유지
+      let data = await fetchGVIZbyUrl_v12b(c.url);
+      data = normData(data);
+      if(!data.length){
+        if(statusEl) statusEl.textContent = '데이터가 없습니다.';
+        if(tableEl) renderTable(tableEl, []);
+        return;
+      }
+      if(tableEl){ renderTable(tableEl, data); markSeasonHeaderRows(tableEl); }
+      if(statusEl){ statusEl.textContent = ''; statusEl.style.display='none'; }
+
+      // ensure we start at top
+      const body = document.querySelector('#hofPopup .popup-body');
+      if(body) body.scrollTop = 0;
+    }catch(e){
+      console.error('HOF open error', e);
+      if(statusEl) statusEl.textContent = '불러오기 실패. (시트 공개 설정/네트워크를 확인해주세요)';
+    }
+  }
+
+  function bindOnce(){
+    const closeBtn = $("hofPopupClose");
+    const backdrop = $("hofPopupBackdrop");
+
+    if(closeBtn && !closeBtn.dataset.bound){
+      closeBtn.dataset.bound='1';
+      closeBtn.addEventListener('click', closePopup);
+    }
+    if(backdrop && !backdrop.dataset.bound){
+      backdrop.dataset.bound='1';
+      backdrop.addEventListener('click', closePopup);
+    }
+    document.addEventListener('keydown', (e)=>{
+      if(e.key==='Escape') closePopup();
+    });
+
+    const proBtn = $("hofPro");
+    const tstBtn = $("hofTST");
+    const tslBtn = $("hofTSL");
+
+    // Stop bubbling so any legacy parent click handlers (that used to open Google Sheets) won't fire.
+    const guard = (e)=>{ try{ e.preventDefault(); }catch(_){} try{ e.stopPropagation(); }catch(_){} try{ e.stopImmediatePropagation(); }catch(_){} };
+
+    if(proBtn && !proBtn.dataset.bound){
+      proBtn.dataset.bound='1';
+      proBtn.addEventListener('click', (e)=>{ guard(e); openHOF('pro'); });
+    }
+    if(tstBtn && !tstBtn.dataset.bound){
+      tstBtn.dataset.bound='1';
+      tstBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tst'); });
+    }
+    if(tslBtn && !tslBtn.dataset.bound){
+      tslBtn.dataset.bound='1';
+      tslBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tsl'); });
+    }
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', bindOnce);
+  else bindOnce();
+})();
+
+
+/* === 시즌 대표 행 감지 (예: 스타리그 2019 (시즌1)) === */
+function markSeasonHeaderRows(tableEl){
+  if(!tableEl) return;
+  const rows = tableEl.querySelectorAll("tbody tr");
+  rows.forEach(tr=>{
+    const firstTd = tr.querySelector("td");
+    if(!firstTd) return;
+    const txt = firstTd.textContent || "";
+    if(/시즌\s*\d+/i.test(txt)){
+      tr.classList.add("season-header-row");
+    }
+  });
+}

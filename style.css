@@ -677,3 +677,157 @@ body{
 @media (max-width: 420px){
   body{ padding-top: 320px; }
 }
+
+
+/* ===== MOBILE SCROLL FIX: use sticky header instead of fixed ===== */
+.topbar{
+  position: sticky !important;
+  top: 0 !important;
+  left: auto !important;
+  right: auto !important;
+  width: auto !important;
+}
+
+/* Fixed-header version added body padding-top; revert to avoid scroll glitches on mobile browsers */
+body{
+  padding-top: 0 !important;
+}
+
+/* Menu can stay inside header; if you want it always visible with header, keep it static */
+.menu{
+  position: static !important;
+  top: auto !important;
+}
+
+/* ===== Player detail race table responsive ===== */
+@media (max-width: 720px){
+  table.detail{
+    display:block !important;
+    width:100% !important;
+    overflow-x:auto !important;
+    -webkit-overflow-scrolling:touch;
+    white-space:nowrap;
+  }
+  table.detail th, table.detail td{
+    white-space:nowrap !important;
+  }
+}
+
+/* === Hall of Fame Popup (matches premium modal look) === */
+.popup{position:fixed;inset:0;display:none;z-index:9999}
+.popup[aria-hidden="false"]{display:block}
+.popup-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)}
+.popup-panel{
+  position:relative;
+  width:min(920px, calc(100vw - 32px));
+  height:min(78vh, 640px);
+  margin:64px auto;
+  background:linear-gradient(180deg, var(--premium-surface2), var(--premium-surface));
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:22px;
+  box-shadow:0 30px 80px rgba(0,0,0,.45);
+  color:var(--premium-text);
+  overflow:hidden;
+}
+.popup-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 18px;
+  border-bottom:1px solid rgba(255,255,255,.10);
+}
+.popup-title{font-size:18px;font-weight:800;letter-spacing:-.2px}
+.popup-close{
+  border:1px solid rgba(255,255,255,.16);
+  background:rgba(255,255,255,.08);
+  color:var(--premium-text);
+  border-radius:12px;
+  padding:8px 12px;
+  cursor:pointer;
+}
+.popup-close:hover{background:rgba(255,255,255,.12)}
+.popup-body{height:calc(100% - 58px);overflow:auto;padding:14px 16px}
+
+/* make inner table readable (sheet-like) inside premium modal */
+#hofPopup .table-wrap{
+  border:1px solid rgba(255,255,255,.10);
+  background:#ffffff;
+}
+#hofPopup .table{
+  color:#0b1220 !important;
+}
+#hofPopup .table th{
+  background:#f3f4f6;
+  border-bottom:1px solid #e5e7eb;
+  color:#111827 !important;
+}
+#hofPopup .table td{
+  background:#ffffff;
+  border-bottom:1px solid #eef2f7;
+  color:#0b1220 !important;
+}
+
+/* if any links sneak in from sheet formatting, disable navigation */
+#hofPopup a{
+  color:inherit !important;
+  text-decoration:none !important;
+  pointer-events:none !important;
+}
+
+@media (max-width:520px){
+  .popup-panel{margin:18px auto;height:min(84vh, 720px)}
+  .popup-title{font-size:16px}
+}
+
+
+
+/* === HOF POPUP FIX: white background + visible close button + horizontal scroll === */
+#hofPopup .popup-panel{
+  background:#ffffff !important;
+  border:1px solid #e5e7eb !important;
+}
+#hofPopup .popup-head{
+  border-bottom:1px solid #e5e7eb !important;
+}
+#hofPopup .popup-title{
+  color:#111827 !important;
+}
+#hofPopup .popup-close{
+  color:#111827 !important;
+  border:1px solid #d1d5db !important;
+  background:#ffffff !important;
+  font-weight:800 !important;
+}
+#hofPopup .popup-close:hover{ background:#f3f4f6 !important; }
+
+/* Ensure table area can scroll horizontally when wide */
+#hofPopup .table-wrap{ overflow:auto !important; }
+
+
+
+/* === HOF POPUP CELL SPACING COMPACT === */
+#hofPopup .table th,
+#hofPopup .table td{
+  padding: 4px 6px !important;   /* 셀 간격 축소 */
+  font-size: 13px !important;    /* 글자 약간 축소 */
+  line-height: 1.25 !important;
+}
+#hofPopup .table th{
+  font-weight: 700;
+}
+
+
+
+/* === 시즌별 대표 행 셀 배경 강조 === */
+#hofPopup .table tr.season-header-row td{
+  background:#f1f5f9 !important;
+  font-weight:700;
+}
+
+#hofPopup .table tr.season-header-row td:first-child{
+  color:#0f172a;
+}
+
+/* 시즌 행 아래 구분선 */
+#hofPopup .table tr.season-header-row{
+  border-top:2px solid #cbd5e1;
+  border-bottom:2px solid #cbd5e1;
+}
