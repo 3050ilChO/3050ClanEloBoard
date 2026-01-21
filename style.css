@@ -1,805 +1,627 @@
-root{--bg:#fff;--fg:#222;--gold:#a78d40;--gold-soft:#efe6c7;--line:rgba(0,0,0,.08);--hl:rgba(167,141,64,.12)}
+:root{
+  /* Theme (light, premium) */
+  --bg:#ffffff;
+  --premium-surface:#0b1220;
+  --premium-surface2:#111827;
+  --premium-border:rgba(255,255,255,.14);
+  --premium-text:rgba(255,255,255,.92);
+  --premium-muted:rgba(255,255,255,.72);
+  --premium-chip:rgba(255,255,255,.10);
+  --surface:#ffffff;
+  --card:#ffffff;
+  --card2:#ffffff;
+  --fg:#111827;
+  --muted:#4b5563;
+  --muted2:#6b7280;
+  --line:rgba(17,24,39,.10);
+  --line2:rgba(17,24,39,.16);
+  --shadow:0 14px 30px rgba(17,24,39,.10);
+  --accent:#0f766e;   /* royal blue */
+  --accent2:#115e59;
+  --radius:16px;
+  --radius-sm:12px;
+  --radius-xs:10px;
+  --focus:0 0 0 3px rgba(37,99,235,.18);
+}
+
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:'Noto Sans KR',system-ui,-apple-system,'Segoe UI',Roboto,'Apple SD Gothic Neo','Malgun Gothic',sans-serif}
-a{color:#000;text-decoration:none}
-.topbar{position:sticky;top:0;background:linear-gradient(180deg,#fff,rgba(255,255,255,.92));backdrop-filter:saturate(1.2) blur(8px);border-bottom:1px solid var(--line);z-index:20}
-.brand{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:16px 16px 8px 16px;justify-content:flex-start;position:relative}
-.logo{width:72px;height:72px;object-fit:contain}
-.titles{display:flex;flex-direction:column;align-items:flex-start}
-.titles .minor{font-size:14px;color:#616161;font-weight:600}
-.titles .mainline{font-size:18px;color:#3b3b3b;font-weight:700;margin-top:2px}
-.titles .league{font-size:40px;line-height:1.05;color:var(--gold);font-weight:900;margin-top:2px;letter-spacing:.2px}
-.titles .subline{font-size:14px;color:#6d6d6d;margin-top:2px}
+html,body{margin:0;padding:0}
+body{
+  background:#ffffff;
+  color:var(--fg);
+  font-family:'Noto Sans KR',system-ui,-apple-system,'Segoe UI',Roboto,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+}
 
-/* Hamburger */
+a{color:inherit;text-decoration:none}
+img{max-width:100%;height:auto}
 
-.menu{display:flex;gap:8px;padding:10px 16px 18px 16px;justify-content:center;flex-wrap:wrap}
-.menu.collapsed{display:none}
-.menu.mobile-open{display:flex;flex-direction:column;align-items:stretch;gap:10px;padding:10px 16px}
-.tab-btn{border:1px solid var(--line);background:#fff;padding:8px 12px;border-radius:999px;cursor:pointer;transition:color .15s ease,border-color .15s ease}
-.tab-btn.active{border-color:var(--gold);color:var(--gold);font-weight:700}
-.tab-btn:hover{color:var(--gold);border-color:var(--gold)}
-.container{max-width:1200px;margin:20px auto;padding:0 16px}
+/* --- Top header --- */
+.topbar{
+  position:sticky;
+  top:0;
+  z-index:50;
+  background:#ffffff;
+  border-bottom:1px solid var(--line);
+  box-shadow:0 8px 18px rgba(17,24,39,.06);
+}
+
+.top-left-bar.left{
+  max-width:1200px;
+  margin:0 auto;
+  padding:10px 16px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  color:var(--muted);
+}
+
+.current-date{opacity:.9}
+.divider{opacity:.4}
+
+.home-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:34px;
+  height:34px;
+  border-radius:10px;
+  background:#ffffff;
+  border:1px solid var(--line);
+  box-shadow:0 6px 14px rgba(17,24,39,.06);
+}
+.home-link:hover{transform:translateY(-1px)}
+.home-link:focus{outline:none;box-shadow:var(--focus)}
+.home-logo{
+  width:22px;
+  height:22px;
+  object-fit:contain;
+}
+
+
+.yt-link{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:#ffffff;
+}
+.yt-link:hover{border-color:var(--line2)}
+.yt-icon{height:18px;width:auto;filter:grayscale(.1) brightness(1.2)}
+.yt-text{font-size:12.5px}
+
+.hamburger{
+  position:absolute;
+  left:12px;
+  top:10px;
+  height:40px;
+  width:44px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background:#ffffff;
+  color:var(--fg);
+  cursor:pointer;
+}
+.hamburger:hover{border-color:var(--line2)}
+
+.brand.center{
+  max-width:1200px;
+  margin:0 auto;
+  padding:14px 16px 10px;
+  display:grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap:14px;
+  align-items:center;
+}
+
+
+.brand.center .logo{
+  width:44px;
+  height:44px;
+  object-fit:contain;
+  filter: drop-shadow(0 8px 20px rgba(0,0,0,.35));
+}
+
+.brand.center .logo{grid-column:1; justify-self:start;}
+.brand.center .titles{grid-column:2; justify-self:center; text-align:center;}
+.brand.center .dash-search{grid-column:3; justify-self:end;}
+
+
+.titles{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.titles .minor{font-size:12px;color:var(--muted2);font-weight:700;letter-spacing:.2px}
+.titles .mainline{font-size:16px;font-weight:800;color:var(--fg)}
+.titles .league{font-size:22px;line-height:1.15;font-weight:900;color:var(--accent);letter-spacing:.4px}
+.titles .subline{font-size:12px;color:var(--muted)}
+
+.dash-search{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  justify-content:flex-end;
+}
+
+/* --- Inputs & Buttons --- */
+.search{
+  height:40px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background:#ffffff;
+  color:var(--fg);
+  padding:0 12px;
+  outline:none;
+}
+.search::placeholder{color:rgba(170,179,199,.7)}
+.search:focus{box-shadow:var(--focus);border-color:rgba(37,99,235,.45)}
+
+button, .ghost, .mini-btn{
+  height:40px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background:#ffffff;
+  color:var(--fg);
+  padding:0 12px;
+  cursor:pointer;
+  font-weight:700;
+}
+button:hover, .ghost:hover, .mini-btn:hover{border-color:var(--line2)}
+button:focus, .ghost:focus, .mini-btn:focus{outline:none;box-shadow:var(--focus)}
+
+/* Tier filter smaller buttons */
+.tier-filters .tier-btn{height:34px;padding:0 10px;border-radius:999px;font-weight:800}
+.tier-filters .tier-btn.active{border-color:rgba(37,99,235,.55);background:#ffffff;color:var(--accent)}
+
+/* --- Nav tabs --- */
+.menu{
+  max-width:1200px;
+  margin:0 auto;
+  padding:10px 12px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:center;
+
+  /* Premium bar */
+  background:linear-gradient(135deg,var(--premium-surface),var(--premium-surface2));
+  border:1px solid var(--premium-border);
+  border-radius:999px;
+  box-shadow:0 10px 30px rgba(15,23,42,.10);
+}
+
+.tab-btn{
+  height:36px;
+  border-radius:999px;
+  padding:0 12px;
+  font-weight:800;
+  letter-spacing:.1px;
+}
+
+.tab-btn.active{
+  border-color:rgba(37,99,235,.55);
+  background:#ffffff;
+  color:var(--accent);
+}
+
+/* Premium tabs inside the dark pill menu */
+.menu .tab-btn{
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.06);
+  color:#ffffff !important;
+  text-shadow:0 1px 0 rgba(0,0,0,.35);
+}
+.menu .tab-btn:hover{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.26)}
+.menu .tab-btn.active{
+  border-color:rgba(15,118,110,.55);
+  background:rgba(15,118,110,.14);
+  color:#eafffb;
+}
+
+/* --- Panels / Layout --- */
+.container{max-width:1200px;margin:18px auto 40px;padding:0 16px}
 .panel{display:none}
 .panel.active{display:block}
-.panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
-.panel-head h2{margin:0;font-size:22px}
-.actions{display:flex;gap:8px;align-items:center}
-.search{border:1px solid var(--line);border-radius:10px;padding:8px 10px;width:240px}
-.ghost{border:1px solid var(--line);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer}
-.status{font-size:14px;color:#666;margin:12px 0}
 
-.table-wrap{width:100%;max-width:100%;overflow-x:auto;border:none;border-radius:0}
-table{width:100%;border-collapse:collapse;table-layout:auto}
-thead th{position:sticky;top:0;background:linear-gradient(180deg,#fffdf3,#fff8e1);border-bottom:1px solid var(--gold);text-align:center;padding:12px;font-weight:800;color:var(--gold);white-space:nowrap}
-tbody td{padding:10px 12px;border-bottom:1px solid #f1f1f1;vertical-align:middle;white-space:nowrap;text-align:center}
-tbody tr:hover{background:rgba(167,141,64,.08)}
+/* Give content panels a consistent card surface */
+main.container > .panel{
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:#ffffff;
+  box-shadow:var(--shadow);
+  padding:14px;
+}
+
+/* Dashboard is already on its own layout */
+#dashboard.panel{background:transparent;border:none;box-shadow:none;padding:0}
+
+.panel-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin:16px 0 10px;
+}
+.panel-head h2{margin:0;font-size:20px;letter-spacing:.2px}
+
+.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+.status{font-size:13px;color:var(--muted);margin:10px 2px}
+
+/* --- Card system (dashboard) --- */
+.dash-wrap{margin-top:14px}
+.cards{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0,1fr));
+  gap:12px;
+  margin:8px 0 18px;
+}
+
+.dash-card{
+  background:#ffffff;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:14px 14px 12px;
+  box-shadow:var(--shadow);
+}
+
+.dash-card.gold{
+  border-color:rgba(15,118,110,.35);
+  background:linear-gradient(135deg,var(--premium-surface),var(--premium-surface2));
+  color:var(--premium-text);
+}
+
+.card-title{font-size:12.5px;color:var(--accent2);font-weight:900;letter-spacing:.2px}
+.card-value{font-size:22px;color:var(--fg);font-weight:900;margin-top:6px}
+.card-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.mini-btn{height:34px;border-radius:999px;padding:0 12px}
+
+/* --- Tables --- */
+.table-wrap{width:100%;max-width:100%;overflow:auto;border-radius:var(--radius);border:1px solid var(--line);background:rgba(17,24,39,.02)}
+.table-wrap.full{border-radius:var(--radius)}
+
+table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  min-width:720px;
+  color:var(--fg);
+}
+
+thead th{
+  position:sticky;
+  top:0;
+  z-index:2;
+  background:#f8fafc;
+  border-bottom:1px solid var(--line2);
+  padding:11px 12px;
+  text-align:center;
+  font-size:12.5px;
+  font-weight:900;
+  color:#0f172a;
+  white-space:nowrap;
+}
+
+tbody td{
+  padding:10px 12px;
+  border-bottom:1px solid var(--line);
+  text-align:center;
+  white-space:nowrap;
+  font-size:13px;
+}
+
+tbody tr:hover td{background:rgba(17,24,39,.03)}
+
 .clickable tbody tr{cursor:pointer}
 
-.filters{display:flex;gap:12px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;background:#fafafa}
-.filters input{border:1px solid var(--line);border-radius:8px;padding:6px 8px;width:200px}
-.search-wide{flex:1;height:36px;border:none;background:#2e2e2e;color:#fff;border-radius:6px;cursor:pointer}
-
-.footer{display:flex;gap:8px;justify-content:center;align-items:center;padding:20px 16px;color:#8a8a8a;border-top:1px solid var(--line);margin-top:28px}
-
-/* Player detail */
-.player-body{border:1px solid var(--line);border-radius:12px;padding:14px}
-.player-body h3{margin:8px 0 6px 0}
-.badge{background:#a78d40!important;color:#fff!important;border:none!important;font-weight:600;display:inline-block;padding:2px 6px;border-radius:999px;font-size:12px;margin-right:6px}
-.team-logo{width:40px;height:40px;object-fit:contain}
+/* Logo cells used by proRank auto logo */
+.team-logo{width:32px;height:32px;object-fit:contain;filter: drop-shadow(0 6px 16px rgba(0,0,0,.35))}
 td.logo-cell img{display:block;margin:0 auto}
 
-hr.gold{border:0;border-top:1px solid rgba(167,141,64,.55);margin:12px 0}
-
-/* H2H compare */
-.h2h-compare{display:flex;justify-content:center;margin:10px 0;}
-.h2h-compare table{border-collapse:separate;border-spacing:12px 0;text-align:center;}
-.h2h-compare .race-icon{width:38px;height:38px;object-fit:contain;margin:0 6px;}
-.h2h-compare .h2h-name{font-size:16px;font-weight:700;}
-.h2h-compare .h2h-stat{font-size:12px;color:#666;font-weight:500;}
-.h2h-compare .vs{padding:0 8px;font-weight:900;letter-spacing:1px;color:#333;}
-
-/* Floating gold FABs */
-.scroll-fab{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:30}
-.fab-btn{width:46px;height:46px;border-radius:50%;border:1px solid var(--gold);background:var(--gold);color:#fff;font-weight:900;cursor:pointer;box-shadow:0 6px 14px rgba(0,0,0,.12)}
-.fab-btn:hover{filter:brightness(0.97)}
-
-/* Responsive */
-@media (max-width: 900px){
-  
-  .menu{padding-top:8px}
-  .menu.collapsed{display:none}
-  .titles .league{font-size:28px}
-  .brand{justify-content:flex-start}
-}
-
-/* v9.23 FinalProEdition */
-.league.gold-text{color:#a78d40!important}
-#rank,#h2h,#proRank,#sched,#all,#members{border:1px solid #ccc!important;border-radius:12px;background:#fff;padding:10px}
-table{border:1px solid #ccc;border-radius:12px;overflow:hidden;background:#fff}
-thead th{background:#f3f3f3;color:#222!important}
-tbody tr:hover td{background:#f6f6f6}
-.player-body .row{background:#fff!important;border:none!important;color:#222!important}
-.badge{background:#a78d40!important;color:#fff!important;border:none!important;font-weight:600;display:inline-block;padding:2px 6px;border-radius:999px;font-size:12px;margin-right:6px}
-button,.ghost,.action-btn{background:#000!important;color:#fff!important;border:1px solid #000!important;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
-button:hover,.ghost:hover,.action-btn:hover{background:#333!important}
-
-.fab-btn{background:#000!important;color:#fff!important;border:1px solid #000!important}
-.fab-btn:hover{background:#333!important}
-#h2h .filters{background:#fff;border:1px solid #ccc!important}
-#h2h table{border:1px solid #ccc!important}
-#h2h tbody td{background:#fff}
-#h2h tbody tr:hover td{background:#f6f6f6}
-
-.brand.center{justify-content:center!important;flex-direction:column!important;text-align:center}
-
-/* v9.30 Topbar center alignment + font 9pt */
-.top-left-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 6px 16px;
-}
-.btn-flat, .yt-link {
-  font-size: 9pt !important;
-}
-.brand.center {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: row;
-  text-align: center;
-  gap: 8px;
-}
-.brand.center img.logo {
-  height: 42px;
-  width: auto;
-}
-
-/* v9.32 Header layout */
-.top-left-bar.left{max-width:1200px;margin:0 auto;padding:6px 16px;display:flex;gap:10px;align-items:center;justify-content:flex-start}
-.btn-flat,.yt-link{font-size:9pt!important}
-.btn-flat{background:#fff;color:#000;border:1px solid #ccc;border-radius:8px;padding:6px 10px;cursor:pointer}
-.btn-flat:hover{background:#f5f5f5}
-.yt-link{display:inline-flex;align-items:center;gap:6px;color:#000;text-decoration:none;border:1px solid #ccc;border-radius:8px;padding:6px 10px}
-.yt-link:hover{background:#f5f5f5}
-.yt-icon{height:18px;width:auto}
-.brand.center{display:flex;flex-direction:row;align-items:center;justify-content:center;gap:10px;text-align:center}
-.brand.center .titles{display:flex;flex-direction:column;align-items:flex-start}
-.brand.center img.logo{height:42px;width:auto}
-
-/* v9.32 Player detail chips */
-.player-body .row{background:#fff!important;border:none!important;color:#222!important}
-.player-body .row *{color:#fff!important}
-.badge{background:#a78d40!important;color:#fff!important;border:none!important;font-weight:600;display:inline-block;padding:2px 6px;border-radius:999px;font-size:12px;margin-right:6px}
-
-/* v9.32 H2H left labels */
-.h2h-graph-wrap{display:flex;align-items:stretch;gap:8px}
-.h2h-left-labels{display:flex;flex-direction:column;justify-content:space-between;font-weight:800;color:#333}
-.h2h-left-labels .top{content:'승'}
-.h2h-left-labels .bottom{content:'패'}
-
-/* v9.32 Members header highlight */
-th.th-gray{background:#e9e9e9!important;color:#222!important}
-
-
-/* === Final 1~6차 Tweaks === */
-.top-left-bar .yt-link, a.yt-link { border:none !important; background:transparent !important; box-shadow:none !important; }
-.brand.center{ display:flex; align-items:center; flex-direction:column; gap:6px; text-align:center; }
-.brand.center .logo{ height:96px; width:auto; }
-.brand.center .titles .league{ color:var(--gold, #a78d40); font-weight:900; }
-#membersTable thead tr{ background:#f2f2f2; }
-#membersTable thead th{ color:#222; font-weight:600; }
-#playerBody .row{ background:#fff; }
-#playerBody .row.highlight { background:#fff !important; color:#222 !important; border:none !important; }
-#membersTable tbody tr.role-master-row{ background:#fff2cc; }
-#membersTable tbody tr.role-sub-row{ background:#dbe5f1; }
-#membersTable tbody tr.role-ops-row{ background:#e2f0d9; }
-
-.player-detail .info-box.highlight {
-  background-color: #3498db;
-  border-radius: 8px;
-  color: white;
-  padding: 6px 10px;
-}
-
-#membersTable td.role,
-#membersTable td.id,
-#membersTable td.tier,
-#membersTable td.battlecode {
-  background-color: #f2f2f2;
-}
-
-
-/* --- Brand center rules (enforced) --- */
-.brand.center{display:flex;gap:12px;align-items:center;justify-content:center;margin:12px auto;text-align:left;max-width:1100px}
-.brand.center .titles{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
-.brand.center .brand-logo{width:72px;height:72px;object-fit:contain}
-@media (max-width:900px){
-  .brand.center{padding:8px 12px}
-  .brand.center .brand-logo{width:60px;height:60px}
-}
-
-/* Player detail emphasis */
-#playerBody .chip-blue{background:#3498db;color:#fff;border-radius:10px;padding:4px 8px;display:inline-flex;gap:6px;margin-right:6px}
-
-.player-body .row.highlight strong {color:#000!important;}
-
-
-.player-body .row.highlight strong,
-#playerBody .row strong { color:#000 !important; }
-
-
-
-/* v9_51 Search & Reset Buttons */
-.search-button, .reset-button {
-  background-color: #000 !important;
-  color: #fff !important;
-  border: none !important;
-  padding: 6px 12px !important;
-  border-radius: 4px !important;
-  cursor: pointer !important;
-  font-size: 0.9rem !important;
-  margin-left: 4px !important;
-  transition: background 0.2s ease;
-}
-.search-button:hover, .reset-button:hover {
-  background-color: #333 !important;
-}
-
-
-/* v9_52 Search & Reset Buttons */
-.search-button, .reset-button {
-  background-color: #000 !important;
-  color: #fff !important;
-  border: none !important;
-  padding: 6px 12px !important;
-  border-radius: 4px !important;
-  cursor: pointer !important;
-  margin-left: 4px !important;
-  font-size: 0.9rem !important;
-  transition: background 0.2s ease;
-}
-.search-button:hover, .reset-button:hover {
-  background-color: #333 !important;
-}
-
-
-/* v9_53 Search & Reset Buttons */
-.search-button, .reset-button {
-  background-color: #000 !important;
-  color: #fff !important;
-  border: none !important;
-  padding: 6px 12px !important;
-  border-radius: 4px !important;
-  cursor: pointer !important;
-  margin-left: 4px !important;
-  font-size: 0.9rem !important;
-  transition: background 0.2s ease;
-}
-.search-button:hover, .reset-button:hover {
-  background-color: #333 !important;
-}
-
-/* v9_56 Search & Reset Buttons */
-.search-button, .reset-button {
-  background-color:#000 !important;
-  color:#fff !important;
-  border:none !important;
-  padding:6px 12px !important;
-  border-radius:4px !important;
-  cursor:pointer !important;
-  margin-left:4px !important;
-  font-size:0.9rem !important;
-  transition:background .2s ease;
-}
-.search-button:hover,.reset-button:hover{ background-color:#333 !important; }
-
-/* === v9_55 Fix: H2H header hidden & Members header gray === */
-#h2hTable thead tr:first-child {
-  display: none !important;
-}
-
-#membersTable thead tr {
-  background-color: #f2f2f2 !important;
-}
-#membersTable thead th {
-  color: #222 !important;
-  font-weight: 600 !important;
-}
-
-/* === v9_56 Logo-Text Horizontal Alignment === */
-.brand.center {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 10px !important;
-  text-align: left !important;
-}
-
-/* === v9_57 Logo Resize to 80x80 === */
-.brand.center .logo {
-  width: 80px !important;
-  height: 80px !important;
-  object-fit: contain !important;
-}
-
-/* === v9_58 Logo Resize to 100x100 === */
-.brand.center .logo {
-  width: 100px !important;
-  height: 100px !important;
-  object-fit: contain !important;
-}
-
-/* === v9_59 Members list first 2 rows gray === */
-#membersTable tbody tr:nth-child(-n+2) {
-  background-color: #f9f9f9 !important;
-}
-
-/* === v9_60 Members Role Highlight === */
-#membersTable tbody tr:nth-child(1) {
-  background-color: #f3f3f3 !important;
-}
-#membersTable tbody tr:nth-child(2) {
-  background-color: #f9f9f9 !important;
-}
-
-/* === v9_61 Members Role Only Highlight === */
-#membersTable tbody tr:nth-child(1) {
-  background-color: #f3f3f3 !important;
-}
-
-/* === v9_62 Second Row White === */
-#membersTable tbody tr:nth-child(2) {
-  background-color: #ffffff !important;
-}
-
-/* v9_65: keep row1 #f3f3f3 and row2 #fff ensured by prior rules */
-
-/* === v9_66 Role classes override (ensures master color applies even on row1) === */
-#membersTable tbody tr.role-master { background-color: #fff2cc !important; }
-#membersTable tbody tr.role-submaster { background-color: #dbe5f1 !important; }
-#membersTable tbody tr.role-ops { background-color: #e2f0d9 !important; }
-
-
-/* === 클랜원명단 강조: 2행(#f3f3f3), 3행(#fff9d9) === */
-#membersTable tbody tr:nth-child(1) {
-  background-color: #f3f3f3 !important;
-}
-#membersTable tbody tr:nth-child(2) {
-  background-color: #fff9d9 !important;
-}
-
-
-/* === 햄버거 메뉴 작동 전용 === */
-.menu.collapsed {
-  display: none !important;
-}
-@media (max-width: 900px) {
-  .menu {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-    background: #fff;
-    border-top: 1px solid #ccc;
-    padding: 10px 0;
-  }
-}
-
-
-/* === v9_78 Mobile Center Align ===
-       - Maintain all UI and data identical.
-       - On mobile (≤600px), menus and filters stay horizontal but are centered.
-       - Prevent vertical stacking that hides elements.
-    */
-@media (max-width:600px){
-  .brand.center{justify-content:center !important; align-items:center !important; text-align:center !important;}
-  .container{padding:0 10px !important;}
-  .panel-head{justify-content:center !important; align-items:center !important; text-align:center !important;}
-  .actions, .filters{justify-content:center !important; align-items:center !important; flex-wrap:wrap !important; gap:6px !important;}
-  .search{width:auto !important;}
-  .filters input{width:auto !important;}
-  .table-wrap{overflow-x:visible !important;}
-  table{table-layout:fixed !important; width:100% !important; word-break:break-word !important;}
-  thead th, tbody td{white-space:normal !important; padding:8px 6px !important; font-size:12px !important;}
-  td, th{overflow-wrap:anywhere !important;}
-  .chart-wrap canvas{max-width:100% !important; height:auto !important;}
-}
-@media (max-width: 600px){
-  /* Header: center stack without changing branding */
-  .brand.center{flex-direction:column !important; align-items:center !important; text-align:center !important; gap:6px !important;}
-  .brand.center .titles{align-items:center !important;}
-  .brand.center .logo{max-width:28vw !important; height:auto !important; width:auto !important;}
-
-  .container{padding:0 10px !important;}
-  .panel-head{flex-direction:column !important; align-items:stretch !important; gap:6px !important;}
-  .actions{flex-wrap:wrap !important;}
-  .filters{flex-direction:column !important; align-items:stretch !important; gap:8px !important;}
-  .search{width:100% !important;}
-  .filters input{width:100% !important;}
-
-  /* Tables: wrap text, fixed layout, no horizontal scroll */
-  .table-wrap{overflow-x:visible !important;}
-  table{table-layout:fixed !important; width:100% !important; word-break:break-word !important;}
-  thead th, tbody td{white-space:normal !important; padding:8px 6px !important; font-size:12px !important;}
-  td, th{overflow-wrap:anywhere !important;}
-
-  /* Charts fill width */
-  .chart-wrap canvas{max-width:100% !important; height:auto !important;}
-}
-
-
-/* === v9_79 Mobile Fixed Menu ===
-   Keep menu buttons horizontally aligned on mobile, centered, no wrapping.
-   Preserve full PC layout and spacing.
-*/
-@media (max-width:600px){
-  .panel-head, .actions, .filters, .menu{
-    flex-direction:row !important;
-    justify-content:center !important;
-    align-items:center !important;
-    flex-wrap:nowrap !important;
-    gap:8px !important;
-    text-align:center !important;
-  }
-  .menu button, .actions button, .filters button{
-    width:auto !important;
-    min-width:80px !important;
-  }
-  .brand.center{justify-content:center !important; align-items:center !important; text-align:center !important;}
-  .chart-wrap canvas{max-width:100% !important; height:auto !important;}
-}
-
-
-/* === v9_81 Mobile Auto Wrap Menu ===
-   - Keep all styles identical.
-   - On narrow screens, menu buttons wrap naturally into 2 lines.
-   - Maintain centered alignment and spacing.
-*/
-@media (max-width:600px){
-  .menu, .panel-head, .actions, .filters{
-    display:flex !important;
-    flex-wrap:wrap !important;
-    justify-content:center !important;
-    align-items:center !important;
-    gap:8px !important;
-    text-align:center !important;
-  }
-  .menu button, .actions button, .filters button{
-    flex:1 1 40% !important; /* auto 2 columns */
-    min-width:120px !important;
-  }
-}
-
-
-/* === v9_82 Scrollable Menu ===
-   - Make menu scroll with page instead of being fixed.
-   - Prevent content from hiding behind the menu.
-*/
-.menu, .panel-head{
-  position:relative !important;
-  top:auto !important;
-  z-index:auto !important;
-}
-
-
-/* === v9_83 Menu Overlap Fix ===
-   - Ensure menu and content never overlap.
-   - Add margin below menu for spacing.
-*/
-.menu, .panel-head{
-  position:relative !important;
-  top:auto !important;
-  z-index:1 !important;
-}
-
-.container, .panel, .content{
-  position:relative !important;
-  z-index:0 !important;
-  margin-top:20px !important;
-}
-
-
-/* === v9_84 Full Scroll Mode ===
-   - Entire page (logo, title, menu, content) scrolls together.
-   - Remove all fixed/sticky positioning and ensure smooth scroll.
-*/
-header, .brand, .menu, .panel-head, .container, .content {
-  position: relative !important;
-  top: auto !important;
-  z-index: auto !important;
-}
-
-body, html {
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  height: auto !important;
-}
-
-.menu, .panel-head {
-  margin-bottom: 20px !important; /* spacing below menu */
-}
-
-.panel, .container, .content {
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-}
-
-
-/* === v9_92 Scroll Button Always Clickable === */
-.scrollTop, .scrollBottom, #scrollTop, #scrollBottom {
-  position: fixed;
-  right: 20px;
-  width: 45px;
-  height: 45px;
-  border-radius: 50%;
-  background: black;
-  color: white;
-  font-size: 18px;
-  cursor: pointer;
-  z-index: 9999;
-  pointer-events: auto;
-}
-
-.scrollTop { bottom: 80px; }
-.scrollBottom { bottom: 20px; }
-
-
-/* === v9_93 Scroll Button Always Visible === */
-.scrollTop, .scrollBottom, #scrollTop, #scrollBottom {
-  position: fixed;
-  right: 20px;
-  width: 45px;
-  height: 45px;
-  border-radius: 50%;
-  background: black;
-  color: white;
-  font-size: 18px;
-  cursor: pointer;
-  z-index: 9999;
-  pointer-events: auto; /* 클릭 차단 방지 */
-}
-
-.scrollTop { bottom: 80px; }
-.scrollBottom { bottom: 20px; }
-
-
-/* === v9_94 Ensure scroll buttons clickable and on top === */
-#scrollTop, .scrollTop, #scrollBottom, .scrollBottom{
-  position: fixed;
-  right: 16px;
-  width: 44px;
-  height: 44px;
-  border-radius: 9999px;
-  display:flex; align-items:center; justify-content:center;
-  cursor: pointer;
-  z-index: 2147483647; /* max */
-  pointer-events: auto;
-}
-#scrollTop, .scrollTop{ bottom: 76px; }
-#scrollBottom, .scrollBottom{ bottom: 20px; }
-
-/* === v9_95 Scroll Button UI === */
-#scrollTop, .scrollTop, #scrollBottom, .scrollBottom {
-  position: fixed;
-  right: 20px;
-  width: 45px;
-  height: 45px;
-  border-radius: 50%;
-  background: black;
-  color: white;
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 99999;
-  opacity: 0.85;
-  pointer-events: auto;
-}
-.scrollTop { bottom: 80px; }
-.scrollBottom { bottom: 20px; }
-
-/* League tables */
-#playerBody table.detail th, #playerBody table.detail td{ text-align:center; }
-
-
-/* === Responsive Cinematic Zoom Fade & Date Bar (Restored) === */
-#loadingScreen {
-  position: fixed;
-  inset: 0;
-  background: #fff;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-  animation: fadeOut 1.5s ease-in-out 1.5s forwards;
-}
-#loadingScreen img {
-  width: 45vw;
-  max-width: 640px;
-  opacity: 0;
-  animation: zoomFadeIn 2.4s ease-in-out forwards;
-}
-@media (max-width: 600px) {
-  #loadingScreen img {
-    width: 75vw;
-    max-width: 420px;
-  }
-}
-@keyframes zoomFadeIn {
-  0% { opacity: 0; transform: scale(0.8); }
-  60% { opacity: 1; transform: scale(1.03); }
-  100% { transform: scale(1); }
-}
-@keyframes fadeOut {
-  to { opacity: 0; visibility: hidden; }
-}
-.top-left-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 10pt;
-  font-weight: 600;
-}
-.yt-link {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #000;
-  text-decoration: none;
-}
-.yt-text { font-size: 9pt; font-weight: 600; }
-.divider { color: #999; }
-.current-date { color: #555; font-weight: 600; }
-
-
-/* === 전체경기기록 테이블: J열(리그명) 텍스트에 딱 맞게 자동폭 + 스크롤 제거 === */
-#allTable {
-  table-layout: auto !important;
-  width: 100% !important;
-  border-collapse: collapse !important;
-}
-
-#allTable th:nth-child(10),
-#allTable td:nth-child(10) {
-  width: 1% !important;
-  min-width: fit-content !important;
-  max-width: fit-content !important;
-  white-space: nowrap !important;
-  text-align: center !important;
-  padding: 4px 8px !important;
-}
-
-.table-wrap {
-  overflow-x: hidden !important;
-}
-
-
-/* === 전체경기기록 J열 너비 자동조정 === */
-#allTable td:nth-child(10),
-#allTable th:nth-child(10) {
-  white-space: normal !important;
-  width: auto !important;
-  max-width: 120px !important;
-  word-break: keep-all !important;
-  overflow-wrap: anywhere !important;
-}
-#allTable {
-  table-layout: auto !important;
-}
-.table-wrap.full {
-  overflow-x: hidden !important;
-}
-
-
-/* === v9_80 Menu Rect Bar + Hamburger === */
-.hamburger {
-  position: absolute; left: 10px; top: 52px;
-  background: #000; color: #fff; border: none;
-  width: 44px; height: 44px; border-radius: 8px;
-  font-size: 22px; line-height: 44px; text-align: center;
-  cursor: pointer; z-index: 25;
-}
-.hamburger:active{ transform:scale(0.98); }
-
-/* Equal-width rectangular menu bar */
-.menu{ display:flex; gap:0 !important; padding:0 !important; margin:12px auto 16px; max-width:1100px; width:100%; }
-.menu .tab-btn, .menu .home-btn{
-  flex:1 1 0; border-radius:0 !important;
-  background:#f0f0f0 !important; color:#111 !important;
-  border:1px solid #d9d9d9 !important; padding:12px 10px !important;
-  height:46px; display:flex; align-items:center; justify-content:center;
-  font-weight:700; letter-spacing:0.2px;
-}
-.menu .tab-btn + .tab-btn{ border-left:none !important; }
-.menu .home-btn{ background:#fff !important; }
-.menu .tab-btn.active{ background:#d9d9d9 !important; color:#000 !important; border-color:#c9c9c9 !important; }
-
-/* Mobile: collapse bar; use overlay */
-@media (max-width: 900px){
-  .menu{ display:none !important; }
-  .hamburger {
-  position: absolute; left: 10px; top: 52px;
-  background: #000; color: #fff; border: none;
-  width: 44px; height: 44px; border-radius: 8px;
-  font-size: 22px; line-height: 44px; text-align: center;
-  cursor: pointer; z-index: 25;
-}
-}
-@media (min-width: 901px){
-  .hamburger {
-  position: absolute; left: 10px; top: 52px;
-  background: #000; color: #fff; border: none;
-  width: 44px; height: 44px; border-radius: 8px;
-  font-size: 22px; line-height: 44px; text-align: center;
-  cursor: pointer; z-index: 25;
-}
-}
-
-/* Mobile overlay */
+/* Player detail */
+.player-body{
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:#ffffff;
+  padding:14px;
+  box-shadow:var(--shadow);
+}
+.player-body h3{margin:10px 0 8px;font-size:16px}
+
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  height:22px;
+  padding:0 10px;
+  border-radius:999px;
+  background:#ffffff;
+  border:1px solid rgba(37,99,235,.25);
+  color:var(--accent);
+  font-size:12px;
+  font-weight:900;
+  margin-right:6px;
+}
+
+hr.gold{border:0;border-top:1px solid rgba(37,99,235,.28);margin:14px 0}
+
+/* H2H */
+.filters{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:flex-end;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:#ffffff;
+  box-shadow:var(--shadow);
+  margin-bottom:12px;
+}
+.filters label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted);font-weight:800}
+.filters input{height:38px;border-radius:12px;border:1px solid var(--line);background:#ffffff;color:var(--fg);padding:0 12px}
+.filters input:focus{outline:none;box-shadow:var(--focus);border-color:rgba(37,99,235,.45)}
+.search-button,.reset-button{height:40px}
+
+.chart-wrap{
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:#ffffff;
+  padding:10px;
+  margin:10px 0;
+  box-shadow:var(--shadow);
+}
+
+/* Floating buttons */
+.scroll-fab{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:60}
+.fab-btn{width:48px;height:48px;border-radius:50%;border:1px solid rgba(37,99,235,.25);background:#ffffff;color:var(--accent);font-weight:1000;cursor:pointer;box-shadow:var(--shadow)}
+.fab-btn:hover{border-color:rgba(37,99,235,.40);background:rgba(37,99,235,.18)}
+
+/* Footer */
+.footer{max-width:1200px;margin:0 auto;padding:22px 16px;color:var(--muted2);border-top:1px solid var(--line);display:flex;justify-content:center;gap:8px}
+
+/* --- Mobile overlay menu (existing DOM) --- */
 .mobile-menu{
-  position:fixed; inset:0; background:rgba(0,0,0,.55);
-  display:none; align-items:flex-start; justify-content:flex-start; z-index:60;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.55);
+  display:none;
+  z-index:80;
 }
-.mobile-menu.open{ display:flex; }
-.mobile-menu .mobile-menu-inner{
-  background:#000; color:#fff; width:78%; max-width:360px; min-height:100%;
-  padding:12px 14px 20px 14px; box-shadow:4px 0 16px rgba(0,0,0,.3);
-}
-.mobile-menu .mobile-close{
-  background:#222; color:#fff; border:none; border-radius:8px;
-  width:44px; height:36px; font-size:20px; cursor:pointer;
-}
-.mobile-menu .mobile-list{ list-style:none; padding:10px 0 0; margin:0; display:flex; flex-direction:column; gap:8px; }
-.mobile-menu .mobile-item{
-  width:100%; background:#111; color:#fff; border:1px solid #333; border-radius:10px;
-  padding:12px; text-align:left; font-size:16px; cursor:pointer;
-}
-.mobile-menu .mobile-item:active{ background:#1b1b1b; }
+.mobile-menu[aria-hidden="false"]{display:block}
 
-
-/* === v9_81 Menu Black Background Fix === */
-.menu .tab-btn, .menu .home-btn {
-  background: #000 !important;
-  color: #fff !important;
-  border: 1px solid #333 !important;
-}
-.menu .tab-btn.active, .menu .home-btn.active {
-  background: var(--gold, #a78d40) !important;
-  color: #fff !important;
-  border-color: var(--gold, #a78d40) !important;
+.mobile-menu-inner{
+  position:absolute;
+  top:0;left:0;
+  width:min(320px, 88vw);
+  height:100%;
+  background:#ffffff;
+  border-right:1px solid var(--line);
+  padding:14px;
+  box-shadow:var(--shadow);
 }
 
-
-/* === v9_83 Blur Hover + Mobile Hamburger Only === */
-.menu .tab-btn:hover,
-.menu .tab-btn.active {
-  backdrop-filter: blur(4px);
-  filter: brightness(1.2);
-  background: rgba(0, 0, 0, 0.75) !important;
-  color: #fff !important;
-  border-color: #222 !important;
-  transition: all 0.25s ease;
+.mobile-close{
+  height:40px;
+  width:44px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background:#ffffff;
+  color:var(--fg);
+  cursor:pointer;
 }
 
-/* 햄버거 버튼 표시 조건 */
-@media (min-width: 901px) {
-  .hamburger {
-    display: none !important;
+.mobile-list{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.mobile-item{
+  width:100%;
+  height:44px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background:#ffffff;
+  color:var(--fg);
+  font-weight:900;
+  text-align:left;
+}
+.mobile-item:hover{border-color:var(--line2)}
+
+/* --- Responsiveness --- */
+@media (max-width: 1100px){
+  .cards{grid-template-columns:repeat(2, minmax(0,1fr))}
+  table{min-width:680px}
+}
+
+@media (max-width: 720px){
+  .brand.center{flex-direction:column;align-items:flex-start;gap:10px}
+  .dash-search{width:100%;justify-content:flex-start}
+  .menu{display:none} /* mobile uses hamburger overlay */
+  .cards{grid-template-columns:1fr}
+  .titles .league{font-size:20px}
+  .hamburger{position:static;margin-left:16px;margin-top:22px}
+  .top-left-bar.left{padding:10px 16px 6px}
+}
+
+
+/* ===== FORCE FULL WHITE BACKGROUND (no overlays / no gradients) ===== */
+html, body { background:#ffffff !important; }
+.topbar, header, nav, main, section, footer,
+main.container > .panel,
+.card, .table-wrap { background:#ffffff !important; }
+
+body::before, body::after,
+.bg-overlay, .overlay, .dim, .backdrop, .background { 
+  display:none !important;
+  content:none !important;
+  background:none !important;
+  filter:none !important;
+}
+
+
+/* Text tuning for premium KPI cards */
+.dash-card.gold .card-title{color:var(--premium-muted)}
+.dash-card.gold .card-value{color:#ffffff}
+.dash-card.gold .mini-btn{
+  border-color:rgba(255,255,255,.22);
+  background:rgba(255,255,255,.08);
+  color:#ffffff;
+}
+.dash-card.gold .mini-btn:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.30)}
+
+/* ===== MENU VISIBILITY FORCE FIX ===== */
+.menu{
+  background:#ffffff !important;
+  border:1px solid #e5e7eb !important;
+}
+
+.menu .tab-btn{
+  background:#ffffff !important;
+  color:#111827 !important;
+  border:1px solid #d1d5db !important;
+  font-weight:800 !important;
+}
+
+.menu .tab-btn:hover{
+  background:#f1f5f9 !important;
+}
+
+.menu .tab-btn.active{
+  color:#2563eb !important;
+  border-color:#2563eb !important;
+  background:#eff6ff !important;
+}
+
+/* Mobile menu overlay text */
+@media (max-width:720px){
+  .menu .tab-btn{
+    font-size:14px;
   }
 }
-@media (max-width: 900px) {
-  .hamburger {
-    display: flex !important;
+
+
+/* ===== MENU & KPI BACKGROUND COLOR UPDATE ===== */
+
+/* Menu pill background */
+.menu{
+  background:#f8fafc !important;
+  border:1px solid #e2e8f0 !important;
+}
+
+/* Menu buttons */
+.menu .tab-btn{
+  background:#ffffff !important;
+  border:1px solid #cbd5e1 !important;
+  color:#0f172a !important;
+}
+
+/* Active menu */
+.menu .tab-btn.active{
+  background:#e0f2fe !important;
+  border-color:#38bdf8 !important;
+  color:#0369a1 !important;
+}
+
+/* KPI cards background */
+.dash-card,
+.dash-card.gold{
+  background:linear-gradient(135deg,#0f172a,#020617) !important;
+  color:#ffffff !important;
+}
+
+/* KPI title/value clarity */
+.dash-card .card-title{color:#e5e7eb !important;}
+.dash-card .card-value{color:#ffffff !important;}
+
+
+
+/* ===== MOBILE: hamburger should NOT cover clan logo ===== */
+/* Ensure top-left container is positioning context */
+.top-left-bar.left{ position:relative; }
+
+/* On medium widths where hamburger still appears, push it slightly down */
+@media (max-width: 980px){
+  .hamburger{
+    top:56px !important;
   }
 }
 
+/* On small widths, keep it in the flow but below the brand row */
+@media (max-width: 720px){
+  .hamburger{
+    position:static !important;
+    margin-left:16px !important;
+    margin-top:28px !important;
+  }
+}
 
-/* v12b dashboard styles */
-.dash-wrap{max-width:1100px;margin:0 auto;padding:10px 0 40px;}
-.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:10px 0 24px;}
-.dash-card{border-radius:18px;box-shadow:0 6px 14px rgba(0,0,0,.12);padding:16px 18px;background:linear-gradient(180deg,#d8b86a,#b89445);}
-.dash-card .card-title{color:#fff;font-weight:700;font-size:16px}
-.dash-card .card-value{color:#000;font-weight:800;font-size:26px}
-.dash-card .mini-btn{background:#000;color:#fff;border-radius:10px;padding:6px 10px;margin-right:6px}
-.table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:8px;background:#f3f3f3}
-.table th,.table td{padding:10px 12px;border-bottom:1px solid #e3e3e3;text-align:center}
-.table thead th{background:#ededed;font-weight:700}
-/* menu hover already defined in previous versions */
-
-
-/* Global search under header */
+/* ===== Center align player search ===== */
 .dash-search{
-  max-width:1200px; margin:6px auto 0 auto; padding:0 16px 8px 16px;
-  display:flex; gap:8px; align-items:center; justify-content:center;
+  justify-content:center !important;
+}
+.brand.center .dash-search{
+  justify-self:center !important;
+}
+@media (min-width: 721px){
+  .brand.center .dash-search{
+    grid-column:2 !important;
+  }
+}
+@media (max-width: 720px){
+  .dash-search{
+    width:min(520px, 92vw) !important;
+  }
 }
 
-/* Modal styles */
-.modal{position:fixed; inset:0; display:none; z-index:100;}
-.modal[aria-hidden="false"]{display:block;}
-.modal__backdrop{position:absolute; inset:0; background:rgba(0,0,0,.45);}
-.modal__content{
-  position:relative; max-width:980px; margin:40px auto; background:#fff; border-radius:12px;
-  padding:14px; box-shadow:0 10px 30px rgba(0,0,0,.2);
+
+/* ===== RESPONSIVE FIX PACK (MOBILE FIRST) ===== */
+
+/* Prevent any accidental horizontal scrolling */
+html, body{overflow-x:hidden;}
+img, svg, canvas{max-width:100%; height:auto;}
+
+/* Containers should breathe on small screens */
+@media (max-width: 720px){
+  .container{padding:0 12px !important; margin-top:12px !important;}
+  main.container > .panel{padding:12px !important;}
+  .panel-head{padding:10px 10px 6px !important;}
+
+  /* Title block spacing */
+  .brand.center{gap:8px !important;}
+  .titles .league{line-height:1.15 !important;}
+  .titles .sub{line-height:1.15 !important;}
+
+  /* KPI cards: remove forced heights, allow wrap */
+  .cards{gap:10px !important;}
+  .dash-card{min-height:auto !important; padding:14px 14px !important;}
+  .dash-card .card-title{font-size:12px !important;}
+  .dash-card .card-value{font-size:22px !important;}
+
+  /* Menu: ensure readable and wrap nicely */
+  .menu{border-radius:18px !important; padding:10px 10px !important; gap:6px !important;}
+  .menu .tab-btn{height:34px !important; padding:0 10px !important; font-size:13px !important;}
+
+  /* Search: full width centered */
+  .dash-search{width:100% !important; justify-content:center !important;}
+  .dash-search input{width:100% !important; max-width:520px !important;}
+
+  /* Tables: remove desktop min-width that breaks mobile */
+  table{min-width:0 !important; width:100% !important;}
+  .table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  thead th, tbody td{padding:9px 8px !important; font-size:12.5px !important;}
+  tbody td{white-space:nowrap !important;} /* keep cells compact */
 }
-.modal__header{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
 
+/* Even smaller phones */
+@media (max-width: 420px){
+  .menu .tab-btn{font-size:12px !important; padding:0 9px !important;}
+  .dash-card .card-value{font-size:20px !important;}
+  thead th, tbody td{font-size:12px !important; padding:8px 7px !important;}
+}
 
-/* === Hall of Fame Modal === */
-.hof-modal{ border:none; border-radius:12px; padding:20px; max-width:900px; width:90%; background:#fff; color:#000; box-shadow:0 6px 24px rgba(0,0,0,.2); }
-.hof-modal::backdrop{ background:rgba(0,0,0,.55); }
-.hof-modal h2{ text-align:center; margin:0 0 10px; color:#a78d40; }
-.hof-modal table{ width:100%; border-collapse:collapse; }
-.hof-modal th, .hof-modal td{ border:1px solid #ccc; padding:6px 8px; text-align:center; font-size:14px; }
-.hof-modal .close-btn{ display:block; margin:16px auto 0; padding:8px 16px; background:#000; color:#fff; border:none; border-radius:8px; cursor:pointer; }
-.hof-modal .close-btn:hover{ background:#333; }
-
-
-/* === v9_79 Tier filter buttons & crowns === */
-.tier-filters .tier-btn{padding:6px 10px;border-radius:999px}
-.tier-filters .tier-btn.active{border-color:var(--gold);color:var(--gold);font-weight:700}
-.crown{width:18px;height:18px;object-fit:contain;vertical-align:-3px;margin-left:4px}
+/* Player detail: prevent overflow from long text / badges */
+.player-card, .player-panel, .player-detail, .player-summary{
+  max-width:100% !important;
+}
+.player-card *{max-width:100%;}
+.player-card .badges, .player-card .chips{flex-wrap:wrap !important;}
