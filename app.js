@@ -604,49 +604,51 @@ try {
       }
     }
   }catch(e){ console.warn('elo v4 error', e); }
-// --- 최근 5경기 승패 그래프 및 테이블 (중복 제거 버전) ---
+// --- 최근 10경기 승패 그래프 및 테이블 (중복 제거 버전) ---
 try {
   const iDate = findIdx(MH, /경기일자|date/i);
   const iWinN = findIdx(MH, /승자\s*선수|winner/i);
   const iLoseN = findIdx(MH, /패자\s*선수|loser/i);
   const iMap = findIdx(MH, /맵|map/i);
+  const iLeague = findIdx(MH, /리그명|league/i);
 
   const seq = yourRows.map(r=>({
     d:String(iDate>=0? r[iDate]:""),
     res:(lc(r[iWinN]||"")===you)?"W":"L"
   })).sort((a,b)=> (a.d > b.d ? 1 : -1));
-  const last5 = seq.slice(-5);
+  const last10 = seq.slice(-10);
 
-  if (body && last5.length){
+  if (body && last10.length){
     // 그래프
     body.insertAdjacentHTML('beforeend', `
       <hr class="gold"/>
-      <h3>최근 5경기 승패</h3>
+      <h3>최근 10경기 승패</h3>
       <div class="chart-wrap"><canvas id="recent5Chart" height="120"></canvas></div>
     `);
 
     // 테이블 (중복방지)
-    const rows5 = (yourRows.map(r=>({
+    const rows10 = (yourRows.map(r=>({
       d:String(iDate>=0? r[iDate]:""),
       res:(lc(r[iWinN]||"")===you)?"W":"L",
       w:String(r[iWinN]||""),
       l:String(iLoseN>=0? r[iLoseN]:""),
-      m:String(iMap>=0? r[iMap]:"")
-    })).sort((a,b)=> (a.d > b.d ? 1 : -1))).slice(-5);
+      m:String(iMap>=0? r[iMap]:""),
+      lg:String(iLeague>=0? r[iLeague]:"")
+    })).sort((a,b)=> (a.d > b.d ? 1 : -1))).slice(-10);
 
-    const rowHtml = rows5.map(r=>{
+    const rowHtml = rows10.map(r=>{
       const opp = (lc(r.w)===you) ? r.l : r.w;
       const resTxt = r.res === "W" ? "승" : "패";
-      return `<tr><td>${r.d||""}</td><td>${opp||""}</td><td>${resTxt}</td><td>${r.m||""}</td></tr>`;
+      return `<tr><td>${r.d||""}</td><td>${opp||""}</td><td>${resTxt}</td><td>${r.m||""}</td><td>${r.lg||""}</td></tr>`;
     }).join("");
 
     body.insertAdjacentHTML('beforeend', `
       <hr class="gold"/>
-      <h3>최근 5경기 (테이블)</h3>
+      <h3>최근 10경기 (테이블)</h3>
       <div class="table-wrap">
         <table id="recent5Table">
           <thead>
-            <tr><th>경기일자</th><th>상대</th><th>결과</th><th>맵</th></tr>
+            <tr><th>경기일자</th><th>상대</th><th>결과</th><th>맵</th><th>리그</th></tr>
           </thead>
           <tbody>${rowHtml}</tbody>
         </table>
@@ -703,9 +705,9 @@ try {
       if (recent5Chart && typeof recent5Chart.destroy === 'function') {
         try { recent5Chart.destroy(); } catch(e){}
       }
-      const labels = last5.map((_,i)=>`G${i+1}`);
-      const data = last5.map(g => g.res === 'W' ? 1 : -1);
-      const colors = last5.map(g => g.res === 'W' ? '#3498db' : '#e74c3c');
+      const labels = last10.map((_,i)=>`G${i+1}`);
+      const data = last10.map(g => g.res === 'W' ? 1 : -1);
+      const colors = last10.map(g => g.res === 'W' ? '#3498db' : '#e74c3c');
 
       recent5Chart = new Chart(ctxR, {
         type: 'bar',
@@ -722,7 +724,7 @@ try {
           responsive: true,
           plugins: {
             legend: { display: false },
-            title: { display: true, text: '최근 5경기' },
+            title: { display: true, text: '최근 10경기' },
             datalabels: { display: true, formatter: (v) => v > 0 ? 'W' : 'L' }
           },
           scales: {
