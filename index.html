@@ -162,32 +162,44 @@
 <div class="status">프로리그 / TST / TSL</div>
 </div>
 <div class="hof-wrap premium">
-  <div class="hof-menu" role="tablist" aria-label="명예의전당 메뉴">
-    <button class="hof-menu-btn active" id="hofPro" type="button" role="tab" aria-selected="true">
-      <span class="hof-menu-main">프로리그</span>
-      <span class="hof-menu-sub">PROLEAGUE</span>
-    </button>
-    <button class="hof-menu-btn" id="hofTST" type="button" role="tab" aria-selected="false">
-      <span class="hof-menu-main">TST</span>
-      <span class="hof-menu-sub">3050토너먼트</span>
-    </button>
-    <button class="hof-menu-btn" id="hofTSL" type="button" role="tab" aria-selected="false">
-      <span class="hof-menu-main">TSL</span>
-      <span class="hof-menu-sub">3050스타리그</span>
-    </button>
-  </div>
-
-  <div class="hof-inline" id="hofInline" style="display:none;">
-    <div class="hof-inline-head">
-      <div class="hof-inline-title" id="hofInlineTitle">명예의전당</div>
+  <div class="hof-page">
+    <div class="hof-menu" role="tablist" aria-label="명예의전당 메뉴">
+      <button class="hof-menu-btn active" id="hofPro" type="button" role="tab" aria-selected="true">
+        <span class="hof-menu-main">프로리그</span>
+        <span class="hof-menu-sub">PROLEAGUE</span>
+      </button>
+      <button class="hof-menu-btn" id="hofTST" type="button" role="tab" aria-selected="false">
+        <span class="hof-menu-main">TST</span>
+        <span class="hof-menu-sub">3050토너먼트</span>
+      </button>
+      <button class="hof-menu-btn" id="hofTSL" type="button" role="tab" aria-selected="false">
+        <span class="hof-menu-main">TSL</span>
+        <span class="hof-menu-sub">3050스타리그</span>
+      </button>
     </div>
-    <div class="status" id="hofInlineStatus"></div>
-    <div aria-label="시즌 선택" class="season-bar" id="hofInlineSeasonBar"></div>
-    <div class="table-wrap full">
-      <table class="table" id="hofInlineTable">
-        <thead><tr></tr></thead>
-        <tbody></tbody>
-      </table>
+
+    <div class="hof-shell">
+      <aside class="hof-side" aria-label="시즌별 성적">
+        <div class="hof-side-head">
+          <div class="hof-side-title">시즌별 성적</div>
+        </div>
+        <div class="hof-seasons" id="hofSeasonList"></div>
+      </aside>
+
+      <main class="hof-main">
+        <div class="hof-card" id="hofInline">
+          <div class="hof-card-head">
+            <div class="hof-card-title" id="hofInlineTitle">명예의전당</div>
+            <div class="hof-card-sub" id="hofInlineStatus"></div>
+          </div>
+          <div class="table-wrap full hof-table-wrap">
+            <table class="table" id="hofInlineTable">
+              <thead><tr></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </main>
     </div>
   </div>
 </div>
@@ -293,7 +305,7 @@
 </div>
 <div class="popup-body">
 <div class="status" id="hofPopupStatus"></div>
-<div aria-label="시즌 선택" class="season-bar" id="hofSeasonBar"></div>
+<div aria-label="시즌별 성적" class="season-bar" id="hofSeasonBar"></div>
 <div class="table-wrap full">
 <table class="table" id="hofPopupTable">
 <thead><tr></tr></thead>
@@ -303,7 +315,7 @@
 </div>
 </div>
 </div>
-<script src="app.js?v=118"></script>
+<script src="app.js?v=132"></script>
 <script>
 window.addEventListener('load', () => {
   const dateEl = document.getElementById("currentDate");

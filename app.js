@@ -196,6 +196,24 @@ function renderTable(el, data){
   });
 }
 
+function applyTableDataLabels(tableEl){
+  try{
+    if(!tableEl) return;
+    const ths = Array.from(tableEl.querySelectorAll('thead th'));
+    const labels = ths.map(th => (th.textContent||'').trim());
+    const rows = Array.from(tableEl.querySelectorAll('tbody tr'));
+    rows.forEach(tr=>{
+      const tds = Array.from(tr.children || []);
+      tds.forEach((td, i)=>{
+        if(!td || td.tagName !== 'TD') return;
+        td.setAttribute('data-label', labels[i] || '');
+      });
+    });
+  }catch(_){}
+}
+
+
+
 function percent(w,t){ return t? Math.round(w*1000/t)/10 : 0; }
 function getRaceIcon(r){ const x=String(r||'').trim().toUpperCase(); if(x==='Z') return './z.png'; if(x==='P') return './p.png'; if(x==='T') return './t.png'; return ''; }
 
@@ -1129,8 +1147,16 @@ function activate(id){
   tabs.forEach(b=>b.classList.toggle('active', b.dataset.target===id));
   const playerTab = tabs.find(b=>b.dataset.target==='player');
   if(playerTab){ playerTab.style.display = (id==='player') ? 'inline-block' : 'none'; }
+
+  // Show the 4 stat cards only on Dashboard
+  const heroStats = document.querySelector('.hero-stats');
+  if(heroStats){
+    heroStats.style.display = (id === 'dashboard') ? '' : 'none';
+  }
 }
 tabs.forEach(btn=>btn.addEventListener('click',()=>activate(btn.dataset.target)));
+// Ensure hero stats visibility matches initial active panel
+try{ const initId = document.querySelector('.panel.active')?.id || 'rank'; activate(initId); }catch(_){}
 
 (async()=>{
   await loadRanking();
@@ -2003,13 +2029,13 @@ async function v12_loadCounts(){
   try{
     // active: ClanMembers!A2:A -> numeric count
     const active = activeRows.slice(1).map(r=>String(r[0]||'').trim()).filter(Boolean).length;
-    const elA = document.getElementById('activeCount');
+    const elA = document.querySelector('#dashboard #activeCount') || document.getElementById('activeCount');
     if(elA) elA.textContent = fmtNum(active)+'명';
   }catch(e){ console.error('activeCount set error', e); }
   try{
     // total matches: (개인전)경기기록데이터!A2:A
     const total = matchRows.length ? matchRows.slice(1).filter(r=> String(r[0]||'').trim()).length : 0;
-    const elT = document.getElementById('totalMatches');
+    const elT = document.querySelector('#dashboard #totalMatches') || document.getElementById('totalMatches');
     if(elT) elT.textContent = fmtNum(total)+'경기';
   }catch(e){ console.error('totalMatches set error', e); }
 
@@ -2035,7 +2061,7 @@ async function v12_loadCounts(){
         }
       }
     }
-    const elU = document.getElementById('lastUpdate');
+    const elU = document.querySelector('#dashboard #lastUpdate') || document.getElementById('lastUpdate');
     if(elU){
       if(maxD){
         const days=['일','월','화','수','목','금','토'];
@@ -2152,6 +2178,14 @@ async function v12_loadNextSchedule(){
 })();
 
 /* 5) Bootstrap loader on DOM ready */
+
+// Only show dashboard hero stats on dashboard (index).
+document.addEventListener('DOMContentLoaded', () => {
+  const isDashboard = /(^|\/)index\.html$/.test(location.pathname) || location.pathname === '/' || location.pathname === '';
+  if (isDashboard) return;
+  document.querySelectorAll('.hero-stats').forEach(el => el.remove());
+});
+
 document.addEventListener('DOMContentLoaded', async ()=>{
   try{
     const {matchRows} = await v12_loadCounts();
@@ -2966,9 +3000,553 @@ window.openPlayer = async function(bCellValue){
   }
 
 
+  // Decorate rows that represent champions / runner-up.
+  // Many HOF sheets use a simple structure like:
+  //  [우승 | TEAM] or [준우승 | TEAM] (sometimes TEAM cell contains an image).
+  // This function upgrades that into a roster-like chip with a crown.
+  function decorateHofPlacements(tableEl, leagueKey){
+    if(!tableEl) return;
+    const tbody = (tableEl.tBodies && tableEl.tBodies.length) ? tableEl.tBodies[0] : null;
+    if(!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
+
+    const makeBadge = (type)=>{
+      const wrap = document.createElement('div');
+      wrap.className = 'hof-place-badge ' + (type==='win' ? 'win' : 'runner');
+
+      const img = document.createElement('img');
+      img.className = 'hof-place-crown';
+      img.alt = type==='win' ? '우승' : '준우승';
+      img.src = type==='win' ? './crown_gold.png' : './crown_silver.png';
+
+      const label = document.createElement('div');
+      label.className = 'hof-place-label';
+      label.textContent = type==='win' ? '우승' : '준우승';
+
+      wrap.appendChild(img);
+      wrap.appendChild(label);
+      return wrap;
+    };
+
+    const upgradeTeamCell = (td)=>{
+      if(!td) return;
+      // If already upgraded, skip.
+      if(td.querySelector('.hof-team-chip')) return;
+
+      const imgs = Array.from(td.querySelectorAll('img'));
+      const text = norm(td.textContent);
+
+      const chip = document.createElement('div');
+      chip.className = 'hof-team-chip';
+
+      // icon
+      const icon = document.createElement('div');
+      icon.className = 'hof-team-icon';
+      if(imgs.length){
+        const pic = imgs[0];
+        pic.classList.add('hof-team-img');
+        icon.appendChild(pic);
+      }else{
+        icon.textContent = '';
+      }
+
+      // text block
+      const tbox = document.createElement('div');
+      tbox.className = 'hof-team-text';
+      const name = document.createElement('div');
+      name.className = 'hof-team-name';
+      name.textContent = text || '-';
+      tbox.appendChild(name);
+
+      chip.appendChild(icon);
+      chip.appendChild(tbox);
+
+      // Clear and re-add
+      td.innerHTML = '';
+      td.appendChild(chip);
+    };
+
+
+    const k = String(leagueKey || HOF_INLINE_CURRENT || 'pro').toLowerCase();
+    const wantChip = (k === 'pro');
+
+rows.forEach(tr=>{
+      const tds = Array.from(tr.children||[]);
+      if(!tds.length) return;
+
+      // Find placement cell anywhere in row (some sheets put 우승/준우승 in col 2+)
+      let placeIdx = -1;
+      let placeType = '';
+      for(let i=0;i<tds.length;i++){
+        const txt = norm(tds[i].textContent);
+        if(/준\s*우\s*승/.test(txt)){ placeIdx = i; placeType='runner'; break; }
+        if(/(^|\s)우\s*승($|\s)/.test(txt) && !/준\s*우\s*승/.test(txt)){ placeIdx = i; placeType='win'; break; }
+      }
+      if(placeIdx < 0) return;
+
+      tr.classList.add('hof-place-row');
+      tr.classList.add(placeType==='win' ? 'win' : 'runner');
+
+      // Replace the placement cell with crown badge
+      tds[placeIdx].innerHTML = '';
+      tds[placeIdx].appendChild(makeBadge(placeType));
+
+      // Upgrade the adjacent team cell (next non-empty cell to the right, fallback to next index)
+      let teamTd = null;
+      for(let j=placeIdx+1;j<tds.length;j++){
+        const hasImg = !!tds[j].querySelector('img');
+        const txt = norm(tds[j].textContent);
+        if(hasImg || txt){ teamTd = tds[j]; break; }
+      }
+      if(!teamTd && tds[placeIdx+1]) teamTd = tds[placeIdx+1];
+      if(teamTd && wantChip) upgradeTeamCell(teamTd);
+    });
+  }
+
+  
+  // PRO: transform the raw table into a 2-column podium layout (match desired roster-style card)
+  function transformProHofToPodium(tableEl){
+    if(!tableEl) return;
+    // Only when table currently has a rendered <table>
+    const innerTable = tableEl.querySelector('table');
+    const tbody = innerTable && innerTable.tBodies && innerTable.tBodies.length ? innerTable.tBodies[0] : null;
+    if(!innerTable || !tbody) return;
+
+    // Grab meta for splitIndex (left/win vs right/runner)
+    let meta = null;
+    try{ meta = buildSeasonMeta(tableEl); }catch(_){ meta = null; }
+    const splitIndex = meta && meta.splitIndex ? meta.splitIndex : 0;
+
+    const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    // Find win/runner team chip from placement rows
+    const pickSide = (type)=>{
+      const row = rows.find(r=> r.classList && r.classList.contains('hof-place-row') && r.classList.contains(type));
+      if(!row) return null;
+      const tds = Array.from(row.children||[]);
+      const chipTd = tds.find(td=> td.querySelector && td.querySelector('.hof-team-chip')) || null;
+      const chip = chipTd ? chipTd.querySelector('.hof-team-chip') : null;
+      const img = chip ? chip.querySelector('img') : null;
+      const name = chip ? norm(chip.textContent) : '-';
+      return { row, imgSrc: img ? img.getAttribute('src') : '', name };
+    };
+
+    const win = pickSide('win');
+    const runner = pickSide('runner');
+    if(!win && !runner) return;
+
+    // Extract detail lines by scanning label rows (팀명/감독/부감독/운영팀/대회진행/진행자 등)
+    const wantedLabels = ['팀명','감독','부감독','운영팀','대회진행','진행자','진행','코치'];
+    const details = { win:{}, runner:{} };
+
+    rows.forEach(r=>{
+      const tds = Array.from(r.children||[]);
+      if(tds.length < 2) return;
+
+      const labelLeft = norm(tds[0].textContent);
+      const isWanted = wantedLabels.some(k=> labelLeft===k);
+      if(!isWanted) return;
+
+      // Winner value: usually next cell
+      const winVal = norm(tds[1] ? tds[1].textContent : '');
+      if(winVal) details.win[labelLeft]=winVal;
+
+      // Runner-up value: depends on split layout; try to locate label/value on right side
+      let rLabel = '';
+      let rVal = '';
+      if(splitIndex && tds[splitIndex]){
+        rLabel = norm(tds[splitIndex].textContent);
+        rVal = norm(tds[splitIndex+1] ? tds[splitIndex+1].textContent : '');
+      }else if(tds.length >= 4){
+        // fallback to last two cells
+        rLabel = norm(tds[tds.length-2].textContent);
+        rVal = norm(tds[tds.length-1].textContent);
+      }
+      if(rLabel && wantedLabels.includes(rLabel) && rVal){
+        details.runner[rLabel]=rVal;
+      }else if(rVal && !rLabel && labelLeft && winVal && rVal){
+        // same label used for both sides
+        details.runner[labelLeft]=rVal;
+      }
+    });
+
+    const makeSide = (type, data)=>{
+      const side = document.createElement('div');
+      side.className = 'hof-pro-side ' + type;
+
+      const badge = (function(){
+        const b = document.createElement('div');
+        b.className = 'hof-place-badge ' + (type==='win'?'win':'runner');
+        const crown = document.createElement('img');
+        crown.className = 'hof-place-crown';
+        crown.alt = type==='win' ? '우승' : '준우승';
+        crown.src = type==='win' ? './crown_gold.png' : './crown_silver.png';
+        const lbl = document.createElement('div');
+        lbl.className = 'hof-place-label';
+        lbl.textContent = type==='win' ? '우승' : '준우승';
+        b.appendChild(crown); b.appendChild(lbl);
+        return b;
+      })();
+
+      const chip = document.createElement('div');
+      chip.className = 'hof-pro-chip';
+      const icon = document.createElement('div');
+      icon.className = 'hof-team-icon';
+      if(data.imgSrc){
+        const img = document.createElement('img');
+        img.src = data.imgSrc;
+        img.alt = '';
+        icon.appendChild(img);
+      }
+      const tbox = document.createElement('div');
+      const nm = document.createElement('div');
+      nm.className = 'hof-team-name';
+      nm.textContent = data.name || '-';
+      tbox.appendChild(nm);
+
+      // optional subtitle (감독/부감독)
+      const subParts = [];
+      const d = (type==='win')?details.win:details.runner;
+      if(d['감독']) subParts.push('감독 ' + d['감독']);
+      if(d['부감독']) subParts.push('부감독 ' + d['부감독']);
+      if(subParts.length){
+        const sub = document.createElement('div');
+        sub.className = 'hof-team-sub';
+        sub.textContent = subParts.join('   ');
+        tbox.appendChild(sub);
+      }
+
+      chip.appendChild(icon);
+      chip.appendChild(tbox);
+
+      const lines = document.createElement('div');
+      lines.className = 'hof-pro-lines';
+      const dAll = (type==='win')?details.win:details.runner;
+      ['팀명','감독','부감독','운영팀','대회진행','진행자','진행','코치'].forEach(k=>{
+        const v = dAll[k];
+        if(!v) return;
+        // 팀명은 chip에 이미 있으니 스킵
+        if(k==='팀명') return;
+        const line = document.createElement('div');
+        line.className = 'hof-pro-line';
+        const kk = document.createElement('span');
+        kk.className = 'k';
+        kk.textContent = k + ':';
+        line.appendChild(kk);
+        line.appendChild(document.createTextNode(' ' + v));
+        lines.appendChild(line);
+      });
+
+      side.appendChild(badge);
+      side.appendChild(chip);
+      if(lines.children.length) side.appendChild(lines);
+      return side;
+    };
+
+    const podium = document.createElement('div');
+    podium.className = 'hof-pro-podium';
+    if(win) podium.appendChild(makeSide('win', win));
+    if(runner) podium.appendChild(makeSide('runner', runner));
+
+    // Replace contents with podium only
+    tableEl.innerHTML = '';
+    tableEl.appendChild(podium);
+  }
+
+
+// TST/TSL: merge tier label (갓/킹/...) into winner/runner name cells for mobile "갓 DayDream" style.
+  function mergeTierIntoNameCells(tableEl, leagueKey){
+    const k = String(leagueKey||'').toLowerCase();
+    if(!tableEl || (k!=='tst' && k!=='tsl')) return;
+    const tbody = (tableEl.tBodies && tableEl.tBodies.length) ? tableEl.tBodies[0] : null;
+    if(!tbody) return;
+    const tierSet = new Set(['갓','킹','퀸','잭','스페이드','조커','히든']);
+    const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
+    Array.from(tbody.querySelectorAll('tr')).forEach(tr=>{
+      const tds = Array.from(tr.children||[]);
+      if(tds.length < 3) return;
+      const tierTxt = norm(tds[0].textContent);
+      if(!tierSet.has(tierTxt)) return;
+      tr.classList.add('hof-tier-row');
+      for(let i=1;i<tds.length;i++){
+        const td = tds[i];
+        // skip placement cell (contains 우승/준우승 badge)
+        if(td.querySelector('.hof-place-badge')) continue;
+        // skip image-only cells
+        if(td.querySelector('img') && !norm(td.textContent)) continue;
+        const nameTxt = norm(td.textContent);
+        if(!nameTxt || nameTxt==='-' || nameTxt==='—') continue;
+        // Already merged?
+        if(td.querySelector('.hof-tier-inline')) continue;
+        td.innerHTML = '';
+        const tierSpan = document.createElement('span');
+        tierSpan.className = 'hof-tier-inline';
+        tierSpan.textContent = tierTxt;
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'hof-name-inline';
+        nameSpan.textContent = nameTxt;
+        td.appendChild(tierSpan);
+        td.appendChild(nameSpan);
+      }
+    });
+  }
+
+
   // Per-league inline HOF cache to prevent table/season state leaking across PRO/TST/TSL
+  // html: pristine table html (legacy row-filter mode)
+  // seasons: list of season labels
+  // meta: per-row season metadata (legacy row-filter mode)
+  // blocks: { byLabel: Map<label, {label, num, data:[][]}>, order:[label...] } (grid/block mode)
   const HOF_INLINE_CACHE = { pro: null, tst: null, tsl: null };
   let HOF_INLINE_CURRENT = 'pro';
+
+  // --- HOF season extraction (grid/block style sheets) ---
+  const SEASON_CELL_PAT = /(S|시즌)\s*0*\d+\b/i;
+  const normalizeCellText = (s)=> _normSeasonText(String(s||''));
+
+  function detectSeasonCellsFromData(data){
+    const out = [];
+    const isUrl = (v)=> /^https?:\/\//i.test(String(v||'').trim());
+    for(let r=0;r<data.length;r++){
+      const row = data[r] || [];
+      for(let c=0;c<row.length;c++){
+        const raw = row[c];
+        const rawStr = String(raw||'').trim();
+        if(isUrl(rawStr)) continue;
+        if(/\.(png|jpe?g|gif|webp)(\?|$)/i.test(rawStr)) continue;
+        const txt = normalizeCellText(raw);
+        if(!txt) continue;
+        if(!SEASON_CELL_PAT.test(txt)) continue;
+        const num = extractSeasonNum(txt);
+        if(!num) continue;
+        out.push({ r, c, label: txt, num });
+      }
+    }
+    return out;
+  }
+
+  function sliceAndTrim(data, r0, c0, r1, c1){
+    // slice inclusive bounds then trim empty outer rows/cols
+    const rows = [];
+    for(let r=r0; r<=r1; r++){
+      const src = data[r] || [];
+      rows.push(src.slice(c0, c1+1));
+    }
+    // trim empty bottom
+    const isRowEmpty = (arr)=> arr.every(v=> !normalizeCellText(v));
+    while(rows.length && isRowEmpty(rows[rows.length-1])) rows.pop();
+    // trim empty top
+    while(rows.length && isRowEmpty(rows[0])) rows.shift();
+    if(!rows.length) return [];
+    // trim empty right/left
+    const colCount = Math.max(...rows.map(r=>r.length));
+    const isColEmpty = (idx)=> rows.every(r=> !normalizeCellText(r[idx]));
+    let left=0, right=colCount-1;
+    while(left<=right && isColEmpty(left)) left++;
+    while(right>=left && isColEmpty(right)) right--;
+    const trimmed = rows.map(r=> r.slice(left, right+1));
+    return trimmed;
+  }
+
+  function buildSeasonBlocksFromData(data){
+    const seasonCells = detectSeasonCellsFromData(data);
+    if(!seasonCells.length) return null;
+
+    // Heuristic: block-mode if we have at least 2 season cells (grid OR vertical blocks)
+    const rowCounts = {};
+    seasonCells.forEach(s=>{ rowCounts[s.r] = (rowCounts[s.r]||0) + 1; });
+    const looksGrid = Object.values(rowCounts).some(n=>n>=2);
+    // If not grid, we still support vertical blocks, so only bail when we have <2 seasons
+    if(seasonCells.length < 2) return null;
+
+    // For each season cell, expand a block around it.
+    // We'll expand right/down until we hit another season cell "boundary" or empty space.
+    const maxR = data.length-1;
+    const maxC = Math.max(...data.map(r=> (r||[]).length)) - 1;
+
+    // index season cells for fast boundary detection
+    const seasonAt = new Set(seasonCells.map(s=> `${s.r},${s.c}`));
+
+    const byLabel = {};
+    const pickBestLabel = (labels)=>{
+      // prefer the most descriptive label (longer) when duplicates exist
+      return labels.sort((a,b)=> b.length - a.length)[0];
+    };
+
+    // group by season number first
+    const byNum = {};
+    seasonCells.forEach(s=>{
+      if(!byNum[s.num]) byNum[s.num]=[];
+      byNum[s.num].push(s);
+    });
+
+    Object.keys(byNum).forEach(numStr=>{
+      const num = parseInt(numStr,10);
+      const cells = byNum[num];
+      const label = pickBestLabel(cells.map(x=>x.label));
+      // pick the top-most, left-most occurrence as anchor
+      cells.sort((a,b)=> (a.r-b.r) || (a.c-b.c));
+      const anchor = cells[0];
+
+      // Expand width
+      let c1 = Math.min(anchor.c + 24, maxC); // cap width (wider to include 준우승 column)
+      for(let c=anchor.c+1; c<=Math.min(anchor.c+40, maxC); c++){
+        // stop if we meet another season cell on the same header row
+        if(seasonAt.has(`${anchor.r},${c}`)) { c1 = c-1; break; }
+        // If next 2 cols are all empty in first 12 rows, stop early
+        let hasAny=false;
+        for(let r=anchor.r; r<=Math.min(anchor.r+26, maxR); r++){
+          const v = normalizeCellText((data[r]||[])[c]);
+          if(v){ hasAny=true; break; }
+        }
+        if(!hasAny){ c1 = c-1; break; }
+        c1 = c;
+      }
+
+      // Expand height
+      let r1 = Math.min(anchor.r + 70, maxR);
+      for(let r=anchor.r+1; r<=Math.min(anchor.r+140, maxR); r++){
+        // boundary if we encounter another season cell within the same column range
+        let hit=false;
+        for(let c=anchor.c; c<=c1; c++){
+          if(seasonAt.has(`${r},${c}`)) { hit=true; break; }
+        }
+        if(hit){ r1 = r-1; break; }
+        // stop if we get 2 consecutive empty rows across the range
+        const row = data[r]||[];
+        const has = (colFrom,colTo)=>{
+          for(let c=colFrom;c<=colTo;c++) if(normalizeCellText(row[c])) return true;
+          return false;
+        };
+        if(!has(anchor.c,c1) && !has(anchor.c,c1)){
+          // check next row too
+          const row2 = data[r+1]||[];
+          let has2=false;
+          for(let c=anchor.c;c<=c1;c++) if(normalizeCellText(row2[c])) { has2=true; break; }
+          if(!has2){ r1 = r-1; break; }
+        }
+        r1 = r;
+      }
+
+      const block = sliceAndTrim(data, anchor.r, anchor.c, r1, c1);
+      byLabel[label] = { label, num, data: block };
+    });
+
+    const order = Object.values(byLabel)
+      .sort((a,b)=> (b.num-a.num) || String(b.label).localeCompare(String(a.label),'ko',{numeric:true}))
+      .map(x=>x.label);
+
+    return { byLabel, order };
+  }
+
+  function renderBlockTable(tableEl, block, leagueKey){
+    if(!tableEl) return;
+    const data = (block && block.data) ? block.data : [];
+    renderTable(tableEl, data);
+    try{ markHofTitleCells(tableEl); }catch(_){ }
+    try{ convertImageUrlCells(tableEl); }catch(_){ }
+    try{ applyTableDataLabels(tableEl); }catch(_){ }
+    try{ decorateHofPlacements(tableEl, leagueKey); }catch(_){ }
+    try{ mergeTierIntoNameCells(tableEl, leagueKey); }catch(_){ }
+    // TST/TSL: organizer IDs often come with line breaks; keep them on one row.
+    try{ normalizeOrganizerCells(tableEl, leagueKey); }catch(_){ }
+    try{ if(String(leagueKey||'').toLowerCase()==='pro') transformProHofToPodium(tableEl); }catch(_){ }
+  }
+
+  // TST/TSL: merge multi-line organizer IDs (ilChO, MARVEL, Arirang, sOnic`, Inter, ...)
+  // into a single line to prevent vertical stacking / overlap on small screens.
+  function normalizeOrganizerCells(tableEl, leagueKey){
+    const k = String(leagueKey||'').toLowerCase();
+    if(!tableEl || (k!=='tst' && k!=='tsl')) return;
+    const tbody = (tableEl.tBodies && tableEl.tBodies.length) ? tableEl.tBodies[0] : null;
+    if(!tbody) return;
+    const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
+    const joiner = ' · ';
+
+    Array.from(tbody.querySelectorAll('tr')).forEach(tr=>{
+      const tds = Array.from(tr.children||[]);
+      if(tds.length < 2) return;
+      const label = norm(tds[0].textContent);
+      if(!/^(대회\s*진행|진행자|진행|운영팀)$/.test(label)) return;
+
+      for(let i=1;i<tds.length;i++){
+        const td = tds[i];
+        // textContent preserves newlines; also handle <br>
+        const raw = (td.innerText != null) ? String(td.innerText) : String(td.textContent||'');
+        const parts = raw
+          .split(/\r?\n|\s*<br\s*\/?>\s*/i)
+          .map(p=>norm(p))
+          .filter(Boolean);
+        if(parts.length <= 1) continue;
+        td.textContent = parts.join(joiner);
+        td.classList.add('hof-organizers-merged');
+      }
+    });
+  }
+
+  // PRO sidebar season list: extract winner/runner team names from a block for display.
+  function extractPodiumFromBlockData(blockData){
+    const out = { win:'', runner:'' };
+    if(!Array.isArray(blockData)) return out;
+    const norm = (s)=> String(s||'').replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').trim();
+    const isUrl = (v)=> /^https?:\/\//i.test(String(v||'').trim());
+
+    for(const row of blockData){
+      const r = row || [];
+      for(let c=0;c<r.length;c++){
+        const cell = norm(r[c]);
+        if(!cell) continue;
+        if(/준\s*우\s*승/.test(cell)){
+          // find next meaningful non-url cell to the right
+          for(let j=c+1;j<r.length;j++){
+            const vRaw = r[j];
+            const v = norm(vRaw);
+            if(!v || isUrl(vRaw)) continue;
+            out.runner = v;
+            break;
+          }
+        }
+        if((/(^|\s)우\s*승($|\s)/.test(cell)) && !/준\s*우\s*승/.test(cell)){
+          for(let j=c+1;j<r.length;j++){
+            const vRaw = r[j];
+            const v = norm(vRaw);
+            if(!v || isUrl(vRaw)) continue;
+            out.win = v;
+            break;
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  function showHofSeason(label, leagueKey){
+    const k = (leagueKey || HOF_INLINE_CURRENT || 'pro').toLowerCase();
+    const cache = HOF_INLINE_CACHE[k];
+    const tableEl = document.getElementById('hofInlineTable');
+    if(!cache || !tableEl) return;
+    // grid/block mode
+    if(cache.blocks && cache.blocks.byLabel){
+      const normLabel = _normSeasonText(label);
+      let picked = cache.blocks.byLabel[label] || cache.blocks.byLabel[normLabel];
+      if(!picked){
+        const want = extractSeasonNum(normLabel);
+        if(want){
+          picked = Object.values(cache.blocks.byLabel).find(b=>b && b.num===want) || null;
+        }
+      }
+      if(picked) renderBlockTable(tableEl, picked, k);
+      return;
+    }
+    // legacy row-filter mode
+    applySeasonFilter(tableEl, label, k);
+    try{ decorateHofPlacements(tableEl); }catch(_){ }
+  }
+
+  // Expose for renderSeasonBar (defined in global scope below)
+  try{ window.showHofSeason = showHofSeason; }catch(_){ }
 
 
   async function openHOF(key){
@@ -2983,6 +3561,12 @@ window.openPlayer = async function(bCellValue){
     const titleEl = $("hofInlineTitle");
     const statusEl = $("hofInlineStatus");
     const tableEl = $("hofInlineTable");
+
+    // Tag table with current league for CSS tweaks
+    if(tableEl){
+      tableEl.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl');
+      tableEl.classList.add(key==='pro'?'hof-league-pro':key==='tst'?'hof-league-tst':'hof-league-tsl');
+    }
 
     if(titleEl) titleEl.textContent = c.title;
     // menu active
@@ -3004,20 +3588,62 @@ window.openPlayer = async function(bCellValue){
         return;
       }
       if(tableEl){
+      // --- Prefer block/grid season rendering when the sheet is laid out in columns (your current HOF sheet) ---
+      try{
+        const blocks = buildSeasonBlocksFromData(data);
+        if(blocks && blocks.order && blocks.order.length){
+          const active = blocks.order[0];
+          // Cache blocks per league
+          HOF_INLINE_CACHE[key] = { blocks, seasons: blocks.order };
+
+          // Build season summary (winner/runner-up) for PRO sidebar list
+          try{
+            window.__HOF_SEASON_SUMMARY = window.__HOF_SEASON_SUMMARY || {};
+            const summary = {};
+            if(String(key).toLowerCase()==='pro'){
+              blocks.order.forEach(lbl=>{
+                const b = blocks.byLabel[lbl];
+                if(!b || !b.data) return;
+                summary[_normSeasonText(lbl)] = extractPodiumFromBlockData(b.data);
+              });
+            }
+            window.__HOF_SEASON_SUMMARY[key] = summary;
+          }catch(_){ }
+
+          // Render season list + default season block
+          try{ renderSeasonBar(blocks.order, active, key); }catch(_){ }
+          renderBlockTable(tableEl, blocks.byLabel[active], key);
+          if(statusEl){ statusEl.textContent = ''; statusEl.style.display='none'; }
+          return;
+        }
+      }catch(_){ }
+
+      // Fallback: legacy full-table rendering + row-based season filtering
       renderTable(tableEl, data);
 
       // Post-processing should never break rendering
       try{ markHofTitleCells(tableEl); }catch(_){}
       try{ convertImageUrlCells(tableEl); }catch(_){}
+      try{ applyTableDataLabels(tableEl); }catch(_){}
+      try{ decorateHofPlacements(tableEl); }catch(_){}
 
       let seasonsSorted = [];
       let active = '';
       let meta = null;
 
       try{
-        const grp = applySeasonGrouping(tableEl);
-        seasonsSorted = (grp.seasons||[]).slice().map(_normSeasonText).filter(Boolean)
-          .sort((a,b)=> (extractSeasonNum(b)-extractSeasonNum(a)) || String(a).localeCompare(String(b),'ko'));
+        const grp = applySeasonGrouping(tableEl, key);
+        seasonsSorted = [];
+        try{
+          const seen = new Set();
+          (grp.seasons||[]).forEach(raw=>{
+            const label = _normSeasonText(raw);
+            if(!label) return;
+            if(seen.has(label)) return;
+            seen.add(label);
+            seasonsSorted.push(label);
+          });
+        }catch(_){}
         active = seasonsSorted[0] || grp.active || '';
       }catch(_){}
 
@@ -3029,8 +3655,8 @@ window.openPlayer = async function(bCellValue){
       try{
         HOF_INLINE_CACHE[key] = { html: tableEl.innerHTML, seasons: seasonsSorted, meta };
       }catch(_){}
-      // 시즌 탭 기능 제거: 전체 목록만 표시
-      try{ const bar = document.getElementById('hofInlineSeasonBar') || document.getElementById('hofSeasonBar'); if(bar) bar.innerHTML=''; }catch(_){}
+      // 시즌 탭: 시즌별 보기
+      try{ renderSeasonBar(seasonsSorted, active, key); }catch(_){}
     }
       if(statusEl){ statusEl.textContent = ''; statusEl.style.display='none'; }
     }catch(e){
@@ -3074,6 +3700,14 @@ window.openPlayer = async function(bCellValue){
       tslBtn.dataset.bound='1';
       tslBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tsl'); });
     }
+
+    // Auto render default (latest) when section exists
+    try{
+      if(!window.__HOF_INLINE_BOOTED && document.getElementById('hofInlineTable')){
+        window.__HOF_INLINE_BOOTED = true;
+        openHOF('pro');
+      }
+    }catch(_){ }
   }
 
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', bindOnce);
@@ -3086,62 +3720,90 @@ window.openPlayer = async function(bCellValue){
 
 function extractSeasonNum(s){
   const t = String(s||'');
-  let m = t.match(/\bS\s*(\d+)\b/i);
-  if(!m) m = t.match(/시즌\s*(\d+)/i);
+  // Prefer explicit "시즌#" (e.g. "스타리그25 윈터 (시즌12)") over any other digits.
+  // Robust: don't rely on \b boundaries (Korean + punctuation can break \b)
+  let m = t.match(/시즌\s*0*(\d+)/i);
+  // Then allow S# when it looks like an actual season label.
+  // (Avoid accidental matches inside long tokens; season cells are already URL-filtered upstream.)
+  if(!m) m = t.match(/(?:^|[^A-Za-z0-9])S\s*0*(\d+)/i);
   return m ? parseInt(m[1],10) : 0;
 }
 
 /* === 시즌 대표 행 감지 (예: 스타리그 2019 (시즌1)) === */
-function applySeasonGrouping(tableEl){
+function applySeasonGrouping(tableEl, leagueKey){
   const _normLocal = (s)=> String(s||'')
     .replace(/[\u200B-\u200D\uFEFF]/g,'')
     .replace(/\u00A0/g,' ')
     .replace(/[–—−]/g,'-')
     .replace(/\s+/g,' ')
     .trim();
+
   if(!tableEl) return { seasons: [], active: '' };
+  const k = (leagueKey||HOF_INLINE_CURRENT||'pro').toLowerCase();
   const rows = Array.from(tableEl.querySelectorAll("tbody tr"));
   const seasons = [];
 
-  const isSeasonHeader = (txt, tr)=>{
-    const t = _normLocal(txt);
-    if(!t) return false;
-    const seasonLike =
-      /(시즌\s*0*\d+)/i.test(t) ||
-      /(S\s*0*\d+)/i.test(t) ||
-      /(\d{2}\s*-\s*\d{2}.*S\s*\d+)/i.test(t) ||
-      (/(프로리그|TSL|TST)/i.test(t) && /(S\s*0*\d+)/i.test(t));
+  const pat = /(S|시즌)\s*0*\d+/i; // allow both S# and 시즌# across leagues
 
-    if(!seasonLike) return false;
+  // "Season header row" heuristic:
+  // - contains S#/시즌# text
+  // - and is mostly a merged/label row (few non-empty cells)
+  // NOTE: some seasons rows have a few more filled cells (e.g., split tables),
+  // so keep this threshold slightly generous.
+  const isHeaderRow = (tr)=>{
+    const tds = Array.from(tr.querySelectorAll('td,th'));
+    const texts = tds.map(td => _normLocal(td.textContent||''));
+    const rowText = _normLocal(tr.textContent||'');
+    if(!rowText || !pat.test(rowText)) return false;
 
-    // Often header rows have many empty cells
-    if(tr){
-      const tds = Array.from(tr.querySelectorAll('td,th'));
-      const nonEmpty = tds.map(td=>String(td.textContent||'').trim()).filter(Boolean);
-      if(nonEmpty.length <= Math.min(2, tds.length)) return true;
+    // Header rows in our HOF sheets are "label rows":
+    // usually 1 cell (or 2 cells for split tables) has the season title,
+    // and the rest are empty.
+    const nonEmpty = texts.filter(Boolean);
+    if(nonEmpty.length === 0) return false;
+
+    // If multiple cells are filled, they should still look like season labels (e.g., split layout)
+    const seasonLike = nonEmpty.filter(t => pat.test(t)).length;
+    const ok = (nonEmpty.length <= 2 && seasonLike >= 1) || (nonEmpty.length <= 3 && seasonLike >= 2);
+    return ok;
+  };
+
+  const getHeaderTitle = (tr)=>{
+    const tds = Array.from(tr.querySelectorAll('td,th'));
+    for(const td of tds){
+      const t = _normLocal(td.textContent||'');
+      if(t) return t;
     }
-    return true;
+    return _normLocal(tr.textContent||'');
   };
 
   rows.forEach(tr=>{
-    const tds = Array.from(tr.querySelectorAll('td,th'));
-    const rowSeasons = [];
-    // Mark every cell that looks like a season header (some layouts have 2 seasons on one row)
-    tds.forEach(td=>{
-      const txt = (td.textContent || '').trim();
-      if(!txt) return;
-      if(isSeasonHeader(txt, tr)){
-        td.classList.add('season-header-cell');
-        rowSeasons.push(txt);
-        if(!seasons.includes(txt)) seasons.push(txt);
-      }
+    if(!isHeaderRow(tr)) return;
+    const title = getHeaderTitle(tr);
+    if(!title) return;
+
+    // Mark visually as header
+    tr.classList.add('season-header-row');
+    Array.from(tr.querySelectorAll('td,th')).forEach(td=>{
+      const t = _normLocal(td.textContent||'');
+      if(t && pat.test(t)) td.classList.add('season-header-cell');
     });
-    // Store all seasons appearing in this row (used for highlighting/scrolling)
-    tr.dataset.seasons = rowSeasons.join('||');
-    if(rowSeasons.length) tr.classList.add('season-header-row');
+
+    if(!seasons.includes(title)) seasons.push(title);
   });
 
-  return { seasons, active: seasons[0] || '' };
+  // Sort: most recent first (bigger season number first)
+  const sorted = seasons.slice().sort((a,b)=>{
+    const na = extractSeasonNum(a), nb = extractSeasonNum(b);
+    if(na!==nb) return nb-na;
+    // If numbers tie, prefer later-looking year prefix (e.g. 19-20 > 17-18) if present
+    const ya = (String(a).match(/(\d{2})\s*-\s*(\d{2})/)||[]).slice(1).join('');
+    const yb = (String(b).match(/(\d{2})\s*-\s*(\d{2})/)||[]).slice(1).join('');
+    if(ya && yb && ya!==yb) return yb.localeCompare(ya,'ko',{numeric:true});
+    return String(b).localeCompare(String(a),'ko',{numeric:true});
+  });
+
+  return { seasons: sorted, active: sorted[0] || '' };
 }
 
 // Build per-row season context metadata for reliable filtering across leagues.
@@ -3197,11 +3859,82 @@ function buildSeasonMeta(tableEl){
 }
 
 function renderSeasonBar(seasons, active, leagueKey){
-  // 시즌 탭 기능 제거: 전체 목록만 표시
-  const bar = document.getElementById('hofInlineSeasonBar') || document.getElementById('hofSeasonBar');
-  if(bar) bar.innerHTML='';
-  return;
+  const bar = document.getElementById('hofSeasonList') || document.getElementById('hofInlineSeasonBar') || document.getElementById('hofSeasonBar');
+  if(!bar) return;
+  bar.innerHTML = '';
+
+  const k = leagueKey || HOF_INLINE_CURRENT || 'pro';
+  const rawList = Array.isArray(seasons) ? seasons : [];
+
+  const toLabel = (s)=> _normSeasonText(s);
+  const seasonNum = (label)=> extractSeasonNum(String(label||''));
+
+  // Normalize + de-dup
+  const seen = new Set();
+  const labels = [];
+  rawList.forEach((s)=>{
+    const label = toLabel(s);
+    if(!label) return;
+    if(seen.has(label)) return;
+    seen.add(label);
+    labels.push(label);
+  });
+
+  // Sort: latest season first (bigger number first)
+  labels.sort((a,b)=>{
+    const na = seasonNum(a), nb = seasonNum(b);
+    if(na !== nb) return nb - na;
+    return String(b).localeCompare(String(a), 'ko');
+  });
+
+  const act = toLabel(active||'') || (labels[0] || '');
+
+  labels.forEach((label) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'hof-season-btn' + (label === act ? ' active' : '');
+    // PRO: show winner + runner-up summary in the season list (sidebar)
+    const kSummary = (leagueKey || HOF_INLINE_CURRENT || 'pro');
+    const sumRoot = (window.__HOF_SEASON_SUMMARY && window.__HOF_SEASON_SUMMARY[kSummary]) ? window.__HOF_SEASON_SUMMARY[kSummary] : null;
+    const sum = sumRoot ? (sumRoot[_normSeasonText(label)] || sumRoot[label] || null) : null;
+    if(sum && (sum.win || sum.runner)){
+      btn.classList.add('has-podium');
+      const top = document.createElement('div');
+      top.className = 'hof-season-top';
+      top.textContent = label;
+      const pod = document.createElement('div');
+      pod.className = 'hof-season-podium';
+
+      const w = document.createElement('div');
+      w.className = 'hof-season-line win';
+      w.textContent = (sum.win ? ('우승 ' + sum.win) : '우승 -');
+
+      const r = document.createElement('div');
+      r.className = 'hof-season-line runner';
+      r.textContent = (sum.runner ? ('준우승 ' + sum.runner) : '준우승 -');
+
+      pod.appendChild(w);
+      pod.appendChild(r);
+      btn.appendChild(top);
+      btn.appendChild(pod);
+    }else{
+      btn.textContent = label;
+    }
+    btn.title = label;
+    btn.addEventListener('click', () => {
+      bar.querySelectorAll('.hof-season-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      showHofSeason(label, k);
+    });
+    bar.appendChild(btn);
+  });
+
+  // Apply default season once
+  if(act){
+    showHofSeason(act, k);
+  }
 }
+
 
 
 // Normalize season label text for robust matching across slight formatting differences.
@@ -3216,14 +3949,20 @@ function _normSeasonText(s){
 }
 
 
+// A "generic" season label like "S1" or "시즌 1" (no year/league prefix).
+function isGenericSeasonLabel(label){
+  const s = _normSeasonText(label||'');
+  return /^(S|시즌)\s*0*\d+$/i.test(s);
+}
+
 
 function applySeasonFilter(tableEl, season, leagueKey){
   if(!tableEl) return;
 
-  const k = leagueKey || HOF_INLINE_CURRENT || 'pro';
+  const k = (leagueKey || HOF_INLINE_CURRENT || 'pro').toLowerCase();
   HOF_INLINE_CURRENT = k;
 
-  // Restore original table HTML before applying any filter (per league key).
+  // Restore pristine table before filtering (per league key).
   if(!HOF_INLINE_CACHE[k]) HOF_INLINE_CACHE[k] = {};
   if(!HOF_INLINE_CACHE[k].html){
     HOF_INLINE_CACHE[k].html = tableEl.innerHTML;
@@ -3233,150 +3972,80 @@ function applySeasonFilter(tableEl, season, leagueKey){
 
   const seasonNorm = _normSeasonText(season||'');
   const wantNum = extractSeasonNum(seasonNorm);
+  if(!wantNum) return;
 
-  // If no season selected, keep as-is.
-  if(!seasonNorm && !wantNum) return;
+  const wantExact = !isGenericSeasonLabel(seasonNorm); // e.g. "17-18프로리그 S1" vs "S1"
+  const pat = /(S|시즌)\s*0*\d+/i; // allow both S# and 시즌# across leagues
 
-  const tbody = tableEl.tBodies && tableEl.tBodies.length ? tableEl.tBodies[0] : null;
+  const tbody = (tableEl.tBodies && tableEl.tBodies.length) ? tableEl.tBodies[0] : null;
   if(!tbody) return;
 
   const rows = Array.from(tbody.querySelectorAll('tr'));
   if(!rows.length) return;
 
-  // Heuristic: detect two-block layout (left + right blocks in one wide row)
-  const cellCounts = rows.map(r => (r.children ? r.children.length : 0));
-  const maxCells = cellCounts.reduce((a,b)=>Math.max(a,b),0);
-  const splitIndex = (maxCells >= 8) ? Math.floor(maxCells/2) : 0;
+  const normCell = (td)=> _normSeasonText((td && td.textContent) ? td.textContent : '');
 
-  const isTitleRow = (tr)=>{
-    const t = _normSeasonText(tr.textContent||'');
-    return /명예의전당/i.test(t);
+  const isHeaderRow = (tr)=>{
+    const tds = Array.from(tr.querySelectorAll('td,th'));
+    const texts = tds.map(td => normCell(td)).filter(Boolean);
+    const rowText = _normSeasonText(tr.textContent||'');
+    if(!rowText || !pat.test(rowText)) return false;
+
+    const seasonLike = texts.filter(t => pat.test(t)).length;
+    // Typical header row: 1 filled cell (or 2 for split tables)
+    if(texts.length <= 2 && seasonLike >= 1) return true;
+    if(texts.length <= 3 && seasonLike >= 2) return true;
+    return false;
   };
 
-  const looksLikeSeasonHeaderText = (t)=>{
-    const s = _normSeasonText(t||'');
-    if(!s) return false;
-    // Must include S# or 시즌# and some league-ish clue to avoid false positives.
-    const hasSeason = /(S\s*0*\d+)/i.test(s) || /(시즌\s*0*\d+)/i.test(s);
-    if(!hasSeason) return false;
-    const hasClue = /(프로리그|TSL|TST|스타리그|리그|\d{2}\s*-\s*\d{2})/i.test(s);
-    return hasClue;
+  const headerTitle = (tr)=>{
+    const tds = Array.from(tr.querySelectorAll('td,th'));
+    for(const td of tds){
+      const t = normCell(td);
+      if(t) return t;
+    }
+    return _normSeasonText(tr.textContent||'');
   };
 
-  const parseSeasonInfo = (t)=>{
-    const label = _normSeasonText(t||'');
-    const num = extractSeasonNum(label);
-    return { label, num };
-  };
-
-  // Current season context while scanning down the table
-  let curSingle = { label:'', num:0 };
-  let curLeft   = { label:'', num:0 };
-  let curRight  = { label:'', num:0 };
-
-  const match = (info)=>{
-    if(!info) return false;
-    if(wantNum>0) return info.num === wantNum;
-    return _normSeasonText(info.label||'') === seasonNorm;
-  };
+  let curNum = 0;
+  let curExactOk = false;
 
   const newBody = document.createElement('tbody');
 
-  rows.forEach((tr)=>{
-    const cells = Array.from(tr.children||[]);
+  rows.forEach(tr=>{
+    const rowText = _normSeasonText(tr.textContent||'');
+    if(!rowText) return;
 
-    // Keep title row always (and left-align)
-    if(isTitleRow(tr)){
-      const tr2 = document.createElement('tr');
-      cells.forEach(td=>{
-        const td2 = td.cloneNode(true);
-        td2.style.textAlign='left';
-        td2.style.paddingLeft='16px';
-        tr2.appendChild(td2);
-      });
-      newBody.appendChild(tr2);
+    // Update season context when meeting a header row
+    if(isHeaderRow(tr)){
+      const title = headerTitle(tr);
+      const num = extractSeasonNum(title);
+      curNum = num || 0;
+      if(wantExact){
+        curExactOk = (_normSeasonText(title) === seasonNorm);
+      }else{
+        curExactOk = (curNum === wantNum);
+      }
+
+      // include header row only if it belongs to selected season
+      if(!curExactOk) return;
+      newBody.appendChild(tr.cloneNode(true));
       return;
     }
 
-    // Detect season header cells on THIS row (no reliance on pre-applied classes)
-    const headerCells = [];
-    cells.forEach((td, idx)=>{
-      const t = td.textContent || '';
-      if(looksLikeSeasonHeaderText(t)){
-        const info = parseSeasonInfo(t);
-        if(splitIndex>0){
-          headerCells.push({ side: (idx < splitIndex) ? 'left' : 'right', info, idx });
-        }else{
-          headerCells.push({ side: 'single', info, idx });
-        }
-      }
-    });
-
-    // Update current context if this row introduces a new season header
-    if(headerCells.length){
-      headerCells.forEach(h=>{
-        if(h.side==='left')  curLeft = h.info;
-        else if(h.side==='right') curRight = h.info;
-        else curSingle = h.info;
-      });
-
-      // Include the season header row only if it matches the selected season
-      let keepHeader = false;
-      let keepSide = 'single';
-      if(splitIndex>0){
-        if(match(curLeft)){ keepHeader = true; keepSide='left'; }
-        else if(match(curRight)){ keepHeader = true; keepSide='right'; }
-      }else{
-        keepHeader = match(curSingle);
-      }
-
-      if(!keepHeader) return;
-
-      const tr2 = document.createElement('tr');
-      if(splitIndex>0){
-        if(keepSide==='left'){
-          for(let i=0;i<cells.length;i++) if(i < splitIndex) tr2.appendChild(cells[i].cloneNode(true));
-        }else{
-          for(let i=0;i<cells.length;i++) if(i >= splitIndex) tr2.appendChild(cells[i].cloneNode(true));
-        }
-      }else{
-        cells.forEach(td=> tr2.appendChild(td.cloneNode(true)));
-      }
-      newBody.appendChild(tr2);
-      return;
-    }
-
-    // Regular data rows: keep rows that are under the selected season context
-    let keep = false;
-    let keepSide = 'single';
-    if(splitIndex>0){
-      if(match(curLeft)){ keep=true; keepSide='left'; }
-      else if(match(curRight)){ keep=true; keepSide='right'; }
-    }else{
-      keep = match(curSingle);
-    }
+    // Normal rows: keep only if current context matches wanted season
+    const keep = wantExact ? curExactOk : (curNum === wantNum);
     if(!keep) return;
 
-    const tr2 = document.createElement('tr');
-    if(splitIndex>0){
-      if(keepSide==='left'){
-        for(let i=0;i<cells.length;i++) if(i < splitIndex) tr2.appendChild(cells[i].cloneNode(true));
-      }else{
-        for(let i=0;i<cells.length;i++) if(i >= splitIndex) tr2.appendChild(cells[i].cloneNode(true));
-      }
-    }else{
-      cells.forEach(td=> tr2.appendChild(td.cloneNode(true)));
-    }
-
     // Skip visually empty rows
-    const hasImg = !!tr2.querySelector('img');
-    const text = Array.from(tr2.children||[]).map(c=> (c.textContent||'').trim()).join('');
-    if(!hasImg && !text) return;
+    const hasImg = !!tr.querySelector('img');
+    const txt = _normSeasonText(tr.textContent||'').replace(/\s+/g,'');
+    if(!hasImg && !txt) return;
 
-    newBody.appendChild(tr2);
+    newBody.appendChild(tr.cloneNode(true));
   });
 
-  // Swap tbody (safe, keeps thead intact)
+  // Swap tbody
   tbody.parentNode.replaceChild(newBody, tbody);
 }
 
@@ -3497,19 +4166,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let startScan = Math.max(anchor, headerIdx >= 0 ? headerIdx : anchor);
 
-    // Meta + Logo extraction near top of block
-    const meta = [];
+    // Meta + Logo extraction near top of block (감독/부감독만 표기)
     let logoUrl = '';
+    let coach = '';
+    let assistant = '';
+
     for(let r=anchor; r<startScan; r++){
-      const line = cleanCell((rows[r]||[]).slice(s, s+10).join(' ').replace(/\s+/g,' '));
+      // 첫 번째 이미지 URL(팀 로고) 찾기
       if (!logoUrl){
-        // 첫 번째 이미지 URL(팀 로고) 찾기
-        const urlCandidate = cleanCell(rows[r]?.[s] || rows[r]?.[s+1] || '');
+        const urlCandidate = cleanCell(rows[r]?.[s] || rows[r]?.[s+1] || rows[r]?.[s+2] || '');
         if (/^https?:\/\//i.test(urlCandidate) && /\.(png|jpg|jpeg|webp)(\?|$)/i.test(urlCandidate)){
           logoUrl = urlCandidate;
         }
       }
-      if (/(감독|부감독|보호선수)\s*[:：]/.test(line)) meta.push(line);
+
+      // 감독/부감독 셀 스캔
+      const row = rows[r] || [];
+      const maxC = Math.min(row.length, s+10);
+      for(let c=s; c<maxC; c++){
+        const cell = cleanCell(row[c]);
+        if (!cell) continue;
+        // 감독/부감독이 한 셀에 같이 들어있는 경우가 많아서(예: "감독 : DayDream 부감독 : DD 보호선수 : MARVEL")
+        // 문자열에서 감독/부감독만 정확히 추출하고, "보호선수" 구간은 버린다.
+        if ((!coach || !assistant) && (cell.includes('감독') || cell.includes('부감독'))){
+          const cleaned = String(cell).replace(/\s+/g,' ').trim();
+          // 보호선수 이후는 제거
+          const noProt = cleaned.replace(/보호선수\s*[:：].*$/,'').trim();
+
+          // Case A) "감독" / "부감독" 라벨만 있는 셀 (다음 셀에 아이디가 있는 형태)
+          if(!coach && _normSeasonText(cell) === '감독'){
+            const nxt = cleanCell(row[c+1] || '');
+            if(nxt && !nxt.includes('부감독') && !nxt.includes('보호선수')) coach = nxt;
+          }
+          if(!assistant && _normSeasonText(cell) === '부감독'){
+            const nxt = cleanCell(row[c+1] || '');
+            if(nxt && !nxt.includes('감독') && !nxt.includes('보호선수')) assistant = nxt;
+          }
+
+          // Case B) 한 셀에 같이 들어있는 형태: "감독 : X 부감독 : Y ..."
+          if (!coach){
+            const mCoach = noProt.match(/감독\s*(?:[:：])?\s*([^:：]+?)(?=\s*부감독\s*(?:[:：])?|$)/);
+            if (mCoach && mCoach[1]) coach = cleanCell(mCoach[1]);
+          }
+          if (!assistant){
+            const mAsst = noProt.match(/부감독\s*(?:[:：])?\s*([^:：]+?)$/);
+            if (mAsst && mAsst[1]) assistant = cleanCell(mAsst[1]);
+          }
+        }
+      }
     }
 
     const out = [];
@@ -3529,10 +4233,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (r > startScan && cleanCell(rows[r]?.[s]) === '팀명') break;
     }
 
-    return { roster: out, meta, logoUrl };
+    return { roster: out, coach, assistant, logoUrl };
   }
 
-  function renderTeamMenu(teams){
+function renderTeamMenu(teams){
     if(!teamListEl) return;
     teamListEl.innerHTML = '';
     teams.forEach((team, idx) => {
@@ -3589,17 +4293,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const rows = await ensureRosterData();
     if(!rows){ teamHeaderEl.textContent='로스터 데이터를 불러오지 못했습니다.'; return; }
 
-    const { roster, meta, logoUrl } = extractTeamRoster(rows, team);
+    const { roster, coach, assistant, logoUrl } = extractTeamRoster(rows, team);
 
-    // Header (logo + team name)
+    // Header (logo + team name + 감독/부감독)
+    const coachHtml = coach ? `<div class="roster-team-meta-line"><span class="label">감독</span><span class="value">${escapeHtml(coach)}</span></div>` : '';
+    const asstHtml  = assistant ? `<div class="roster-team-meta-line"><span class="label">부감독</span><span class="value">${escapeHtml(assistant)}</span></div>` : '';
+
     if (logoUrl){
-      teamHeaderEl.innerHTML = `<div class="roster-team-head"><img class="roster-team-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(team.name)} 로고"><span class="roster-team-name">${escapeHtml(team.name)}</span></div>`;
+      teamHeaderEl.innerHTML = `
+        <div class="roster-team-head">
+          <img class="roster-team-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(team.name)} 로고">
+          <div class="roster-team-text">
+            <div class="roster-team-name roster-teamname-accent">${escapeHtml(team.name)}</div>
+            <div class="roster-team-meta roster-teammeta-muted">${coachHtml}${asstHtml}</div>
+          </div>
+        </div>`;
     } else {
-      teamHeaderEl.textContent = team.name;
+      teamHeaderEl.innerHTML = `
+        <div class="roster-team-head">
+          <div class="roster-team-text">
+            <div class="roster-team-name roster-teamname-accent">${escapeHtml(team.name)}</div>
+            <div class="roster-team-meta roster-teammeta-muted">${coachHtml}${asstHtml}</div>
+          </div>
+        </div>`;
     }
 
     renderRoster(roster);
-    rosterMetaEl.innerHTML = meta.length ? meta.map(m => `<div>${escapeHtml(m)}</div>`).join('') : '';
+    rosterMetaEl.innerHTML = '';
   }
 
   openBtn.addEventListener('click', async () => {

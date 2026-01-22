@@ -65,7 +65,7 @@ img{max-width:100%;height:auto}
   max-width:none;
   margin:0;
   padding:6px 8px;
-  border-radius:999px;
+  border-radius:0;
   justify-content:flex-end;
   flex-wrap:nowrap;
   gap:6px;
@@ -98,7 +98,7 @@ img{max-width:100%;height:auto}
   opacity:.92;
   color:rgba(234,255,251,.92);
   padding:2px 8px;
-  border-radius:999px;
+  border-radius:0;
   border:1px solid rgba(255,255,255,.22);
   background:rgba(255,255,255,.10);
 }
@@ -132,7 +132,7 @@ img{max-width:100%;height:auto}
   gap:8px;
   padding:8px 10px;
   border:1px solid var(--line);
-  border-radius:999px;
+  border-radius:0;
   background:#ffffff;
 }
 .yt-link:hover{border-color:var(--line2)}
@@ -247,7 +247,7 @@ td.logo-only-cell .logo-wrap .rank-star{
   gap:2px;
 }
 .titles .minor{font-size:12px;color:var(--muted2);font-weight:700;letter-spacing:.2px}
-.titles .mainline{font-size:16px;font-weight:800;color:var(--fg)}
+.titles .mainline{font-size:14.5px;font-weight:800;color:var(--fg)}
 .titles .league{font-size:22px;line-height:1.15;font-weight:900;color:var(--accent);letter-spacing:.4px}
 .titles .subline{font-size:12px;color:var(--muted)}
 
@@ -280,7 +280,7 @@ button:hover, .ghost:hover, .mini-btn:hover{border-color:var(--line2)}
 button:focus, .ghost:focus, .mini-btn:focus{outline:none;box-shadow:var(--focus)}
 
 /* Tier filter smaller buttons */
-.tier-filters .tier-btn{height:34px;padding:0 10px;border-radius:999px;font-weight:800}
+.tier-filters .tier-btn{height:34px;padding:0 10px;border-radius:0;font-weight:800}
 .tier-filters .tier-btn.active{border-color:rgba(37,99,235,.55);background:#ffffff;color:var(--accent)}
 
 /* --- Nav tabs --- */
@@ -297,13 +297,13 @@ button:focus, .ghost:focus, .mini-btn:focus{outline:none;box-shadow:var(--focus)
   /* Premium bar */
   background:linear-gradient(135deg,var(--premium-surface),var(--premium-surface2));
   border:1px solid var(--premium-border);
-  border-radius:999px;
+  border-radius:0;
   box-shadow:0 10px 30px rgba(15,23,42,.10);
 }
 
 .tab-btn{
   height:36px;
-  border-radius:999px;
+  border-radius:0;
   padding:0 12px;
   font-weight:800;
   letter-spacing:.1px;
@@ -385,7 +385,7 @@ main.container > .panel{
 .card-title{font-size:12.5px;color:var(--accent2);font-weight:900;letter-spacing:.2px}
 .card-value{font-size:22px;color:var(--fg);font-weight:900;margin-top:6px}
 .card-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.mini-btn{height:34px;border-radius:999px;padding:0 12px}
+.mini-btn{height:34px;border-radius:0;padding:0 12px}
 
 /* --- Tables --- */
 .table-wrap{width:100%;max-width:100%;overflow:auto;border-radius:var(--radius);border:1px solid var(--line);background:rgba(17,24,39,.02)}
@@ -450,7 +450,7 @@ td.logo-cell img{display:block;margin:0 auto}
   gap:6px;
   height:22px;
   padding:0 10px;
-  border-radius:999px;
+  border-radius:0;
   background:#ffffff;
   border:1px solid rgba(37,99,235,.25);
   color:var(--accent);
@@ -938,7 +938,7 @@ img, svg, canvas{max-width:100%; height:auto;}
   padding:8px 12px;
   border:1px solid var(--line);
   border-radius:12px;
-  background:#fff;
+  background:transparent;
   text-decoration:none;
   color:var(--fg);
 }
@@ -947,14 +947,14 @@ img, svg, canvas{max-width:100%; height:auto;}
   border:1px solid var(--line);
   border-radius:16px;
   overflow:hidden;
-  background:#fff;
+  background:transparent;
 }
 #hofFrame{
   width:100%;
   height:78vh;
   min-height:520px;
   border:0;
-  background:#fff;
+  background:transparent;
 }
 @media (max-width: 980px){
   #hofFrame{height:72vh; min-height:520px;}
@@ -1000,8 +1000,8 @@ img, svg, canvas{max-width:100%; height:auto;}
 .modal{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:2001; padding:16px}
 .modal-card{width:min(980px, 100%); max-height:86vh; background:var(--card); border:1px solid var(--line); border-radius:18px; box-shadow:0 22px 70px rgba(0,0,0,.35); overflow:hidden}
 .modal-head{display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--line)}
-.modal-title{font-size:16px; font-weight:900; color:var(--fg)}
-.modal-close{border:1px solid var(--line); background:transparent; color:var(--fg); border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:900}
+.modal-title{font-size:14.5px; font-weight:900; color:var(--fg)}
+.modal-close{border:1px solid var(--line); background:transparent; color:var(--fg); border-radius:10px; padding:0; cursor:pointer; font-weight:900}
 .modal-close:hover{background:rgba(17,24,39,.04)}
 .modal-body{padding:14px 16px; overflow:auto}
 
@@ -1016,6 +1016,55 @@ img, svg, canvas{max-width:100%; height:auto;}
   .roster-layout{grid-template-columns:1fr}
   .roster-teams{flex-direction:row; flex-wrap:wrap}
   .roster-team-btn{flex:1 1 auto}
+
+/* === HOF Layout (Top league menu centered + left season tabs) === */
+.hof-menu{justify-content:center; text-align:center;}
+.hof-layout{display:grid; grid-template-columns:220px 1fr; gap:12px; margin-top:12px}
+.hof-seasons{display:flex; flex-direction:column; gap:12px}
+.hof-season-btn{
+  border:1px solid rgba(15,23,42,.10);
+  background:rgba(255,255,255,.96);
+  color:#0f172a;
+  border-radius:14px;
+  padding:12px 14px;
+  font-weight:800;
+  font-size:13.5px;
+  letter-spacing:-0.2px;
+  cursor:pointer;
+  text-align:left;
+  white-space:nowrap;
+  transition: background .15s ease, border-color .15s ease, transform .06s ease, box-shadow .15s ease, color .15s ease;
+}
+
+/* PRO season list: show winner/runner-up under season label */
+.hof-season-btn.has-podium{ 
+  border-radius:18px;
+  padding:10px 12px;
+  justify-content:flex-start;
+}
+.hof-season-top{font-weight:1000; font-size:13.5px; color:inherit; line-height:1.15;}
+.hof-season-podium{display:flex; flex-direction:column; gap:2px; margin-top:2px; width:100%;}
+.hof-season-line{font-size:12px; font-weight:800; opacity:.92; line-height:1.15; color:inherit; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.hof-season-line.win{opacity:1;}
+.hof-season-line.runner{opacity:.9;}
+.hof-season-btn:hover{
+  background:#0b1220;
+  border-color:rgba(255,255,255,.25);
+  color:#ffffff !important;
+}
+.hof-season-btn:active{ transform: translateY(1px); }
+.hof-season-btn.active{
+  background:#0b1220;
+  border-color:rgba(167,141,64,.75);
+  color:#ffffff;
+  box-shadow:0 0 0 3px rgba(167,141,64,.18);
+}
+
+@media (max-width: 900px){
+  .hof-layout{grid-template-columns:1fr}
+  .hof-seasons{flex-direction:row; flex-wrap:wrap}
+  .hof-season-btn{flex:1 1 auto; text-align:center}
+}
 }
 
 .dash-grid{
@@ -1048,7 +1097,7 @@ img, svg, canvas{max-width:100%; height:auto;}
 
 /* Simpler top menu pills */
 .topmenu{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.topmenu .tab-btn{padding:8px 12px;border-radius:999px;font-weight:700}
+.topmenu .tab-btn{padding:8px 12px;border-radius:0;font-weight:700}
 @media (max-width: 900px){.topmenu{justify-content:center}}
 
 #proRankTable{width:100%}
@@ -1098,10 +1147,10 @@ img, svg, canvas{max-width:100%; height:auto;}
   display:inline-flex;
   align-items:center;
   gap:8px;
-  padding:6px 10px;
+  padding:0;
   border:1px solid var(--line);
-  border-radius:999px;
-  background:#fff;
+  border-radius:0;
+  background:transparent;
   text-decoration:none;
   color:inherit;
   font-size:13px;
@@ -1179,13 +1228,13 @@ body{ padding-top: var(--header-h); }
   gap:8px;
   align-items:center;
   padding:8px 10px;
-  border-radius:999px;
+  border-radius:0;
   border:1px solid var(--line);
   background:rgba(255,255,255,.9);
   box-shadow:0 6px 16px rgba(17,24,39,.06);
 }
 .topmenu .tab-btn{
-  border-radius:999px;
+  border-radius:0;
   padding:8px 12px;
   font-weight:700;
 }
@@ -1274,7 +1323,7 @@ body{ padding-top: var(--header-h); }
   gap:10px;
   margin:6px 2px 10px;
 }
-.hof-view-title{ font-weight:900; font-size:16px; }
+.hof-view-title{ font-weight:900; font-size:14.5px; }
 .hof-frame-wrap{
   border-radius:16px;
   overflow:hidden;
@@ -1350,7 +1399,7 @@ body{ padding-top: var(--header-h); }
 .season-bar:empty{display:none;}
 .season-chip{
   padding:8px 12px;
-  border-radius:999px;
+  border-radius:0;
   border:1px solid #d1d5db;
   background:#f3f4f6;
   color:#111827 !important;
@@ -1440,7 +1489,7 @@ td.rank-cell .rank-star-inline{
   align-items:center;
   justify-content:center;
   font-weight:900;
-  font-size:16px;
+  font-size:14.5px;
   color:#22c55e;
   line-height:1;
   color:#22c55e; /* green */
@@ -1485,7 +1534,7 @@ td.rank-cell .rank-num{ font-weight:900; }
 /* keep active clearly selected */
 .hof-menu-btn.active{ outline:2px solid rgba(167,141,64,.55); outline-offset:2px; }
 
-.hof-menu-main{ font-weight:800; font-size:16px; letter-spacing:.2px; }
+.hof-menu-main{ font-weight:800; font-size:14.5px; letter-spacing:.2px; }
 .hof-menu-sub{ font-size:12px; opacity:.85; color:rgba(255,255,255,.78); }
 
 .hof-inline{
@@ -1496,7 +1545,7 @@ td.rank-cell .rank-num{ font-weight:900; }
   background:transparent;
 }
 .hof-inline-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
-.hof-inline-title{ font-weight:900; font-size:16px; }
+.hof-inline-title{ font-weight:900; font-size:14.5px; }
 
 
 /* ===== 2026-01 UI patch: Top menu + HOF readability ===== */
@@ -1558,7 +1607,7 @@ td.rank-cell .rank-num{ font-weight:900; }
 .rank-star-inline{
   color:#22c55e !important;
   font-weight:900;
-  font-size:16px;
+  font-size:14.5px;
   line-height:1;
 }
 .rank-spacer{ width:16px; height:16px; display:inline-block; }
@@ -1567,6 +1616,20 @@ td.rank-cell .rank-num{ font-weight:900; }
 #hofInline .table-wrap{
   margin-top:10px;
 }
+
+#hofInline .table-wrap{
+  overflow-x:hidden !important;
+}
+#hofInlineTable{
+  width:100% !important;
+  table-layout:fixed;
+}
+#hofInlineTable th,
+#hofInlineTable td{
+  white-space:normal !important;
+  word-break:break-word;
+}
+
 #hofInlineTable th,
 #hofInlineTable td{
   padding:6px 8px !important;
@@ -1702,7 +1765,7 @@ td.rank-cell .rank-num{ font-weight:900; }
   overflow:hidden;
 }
 #rosterPopup .roster-team-header{
-  font-size:16px;
+  font-size:14.5px;
   font-weight:900;
   margin-bottom:10px;
   letter-spacing:-.2px;
@@ -1726,6 +1789,11 @@ td.rank-cell .rank-num{ font-weight:900; }
   white-space:normal;
   word-break:break-word;
 }
+
+/* Roster player name colors by race column */
+#rosterPopup #rosterTable tbody td:nth-child(2){color:#2563eb; font-weight:700;} /* T: blue */
+#rosterPopup #rosterTable tbody td:nth-child(3){color:#b45309; font-weight:700;} /* P: deep yellow */
+#rosterPopup #rosterTable tbody td:nth-child(4){color:#f87171; font-weight:700;} /* Z: light red */
 #rosterPopup .roster-meta{
   margin-top:10px;
   font-size:12px;
@@ -1742,8 +1810,9 @@ td.rank-cell .rank-num{ font-weight:900; }
 /* Roster popup: team header (logo + name) */
 #rosterPopup .roster-team-head{
   display:flex;
-  align-items:center;
+  align-items:flex-start;
   gap:10px;
+  flex-wrap:wrap;
 }
 #rosterPopup .roster-team-logo{
   width:34px;
@@ -1757,3 +1826,380 @@ td.rank-cell .rank-num{ font-weight:900; }
   font-weight:900;
   letter-spacing:-.2px;
 }
+.roster-team-text{min-width:0; display:flex; flex-direction:column; gap:2px;}
+#rosterPopup .roster-team-name{font-size:18px; line-height:1.1;}
+#rosterPopup .roster-team-name{color:var(--accent);}/* match THEIR OWN LEAGUE */
+#rosterPopup .roster-team-meta{color:var(--muted2); opacity:1;}
+#rosterPopup .roster-team-meta-line .label{color:var(--muted2); opacity:.9;}
+#rosterPopup .roster-team-meta-line .value{color:var(--muted);}
+
+#rosterPopup .roster-team-meta{font-size:12px; opacity:.85; display:flex; flex-direction:column; gap:2px;}
+#rosterPopup .roster-team-meta-line{display:flex; gap:6px; flex-wrap:wrap; line-height:1.2;}
+#rosterPopup .roster-team-meta-line .label{opacity:.75; white-space:nowrap;}
+#rosterPopup .roster-team-meta-line .value{font-weight:700; word-break:break-word;}
+@media (max-width: 480px){
+  #rosterPopup .roster-team-logo{width:30px; height:30px; border-radius:9px;}
+  #rosterPopup .roster-team-name{font-size:14.5px;}
+  #rosterPopup .roster-team-meta{font-size:11px;}
+}
+
+
+/* === v10_7 Roster: wrap long player names & race colors === */
+:root{
+  --race-t: #2563eb; /* T: blue */
+  --race-p: #facc15; /* P: yellow */
+  --race-z: #fb7185; /* Z: light red */
+}
+
+/* Roster table should wrap instead of overlapping on small screens */
+#rosterTable{
+  min-width: 0 !important;
+  table-layout: fixed;
+}
+#rosterTable thead th,
+#rosterTable tbody td{
+  white-space: normal !important;
+}
+#rosterTable tbody td{
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.25;
+}
+/* Race column colors */
+#rosterTable tbody td:nth-child(2){ color: var(--race-t); font-weight: 800; }
+#rosterTable tbody td:nth-child(3){ color: var(--race-p); font-weight: 800; }
+#rosterTable tbody td:nth-child(4){ color: var(--race-z); font-weight: 800; }
+
+/* Keep tier column readable */
+#rosterTable tbody td:nth-child(1){ color: var(--fg); font-weight: 900; }
+
+/* Team header colors (name = accent like THEIR OWN LEAGUE; meta = muted) */
+.roster-teamname-accent{ color: var(--accent) !important; }
+.roster-teammeta-muted{ color: rgba(15, 23, 42, .65) !important; }
+[data-theme="dark"] .roster-teammeta-muted{ color: rgba(226, 232, 240, .65) !important; }
+
+
+/* Season tabs (Hall of Fame) */
+.season-pill{
+  border:1px solid var(--line);
+  background:transparent;
+  color:var(--fg);
+  border-radius:0;
+  padding:8px 12px;
+  font-weight:900;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.season-pill:hover{ background:rgba(17,24,39,.04); }
+.season-pill.active{
+  border-color:var(--gold);
+  box-shadow:0 0 0 2px rgba(167,141,64,.22) inset;
+}
+
+
+/* === HOF responsive: no horizontal scroll, wrap cells === */
+#hofInlineTable, #hofInlineTable table { width: 100%; max-width: 100%; }
+#hofInlineTable { overflow-x: hidden; }
+#hofInlineTable table { table-layout: fixed; }
+#hofInlineTable td, #hofInlineTable th { white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
+
+@media (max-width: 820px){
+  #hofInlineTable table { display: block; width: 100%; }
+  #hofInlineTable thead { display: none; }
+  #hofInlineTable tbody, #hofInlineTable tr, #hofInlineTable td { display: block; width: 100%; }
+  #hofInlineTable tr { border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 10px; margin: 10px 0; }
+  #hofInlineTable td { padding: 8px 10px; }
+}
+
+
+
+/* HOF: mobile card layout (no horizontal scroll) */
+@media (max-width: 760px){
+  .hof-inline .table-wrap{
+    overflow: visible;
+    border: none;
+    background: transparent;
+  }
+  .hof-inline table{
+    min-width: 0 !important;
+    width: 100%;
+    display: block;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .hof-inline thead{ display:none; }
+  .hof-inline tbody{ display:block; }
+  .hof-inline tbody tr{
+    display:block;
+    margin: 0 0 12px 0;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: rgba(255,255,255,.92);
+    overflow: hidden;
+    box-shadow: 0 10px 24px rgba(0,0,0,.06);
+  }
+  .hof-inline tbody td{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap: 12px;
+    padding: 10px 12px;
+    white-space: normal;
+    text-align: right;
+    border-bottom:1px solid var(--line2);
+  }
+  .hof-inline tbody td:last-child{ border-bottom:none; }
+  .hof-inline tbody td::before{
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-weight: 900;
+    color: #0f172a;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .hof-inline tbody td img{ max-width: 100%; height: auto; }
+}
+
+
+
+/* === HOF roster-like layout (page embedded, white background) === */
+#hof .panel-head{display:none;} /* hide legacy head for cleaner roster-style */
+.hof-page{
+  background:transparent;
+  border:1px solid var(--line);
+  border-radius:22px;
+  padding:18px;
+}
+.hof-shell{
+  margin-top:14px;
+  display:grid;
+  grid-template-columns:260px 1fr;
+  gap:14px;
+  align-items:start;
+}
+.hof-side{
+  background: linear-gradient(180deg, #0b1220 0%, #070d18 100%);
+  border:1px solid rgba(17,24,39,.14);
+  border-radius:18px;
+  padding:16px 14px;
+  box-shadow:0 12px 30px rgba(0,0,0,.08);
+}
+.hof-side-title{
+  font-weight:900;
+  font-size:14px;
+  color:rgba(255,255,255,.92);
+  margin:2px 0 12px;
+  letter-spacing:-0.2px;
+}
+.hof-seasons{display:flex; flex-direction:column; gap:10px}
+
+/* Season list item (matches roster-like sidebar list) */
+.hof-season-btn{
+  background:rgba(255,255,255,.95);
+  border:1px solid rgba(15,23,42,.14);
+  border-radius:999px;
+  padding:8px 12px;
+  font-weight:800;
+  font-size:13px;
+  letter-spacing:-.2px;
+  color:#374151;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  transition:background .15s ease, border-color .15s ease, transform .12s ease, box-shadow .15s ease;
+  width:100%;
+  margin:7px 0;
+}
+.hof-season-btn:hover{
+  background:rgba(255,255,255,.10);
+  border-color:rgba(255,255,255,.35);
+  color:#fff !important;
+}
+.hof-season-btn:hover *{ color:#fff !important; }
+.hof-season-btn.active:hover{
+  background:rgba(17,24,39,.92) !important;
+  border-color:rgba(255,255,255,.35) !important;
+  color:#fff !important;
+  box-shadow:none;
+}
+.hof-season-btn.active{
+  border-color:rgba(167,141,64,.9);
+  background:rgba(167,141,64,.10);
+  color:#111827;
+  box-shadow:0 0 0 2px rgba(167,141,64,.18) inset;
+}
+
+/* Champion / Runner-up badge + team chip (roster-like) */
+.hof-place-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:0;
+  border-radius:0;
+  font-weight:1000;
+  font-size:12px;
+  letter-spacing:-.2px;
+  border:none;
+  background:transparent;
+  color:#111827;
+  white-space:nowrap;
+}
+
+/* TST/TSL: show "티어 + 선수" on one line in narrow view */
+.hof-tier-inline{font-weight:900; color:#6b7280; margin-right:6px; letter-spacing:-.2px;}
+.hof-name-inline{font-weight:800; color:#111827;}
+
+@media (max-width: 820px){
+  /* hide dedicated tier column and move tier label into name cells */
+  #hofInlineTable.hof-league-tst tr.hof-tier-row td:first-child,
+  #hofInlineTable.hof-league-tsl tr.hof-tier-row td:first-child{display:none;}
+
+  #hofInlineTable.hof-league-tst tr.hof-tier-row td,
+  #hofInlineTable.hof-league-tsl tr.hof-tier-row td{white-space:nowrap;}
+}
+.hof-place-badge.win{ border:none; background:transparent; }
+.hof-place-badge.runner{ border:none; background:transparent; }
+.hof-place-crown{ width:18px; height:18px; object-fit:contain; }
+
+.hof-team-chip{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.hof-team-icon{
+  width:34px;
+  height:34px;
+  border-radius:0;
+  background:rgba(15,23,42,.04);
+  border:1px solid rgba(15,23,42,.10);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+}
+.hof-team-img{ width:100%; height:100%; object-fit:cover; }
+.hof-team-text{ min-width:0; }
+.hof-team-name{
+  font-weight:1000;
+  font-size:14.5px;
+  letter-spacing:-.2px;
+  color:#111827;
+  line-height:1.1;
+  word-break:keep-all;
+}
+.hof-main{min-width:0}
+.hof-card{
+  background:transparent;
+  border:1px solid var(--line);
+  border-radius:18px;
+  overflow:hidden;
+}
+.hof-card-head{
+  padding:14px 16px 10px;
+  border-bottom:1px solid var(--line);
+}
+.hof-card-title{
+  font-weight:1000;
+  font-size:20px;
+  letter-spacing:-.2px;
+  color:#111827;
+}
+.hof-card-sub{
+  margin-top:4px;
+  color:#6b7280;
+  font-size:13px;
+}
+.hof-table-wrap{padding:10px 10px 14px}
+
+/* keep top league menu centered */
+.hof-menu{justify-content:center; text-align:center; margin:0}
+
+/* Responsive: stack like cards (no horizontal scroll) */
+@media (max-width: 920px){
+  .hof-shell{grid-template-columns:1fr}
+  .hof-side{padding:12px}
+  .hof-seasons{flex-direction:row; flex-wrap:wrap}
+  .hof-season-btn{flex:1 1 auto; text-align:center}
+}
+@media (max-width: 520px){
+  .hof-page{padding:12px}
+  .hof-card-head{padding:12px}
+  .hof-card-title{font-size:18px}
+}
+
+
+/* HOF white page baseline */
+.hof-page, #hof, .hof-shell{background:#ffffff !important;}
+.hof-card{background:#ffffff;}
+
+
+/* HOF season buttons: ensure hover/active text is always visible */
+.hof-season-btn:hover,
+.hof-season-btn:hover *{ color:#ffffff !important; }
+.hof-season-btn.active{ color:#ffffff !important; }
+.hof-season-btn.active *{ color:#ffffff !important; }
+.hof-season-btn.active:hover,
+.hof-season-btn.active:hover *{ color:#ffffff !important; }
+
+
+
+/* HOF: On small screens keep TST/TSL tables as tables (avoid card stacking) */
+@media (max-width: 820px){
+  /* HOF TST/TSL: ensure columns shrink/grow responsively (fix overlap) */
+  #hofInlineTable.hof-league-tsl,
+  #hofInlineTable.hof-league-tst{ width:100%; table-layout:fixed; }
+  #hofInlineTable.hof-league-tsl td,
+  #hofInlineTable.hof-league-tst td{ overflow:hidden; text-overflow:ellipsis; }
+  /* Allow winner/runner cells to wrap when needed */
+  #hofInlineTable.hof-league-tsl tr.hof-tier-row td,
+  #hofInlineTable.hof-league-tst tr.hof-tier-row td{ white-space:normal; word-break:break-word; }
+}
+
+/* Organizer cells (대회진행/진행자) normalized into one line */
+#hofInlineTable .hof-organizers-merged{ white-space:nowrap; }
+
+
+
+/* HOF PRO podium layout (match team roster style) */
+.hof-pro-podium{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:18px;
+  align-items:start;
+  padding:14px 12px;
+}
+.hof-pro-side{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:10px;
+  padding:6px 6px;
+}
+.hof-pro-side .hof-place-badge{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+}
+.hof-pro-side .hof-place-badge .hof-place-label{ font-weight:900; font-size:18px; color:#111827; }
+.hof-pro-side .hof-place-crown{ width:22px; height:22px; }
+.hof-pro-chip{ display:flex; align-items:center; gap:10px; }
+.hof-pro-chip .hof-team-icon{ width:42px; height:42px; border-radius:999px; overflow:hidden; border:1px solid rgba(17,24,39,.10); background:#fff; display:flex; align-items:center; justify-content:center;}
+.hof-pro-chip img{ width:100%; height:100%; object-fit:contain; display:block; }
+.hof-pro-chip .hof-team-name{ font-weight:900; font-size:20px; line-height:1.1; }
+.hof-pro-chip .hof-team-sub{ font-size:12px; color:#6b7280; font-weight:700; }
+.hof-pro-lines{ display:flex; flex-direction:column; gap:4px; margin-top:2px; }
+.hof-pro-line{ font-size:13px; color:#111827; font-weight:700; }
+.hof-pro-line .k{ color:#6b7280; font-weight:800; margin-right:6px; }
+@media (max-width: 820px){
+  .hof-pro-podium{ grid-template-columns:1fr; gap:14px; }
+  .hof-pro-side{ align-items:center; }
+  .hof-pro-lines{ width:100%; max-width:320px; }
+}
+
+
+
+/* HOF: remove rounded border/outline behind place label */
+.hof-place-badge{ border:0 !important; background:transparent !important; padding:0 !important; box-shadow:none !important; border-radius:0 !important; }
+
