@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>3050ClanEloBoard</title>
+<!-- Cache Bypass + OG Refresh -->
+<meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
+<meta content="no-cache" http-equiv="Pragma"/>
+<meta content="0" http-equiv="Expires"/>
+<meta content="3050ClanEloBoard - 스타크래프트 3050클랜 공식 Elo 보드" property="og:title"/>
+<meta content="3050클랜의 전적, 프로리그 순위, 일정, 클랜원 명단을 한눈에 확인하세요." property="og:description"/>
+<meta content="https://cool-croquembouche-1f074d.netlify.app/logo.png?v=99" property="og:image"/>
+<meta content="website" property="og:type"/>
+<meta content="https://cool-croquembouche-1f074d.netlify.app/" property="og:url"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<meta content="https://cool-croquembouche-1f074d.netlify.app/logo.png?v=99" name="twitter:image"/>
+<link href="./logo.png" rel="icon" type="image/png"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="style.css?v=964" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+<script>
+  // Data bindings (unchanged endpoints)
+  window.SHEETS = {
+    rank:   { id:"1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet:"ELOrank",      range:"A:Z" },
+    matches:{ id:"1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet:"ELOboard",     range:"A:Z" },
+    proRank:{ id:"1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE", sheet:"DontREMOVE10", range:"E24:O29" },
+    sched:  { id:"1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE", sheet:"S10Schedule",  range:"B4:M220" },
+    all:    { id:"1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet:"ELOboard", range:"A:J" },
+    members:{ id:"18m01CS5kUZKByQHmusXMN54Pa0SXwozgPGp92Q2Nnwo", sheet:"ClanMembers",  range:"A:F"}
+  };
+  window.USE_PROXY = false;
+  window.PROXY_URL = "https://cors.isomorphic-git.org/";
+  </script>
+</head>
+<body>
+<header class="topbar">
+  <div class="inner">
+    <a class="brand" href="./index.html">
+      <img src="./logo.png" alt="3050" class="logo"/>
+      <div class="brand-txt">
+        <div class="brand-title">3050 클랜</div>
+        <div class="brand-sub">TEAM ROSTER</div>
+      </div>
+    </a>
+    <div class="top-actions">
+      <a class="ghost" href="./index.html#dash" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">← 메인으로</a>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="panel" id="rosterPage">
+    <div class="panel-head">
+      <h2>팀 로스터</h2>
+      <div class="status" id="rosterStatus" style="display:none;"></div>
+    </div>
+
+    <div class="hof-wrap premium" style="padding-top:10px;">
+      <div class="status" style="margin-bottom:8px;">팀을 클릭하면 해당 팀 로스터가 표시됩니다.</div>
+      <div aria-label="팀 선택" class="season-bar" id="rosterTeams"></div>
+
+      <div class="hof-inline" style="display:block;">
+        <div class="hof-inline-head">
+          <div class="hof-inline-title" id="rosterTeamTitle">팀 로스터</div>
+        </div>
+        <div class="table-wrap full">
+          <table class="table" id="rosterTable">
+            <thead><tr></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="./app.js?v=116"></script>
+</body>
+</html>
