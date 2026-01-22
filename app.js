@@ -3413,5 +3413,209 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+// Dashboard: "팀 로스터" 버튼 → 로스터 팝업 (S10RoasterHOME)
+document.addEventListener('DOMContentLoaded', () => {
+  const openBtn = document.getElementById('viewRosterBtn');
+  const popup = document.getElementById('rosterPopup');
+  const teamListEl = document.getElementById('rosterTeamList');
+  const teamHeaderEl = document.getElementById('rosterTeamHeader');
+  const rosterTableBody = document.querySelector('#rosterTable tbody');
+  const rosterMetaEl = document.getElementById('rosterMeta');
+
+  if (!openBtn || !popup) return;
+
+  const TIERS = ['갓','킹','퀸','잭','스페이드','조커','히든','버스트','하이든','조커']; // some fallbacks
+  const tierSet = new Set(TIERS);
+
+  function openPopup(){ popup.setAttribute('aria-hidden','false'); }
+  function closePopup(){ popup.setAttribute('aria-hidden','true'); }
+
+  // backdrop/close buttons
+  popup.addEventListener('click', (e) => {
+    const t = e.target;
+    if (t && t.getAttribute && t.getAttribute('data-close') === 'rosterPopup') closePopup();
+  });
+
+  let rosterCache = null;
+
+  function cleanCell(v){
+    const s = String(v ?? '').trim();
+    return s;
+  }
+
+  function parseTeams(matrix){
+    // matrix = [headers?, ...rows] from fetchGVIZ; we treat all rows as data
+    if(!Array.isArray(matrix) || !matrix.length) return [];
+    const rows = matrix;
+
+    // S10RoasterHOME는 팀 블록이 위/아래로 2구간(예: 3팀 + 2팀)으로 나뉘어 있을 수 있음.
+    // 그래서 "팀명" 행을 여러 개 찾아서 전부 합친다(중복 팀명 제거).
+    const teams = [];
+    const seen = new Set();
+
+    const maxScan = Math.min(rows.length, 120);
+    for(let teamRowIdx=0; teamRowIdx<maxScan; teamRowIdx++){
+      const row = rows[teamRowIdx] || [];
+      const teamLabelCount = row.filter(x => cleanCell(x)==='팀명').length;
+      if (teamLabelCount < 2) continue;
+
+      const starts = [];
+      for(let c=0;c<row.length;c++){
+        if (cleanCell(row[c]) === '팀명'){
+          const name = cleanCell(row[c+1] || '');
+          if (name) starts.push({ col:c, name });
+        }
+      }
+      if (!starts.length) continue;
+
+      for(let i=0;i<starts.length;i++){
+        const start = starts[i].col;
+        const end = (i < starts.length-1 ? starts[i+1].col : Math.max(start+4, row.length));
+        const width = Math.max(4, end - start); // expect Tier+T+P+Z
+        const name = starts[i].name;
+        if (seen.has(name)) continue;
+        seen.add(name);
+        teams.push({ name, startCol:start, width, anchorRow: teamRowIdx });
+      }
+    }
+
+    return teams;
+  }
+
+  function extractTeamRoster(rows, team){
+    const s = team.startCol;
+    const anchor = Number.isFinite(team.anchorRow) ? team.anchorRow : 0;
+
+    // Heuristic: locate roster header row that has "티어" at s and "T" at s+1 (or within next few rows)
+    let headerIdx = -1;
+    for(let r=anchor; r<rows.length; r++){
+      const a = cleanCell(rows[r]?.[s]);
+      const b = cleanCell(rows[r]?.[s+1]);
+      if (a === '티어' && (b === 'T' || b === 'P' || b === 'Z' || b === 'T P Z')){ headerIdx = r; break; }
+      if (a === '티어' && cleanCell(rows[r+1]?.[s+1]) === 'T'){ headerIdx = r+1; break; }
+    }
+
+    let startScan = Math.max(anchor, headerIdx >= 0 ? headerIdx : anchor);
+
+    // Meta + Logo extraction near top of block
+    const meta = [];
+    let logoUrl = '';
+    for(let r=anchor; r<startScan; r++){
+      const line = cleanCell((rows[r]||[]).slice(s, s+10).join(' ').replace(/\s+/g,' '));
+      if (!logoUrl){
+        // 첫 번째 이미지 URL(팀 로고) 찾기
+        const urlCandidate = cleanCell(rows[r]?.[s] || rows[r]?.[s+1] || '');
+        if (/^https?:\/\//i.test(urlCandidate) && /\.(png|jpg|jpeg|webp)(\?|$)/i.test(urlCandidate)){
+          logoUrl = urlCandidate;
+        }
+      }
+      if (/(감독|부감독|보호선수)\s*[:：]/.test(line)) meta.push(line);
+    }
+
+    const out = [];
+    // scan roster rows: tier in s; players in s+1..s+3
+    for(let r=startScan; r<rows.length; r++){
+      const tier = cleanCell(rows[r]?.[s]);
+      const t = cleanCell(rows[r]?.[s+1]);
+      const p = cleanCell(rows[r]?.[s+2]);
+      const z = cleanCell(rows[r]?.[s+3]);
+      if (!tier && !t && !p && !z) continue;
+
+      if (tierSet.has(tier)){
+        out.push({ tier, t, p, z });
+      }
+
+      // 다음 구간(아래쪽)으로 넘어가면 멈춤: 동일한 startCol에서 또 "팀명"이 나오면 다음 블록 시작이므로 stop
+      if (r > startScan && cleanCell(rows[r]?.[s]) === '팀명') break;
+    }
+
+    return { roster: out, meta, logoUrl };
+  }
+
+  function renderTeamMenu(teams){
+    if(!teamListEl) return;
+    teamListEl.innerHTML = '';
+    teams.forEach((team, idx) => {
+      const btn = document.createElement('button');
+      btn.type='button';
+      btn.className='roster-team-btn';
+      btn.textContent = team.name;
+      btn.addEventListener('click', () => selectTeam(team, btn));
+      teamListEl.appendChild(btn);
+      if(idx===0) setTimeout(()=>btn.click(), 0);
+    });
+  }
+
+  function setActive(btn){
+    teamListEl?.querySelectorAll('.roster-team-btn').forEach(b => b.classList.remove('active'));
+    if(btn) btn.classList.add('active');
+  }
+
+  function renderRoster(roster){
+    if(!rosterTableBody) return;
+    rosterTableBody.innerHTML='';
+    const frag=document.createDocumentFragment();
+    roster.forEach(r => {
+      const tr=document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtml(r.tier)}</td><td>${escapeHtml(r.t)}</td><td>${escapeHtml(r.p)}</td><td>${escapeHtml(r.z)}</td>`;
+      frag.appendChild(tr);
+    });
+    rosterTableBody.appendChild(frag);
+  }
+
+  // Minimal HTML escape
+  function escapeHtml(str){
+    return String(str ?? '')
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;')
+      .replaceAll('"','&quot;')
+      .replaceAll("'","&#39;");
+  }
+
+  async function ensureRosterData(){
+    if (rosterCache) return rosterCache;
+    const cfg = (window.SHEETS && window.SHEETS.roster) ? window.SHEETS.roster : null;
+    if (!cfg) return null;
+    const data = await fetchGVIZ(cfg);
+    // fetchGVIZ returns [headers,...rows] sometimes; for this roster sheet we want raw values.
+    // If first row contains '팀명' treat as data; otherwise keep all.
+    rosterCache = Array.isArray(data) ? data : null;
+    return rosterCache;
+  }
+
+  async function selectTeam(team, btn){
+    setActive(btn);
+    const rows = await ensureRosterData();
+    if(!rows){ teamHeaderEl.textContent='로스터 데이터를 불러오지 못했습니다.'; return; }
+
+    const { roster, meta, logoUrl } = extractTeamRoster(rows, team);
+
+    // Header (logo + team name)
+    if (logoUrl){
+      teamHeaderEl.innerHTML = `<div class="roster-team-head"><img class="roster-team-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(team.name)} 로고"><span class="roster-team-name">${escapeHtml(team.name)}</span></div>`;
+    } else {
+      teamHeaderEl.textContent = team.name;
+    }
+
+    renderRoster(roster);
+    rosterMetaEl.innerHTML = meta.length ? meta.map(m => `<div>${escapeHtml(m)}</div>`).join('') : '';
+  }
+
+  openBtn.addEventListener('click', async () => {
+    openPopup();
+    teamHeaderEl.textContent='로스터 불러오는 중...';
+    rosterTableBody.innerHTML='';
+    rosterMetaEl.innerHTML='';
+    const rows = await ensureRosterData();
+    if(!rows){ teamHeaderEl.textContent='로스터 데이터를 불러오지 못했습니다.'; return; }
+    const teams = parseTeams(rows);
+    if(!teams.length){ teamHeaderEl.textContent='팀 정보를 찾지 못했습니다.'; return; }
+    renderTeamMenu(teams);
+    teamHeaderEl.textContent='팀을 선택하세요';
+  });
+});
+
+
 
 

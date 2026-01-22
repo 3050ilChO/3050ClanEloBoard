@@ -30,6 +30,7 @@
     matches:{ id:"1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet:"ELOboard",     range:"A:Z" },
     proRank:{ id:"1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE", sheet:"DontREMOVE10", range:"E24:O29" },
     sched:  { id:"1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE", sheet:"S10Schedule",  range:"B4:M220" },
+    roster:{ id:"1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE", sheet:"S10RoasterHOME", range:"A4:Z120" },
     all:    { id:"1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet:"ELOboard", range:"A:J" },
     members:{ id:"18m01CS5kUZKByQHmusXMN54Pa0SXwozgPGp92Q2Nnwo", sheet:"ClanMembers",  range:"A:F"}
   };
@@ -109,7 +110,7 @@
 <div class="season-name" id="dashSeasonName">S10</div>
 <div class="season-range" id="dashSeasonRange">-</div>
 </div>
-<div class="dash-btns">  <button class="season-btn" id="viewAllScheduleBtn" type="button">전체 일정 보기 →</button>
+<div class="dash-btns"><button class="season-btn" id="viewRosterBtn" type="button">팀 로스터</button>  <button class="season-btn" id="viewAllScheduleBtn" type="button">전체 일정 보기 →</button>
 </div>
 </div>
 <div class="table-wrap">
@@ -328,6 +329,38 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 </script>
 
 <!-- (removed) Team Roster Modal -->
+
+
+<!-- Team Roster Popup -->
+<div class="popup" id="rosterPopup" aria-hidden="true">
+  <div class="popup-backdrop" data-close="rosterPopup"></div>
+  <div class="popup-panel">
+    <div class="popup-head">
+      <div class="popup-title">S10 팀 로스터</div>
+      <button class="popup-close" type="button" data-close="rosterPopup">닫기 ✕</button>
+    </div>
+    <div class="popup-body roster-body">
+      <div class="roster-layout">
+        <aside class="roster-menu">
+          <div class="roster-menu-title">팀 선택</div>
+          <div id="rosterTeamList" class="roster-team-list"></div>
+        </aside>
+        <section class="roster-content">
+          <div id="rosterTeamHeader" class="roster-team-header">팀을 선택하세요</div>
+          <div class="table-wrap roster-table-wrap">
+            <table class="table" id="rosterTable">
+              <thead>
+                <tr><th>티어</th><th>T</th><th>P</th><th>Z</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div id="rosterMeta" class="roster-meta"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
