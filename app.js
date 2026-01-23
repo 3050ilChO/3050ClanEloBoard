@@ -3854,6 +3854,8 @@ rows.forEach(tr=>{
   tableEl.classList.add('hof-pro-podium-table');
 }
 
+  // --- TST/TSL header row + organizer row merging ---of-pro-podium-table');
+  }
 
   // --- TST/TSL header row + organizer row merging ---
   function mergeTstTslHeaderRows(tableEl, leagueKey){
@@ -3862,80 +3864,52 @@ rows.forEach(tr=>{
     const tbody = (tableEl.tBodies && tableEl.tBodies.length) ? tableEl.tBodies[0] : null;
     if(!tbody) return;
     const rows = Array.from(tbody.querySelectorAll('tr'));
-    if(!rows.length) return;
     const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
 
-    let totalCols = 0;
-    rows.forEach(tr=>{ totalCols = Math.max(totalCols, (tr.children||[]).length); });
-    if(!totalCols) totalCols = 1;
-
-    const mergeRowAll = (tr, cls)=>{
+    const mergeRow = (tr, cls)=>{
       const tds = Array.from(tr.children||[]);
-      if(!tds.length) return;
+      if(tds.length<=1) return;
       const first = tds[0];
-      first.textContent = norm(tr.textContent);
-      first.colSpan = totalCols;
+      const text = norm(tr.textContent);
+      first.textContent = text;
+      first.colSpan = tds.length;
+      first.classList.add(cls);
       for(let i=tds.length-1;i>=1;i--) tds[i].remove();
-      first.classList.add('hof-merged-cell');
-      if(cls) first.classList.add(cls);
-      first.style.textAlign = 'left';
-      first.style.paddingLeft = '14px';
-      first.style.whiteSpace = 'normal';
-      first.style.wordBreak = 'keep-all';
     };
 
-    // 1) Title row containing 명예의전당
-    for(const tr of Array.from(tbody.querySelectorAll('tr'))){
+    // Merge first 2 header-style rows if they look like titles
+    rows.slice(0,4).forEach(tr=>{
       const txt = norm(tr.textContent);
-      if(!txt) continue;
-      if(/명예의전당/.test(txt)){
-        if(k==='tst' && /3050\s*TST\s*명예의전당/i.test(txt)){
-          tr.remove();
-        }else{
-          mergeRowAll(tr, 'hof-title-merged');
-        }
-        break;
+      if(!txt) return;
+      if(/명예의전당/.test(txt) || /(TST|TSL)\s*\d{2,4}/i.test(txt) || /스타리그|토너먼트/.test(txt)){
+        mergeRow(tr, 'hof-merged-title');
       }
-    }
+    });
 
-    // 2) Season name row
-    for(const tr of Array.from(tbody.querySelectorAll('tr'))){
-      const txt = norm(tr.textContent);
-      if(!txt) continue;
-      if(/\(\s*시즌\s*\d+\s*\)/.test(txt) || /시즌\s*\d+/.test(txt) || /(S|시즌)\s*\d+\b/i.test(txt)){
-        mergeRowAll(tr, 'hof-season-merged');
-        break;
-      }
-    }
-
-    // 3) Organizer row
-    for(const tr of Array.from(tbody.querySelectorAll('tr'))){
+    // Organizer row: label in first cell (대회 진행자) then IDs across other cells
+    rows.forEach(tr=>{
       const tds = Array.from(tr.children||[]);
-      if(tds.length < 2) continue;
+      if(tds.length<2) return;
       const label = norm(tds[0].textContent);
-      if(!/^(대회\s*진행자|대회\s*진행|진행자|운영팀|운영진)$/.test(label)) continue;
-      const second = tds[1];
-      if(tds.length > 2){
-        let extra = '';
-        for(let i=2;i<tds.length;i++){
-          const t = norm(tds[i].textContent);
-          if(t) extra += (extra? ' ' : '') + t;
-          tds[i].remove();
-        }
-        if(extra){
-          const base = norm(second.textContent);
-          second.textContent = base ? (base + ' ' + extra) : extra;
-        }
-      }
-      second.colSpan = Math.max(1, totalCols - 1);
-      second.classList.add('hof-organizers-merged');
+      if(!/^(대회\s*진행자|대회\s*진행|진행자|운영팀)$/.test(label)) return;
+      // merge remaining into one cell
+      const ids = tds.slice(1).map(td=> (td.innerText!=null? String(td.innerText): String(td.textContent||''))).join(' ');
+      const merged = document.createElement('td');
+      merged.colSpan = tds.length-1;
+      const star = document.createElement('span');
+      star.className = 'hof-organizer-star';
+      star.textContent = '*';
+      merged.appendChild(star);
+      merged.appendChild(document.createTextNode(' ' + norm(ids)));
+      merged.classList.add('hof-organizers-merged');
+      // remove old cells and insert
+      for(let i=tds.length-1;i>=1;i--) tds[i].remove();
+      tr.appendChild(merged);
+      tr.classList.add('hof-organizer-row');
+      // left align both label and merged cell
       tds[0].style.textAlign = 'left';
-      second.style.textAlign = 'left';
-      second.style.paddingLeft = '12px';
-      second.style.whiteSpace = 'normal';
-      second.style.wordBreak = 'keep-all';
-      break;
-    }
+      merged.style.textAlign = 'left';
+    });
   }
 // PRO sidebar season list: extract winner/runner team names from a block for display.
 function extractPodiumFromBlockData(blockData){
@@ -3973,6 +3947,20 @@ function extractPodiumFromBlockData(blockData){
   }
   return out;
 }
+        }
+        if((/(^|\s)우\s*승($|\s)/.test(cell)) && !/준\s*우\s*승/.test(cell)){
+          for(let j=c+1;j<r.length;j++){
+            const vRaw = r[j];
+            const v = norm(vRaw);
+            if(!v || isUrl(vRaw)) continue;
+            out.win = v;
+            break;
+          }
+        }
+      }
+    }
+    return out;
+  }
 
 
   // PRO: render podium cards from a season block laid out like the sheet screenshot:
@@ -4150,6 +4138,166 @@ function renderProPodiumFromBlockData(tableEl, blockData){
   try{ tableEl.classList.add('hof-league-pro'); }catch(_){ }
   return true;
 }
+      if(cWin>=0 && cRun>=0){ headerR=r; break; }
+      cWin=cWin; cRun=cRun;
+    }
+    if(headerR<0 || cWin<0) return false;
+    if(cRun<0) cRun = cWin+1;
+
+    // attempt to pick logo row: the next row with URL-ish values at win/run cols
+    let logoR=-1;
+    for(let r=headerR+1; r<Math.min(headerR+6, blockData.length); r++){
+      const row = blockData[r]||[];
+      const w=row[cWin];
+      const u=row[cRun];
+      if((isUrl(w) || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(String(w||''))) ||
+         (isUrl(u) || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(String(u||'')))){
+        logoR=r; break;
+      }
+    }
+
+    const win = { label:'우승', name:'-', logo:'', lines:{} };
+    const run = { label:'준우승', name:'-', logo:'', lines:{} };
+
+    if(logoR>=0){
+      const row = blockData[logoR]||[];
+      const w = row[cWin];
+      const u = row[cRun];
+      if(isUrl(w)) win.logo = String(w).trim();
+      if(isUrl(u)) run.logo = String(u).trim();
+    }
+
+    const wanted = ['팀명','감독','부감독','운영팀','대회 진행자','대회진행자','진행자','운영진'];
+    for(let r=headerR+1; r<blockData.length; r++){
+      const row = blockData[r]||[];
+      // find label cell in this row
+      let labelCol=-1; let label='';
+      for(let c=0;c<Math.min(6,row.length);c++){
+        const t=norm(row[c]);
+        if(wanted.includes(t)) { labelCol=c; label=t; break; }
+      }
+      if(labelCol<0) continue;
+      const wv = norm(row[cWin]);
+      const rv = norm(row[cRun]);
+      if(label==='팀명'){
+        if(wv) win.name = wv;
+        if(rv) run.name = rv;
+      }else{
+        if(wv) win.lines[label]=wv;
+        if(rv) run.lines[label]=rv;
+      }
+    }
+
+    // if runner-up is missing in the sheet for this season, hide it
+    const hasRunner = (run.name && run.name!=='-' && run.name!=='—') || Object.keys(run.lines).length || run.logo;
+
+    // build two stacked cards inside the table to keep layout consistent
+    const thead = tableEl.querySelector('thead');
+    const tbody = tableEl.querySelector('tbody');
+    if(!thead || !tbody) return false;
+    thead.innerHTML='';
+    tbody.innerHTML='';
+
+    const makeCard = (obj, type)=>{
+      const card = document.createElement('div');
+      card.className = 'hof-pro-card ' + type;
+
+      const badge = document.createElement('div');
+      badge.className = 'hof-place-badge ' + (type==='win'?'win':'runner');
+      const crown = document.createElement('img');
+      crown.className='hof-place-crown';
+      crown.alt = type==='win' ? '우승' : '준우승';
+      crown.src = type==='win' ? './crown_gold.png' : './crown_silver.png';
+      const lbl = document.createElement('div');
+      lbl.className='hof-place-label';
+      lbl.textContent = type==='win' ? '우승' : '준우승';
+      badge.appendChild(crown); badge.appendChild(lbl);
+
+      const top = document.createElement('div');
+      top.className = 'hof-pro-top';
+
+      const icon = document.createElement('div');
+      icon.className = 'hof-team-icon';
+      if(obj.logo){
+        const img=document.createElement('img');
+        img.src=obj.logo; img.alt='';
+        img.loading='lazy'; img.decoding='async';
+        img.referrerPolicy='no-referrer';
+        icon.appendChild(img);
+      }
+
+      const tbox=document.createElement('div');
+      const nm=document.createElement('div');
+      nm.className='hof-team-name';
+      nm.textContent=obj.name||'-';
+      tbox.appendChild(nm);
+
+      // show 감독/부감독 inline subtitle if present
+      const subParts=[];
+      const d=obj.lines;
+      const g = d['감독'];
+      const a = d['부감독'];
+      if(g) subParts.append('감독 ' + g);
+      if(a) subParts.append('부감독 ' + a);
+      if(subParts.length){
+        const sub=document.createElement('div');
+        sub.className='hof-team-sub';
+        sub.textContent=subParts.join('   ');
+        tbox.appendChild(sub);
+      }
+
+      top.appendChild(icon);
+      top.appendChild(tbox);
+
+      const lines=document.createElement('div');
+      lines.className='hof-pro-lines';
+      const ordered=['감독','부감독','운영팀','대회 진행자','대회진행자','진행자','운영진'];
+      ordered.forEach(k=>{
+        const v=d[k];
+        if(!v) return;
+        const line=document.createElement('div');
+        line.className='hof-pro-line';
+        const kk=document.createElement('span');
+        kk.className='k';
+        kk.textContent=(k.replace('대회 진행자','대회 진행자'))+':';
+        line.appendChild(kk);
+        // organizer gets green star prefix
+        if(/대회\s*진행자|대회진행자|진행자/.test(k)){
+          const star=document.createElement('span');
+          star.className='hof-organizer-star';
+          star.textContent='*';
+          line.appendChild(document.createTextNode(' '));
+          line.appendChild(star);
+        }
+        line.appendChild(document.createTextNode(' ' + v));
+        lines.appendChild(line);
+      });
+
+      card.appendChild(badge);
+      card.appendChild(top);
+      if(lines.children.length) card.appendChild(lines);
+      return card;
+    };
+
+    const wrap=document.createElement('div');
+    wrap.className='hof-pro-podium';
+    wrap.appendChild(makeCard(win,'win'));
+    if(hasRunner) wrap.appendChild(makeCard(run,'runner'));
+
+    const tr=document.createElement('tr');
+    const td=document.createElement('td');
+    td.colSpan = 1;
+    td.className='hof-pro-cell';
+    td.appendChild(wrap);
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+
+    // Tag for CSS
+    try{ tableEl.classList.add('hof-league-pro'); }catch(_){ }
+    return true;
+  }
+
+
   function showHofSeason(label, leagueKey){
     const k = (leagueKey || HOF_INLINE_CURRENT || 'pro').toLowerCase();
     const cache = HOF_INLINE_CACHE[k];
@@ -4535,7 +4683,33 @@ function renderSeasonBar(seasons, active, leagueKey){
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'hof-season-btn' + (label === act ? ' active' : '');
-    btn.textContent = label;
+    // PRO: show winner + runner-up summary in the season list (sidebar)
+    const kSummary = (leagueKey || HOF_INLINE_CURRENT || 'pro');
+    const sumRoot = (window.__HOF_SEASON_SUMMARY && window.__HOF_SEASON_SUMMARY[kSummary]) ? window.__HOF_SEASON_SUMMARY[kSummary] : null;
+    const sum = sumRoot ? (sumRoot[_normSeasonText(label)] || sumRoot[label] || null) : null;
+    if(sum && (sum.win || sum.runner)){
+      btn.classList.add('has-podium');
+      const top = document.createElement('div');
+      top.className = 'hof-season-top';
+      top.textContent = label;
+      const pod = document.createElement('div');
+      pod.className = 'hof-season-podium';
+
+      const w = document.createElement('div');
+      w.className = 'hof-season-line win';
+      w.textContent = (sum.win ? ('우승 ' + sum.win) : '우승 -');
+
+      const r = document.createElement('div');
+      r.className = 'hof-season-line runner';
+      r.textContent = (sum.runner ? ('준우승 ' + sum.runner) : '준우승 -');
+
+      pod.appendChild(w);
+      pod.appendChild(r);
+      btn.appendChild(top);
+      btn.appendChild(pod);
+    }else{
+      btn.textContent = label;
+    }
     btn.title = label;
     btn.addEventListener('click', () => {
       bar.querySelectorAll('.hof-season-btn').forEach(b=>b.classList.remove('active'));
@@ -4790,9 +4964,9 @@ document.addEventListener('DOMContentLoaded', () => {
     for(let r=anchor; r<startScan; r++){
       // 첫 번째 이미지 URL(팀 로고) 찾기
       if (!logoUrl){
-        const urlCandidate = cleanCell(rows[r]?.[s] || rows[r]?.[s+1] || rows[r]?.[s+2] || '');
-        if (/^https?:\/\//i.test(urlCandidate) && /\.(png|jpg|jpeg|webp)(\?|$)/i.test(urlCandidate)){
-          logoUrl = urlCandidate;
+        const urlC&&idate = cleanCell(rows[r]?.[s] || rows[r]?.[s+1] || rows[r]?.[s+2] || '');
+        if (/^https?:\/\//i.test(urlC&&idate) && /\.(png|jpg|jpeg|webp)(\?|$)/i.test(urlC&&idate)){
+          logoUrl = urlC&&idate;
         }
       }
 
