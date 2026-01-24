@@ -3222,8 +3222,8 @@ rows.forEach(tr=>{
       const subParts=[];
       const coach = get(d, ['감독']);
       const sub = get(d, ['부감독']);
-      if(coach) subParts.append('감독 ' + coach);
-      if(sub) subParts.append('부감독 ' + sub);
+      if(coach) subParts.push('감독 ' + coach);
+      if(sub) subParts.push('부감독 ' + sub);
       if(subParts.length){
         const s = document.createElement('div');
         s.className = 'hof-team-sub';
@@ -4034,16 +4034,23 @@ function renderProPodiumFromBlockData(tableEl, blockData){
   // if runner-up is missing in the sheet for this season, hide it
   const hasRunner = (run.name && run.name!=='-' && run.name!=='—') || Object.keys(run.lines).length || run.logo;
 
-  // build two stacked cards inside the table to keep layout consistent
+  // Render a 2-column podium (winner left / runner right) and a single organizer line below.
   const thead = tableEl.querySelector('thead');
   const tbody = tableEl.querySelector('tbody');
   if(!thead || !tbody) return false;
   thead.innerHTML='';
   tbody.innerHTML='';
 
-  const makeCard = (obj, type)=>{
-    const card = document.createElement('div');
-    card.className = 'hof-pro-card ' + type;
+  // Extract organizer once (prefer explicit 진행자, fallback 운영팀/운영진)
+  const orgKeys = ['대회 진행자','대회진행자','진행자','운영팀','운영진'];
+  let organizer = '';
+  for(const k of orgKeys){ organizer = organizer || win.lines[k] || run.lines[k] || ''; }
+  // remove from side-lines to avoid duplication
+  for(const k of orgKeys){ delete win.lines[k]; delete run.lines[k]; }
+
+  const makeSide = (obj, type)=>{
+    const side = document.createElement('div');
+    side.className = 'hof-pro-side ' + (type==='win'?'win':'runner');
 
     const badge = document.createElement('div');
     badge.className = 'hof-place-badge ' + (type==='win'?'win':'runner');
@@ -4056,8 +4063,8 @@ function renderProPodiumFromBlockData(tableEl, blockData){
     lbl.textContent = type==='win' ? '우승' : '준우승';
     badge.appendChild(crown); badge.appendChild(lbl);
 
-    const top = document.createElement('div');
-    top.className = 'hof-pro-top';
+    const chip = document.createElement('div');
+    chip.className = 'hof-pro-chip';
 
     const icon = document.createElement('div');
     icon.className = 'hof-team-icon';
@@ -4070,62 +4077,55 @@ function renderProPodiumFromBlockData(tableEl, blockData){
     }
 
     const tbox=document.createElement('div');
+    tbox.className='hof-team-text';
     const nm=document.createElement('div');
     nm.className='hof-team-name';
     nm.textContent=obj.name||'-';
     tbox.appendChild(nm);
 
-    // show 감독/부감독 inline subtitle if present
-    const subParts=[];
+    // 감독/부감독은 스샷처럼 아래에 작은 글씨로 2줄
     const d=obj.lines||{};
     const g = d['감독'];
     const a = d['부감독'];
-    if(g) subParts.push('감독 ' + g);
-    if(a) subParts.push('부감독 ' + a);
-    if(subParts.length){
+    if(g || a){
       const sub=document.createElement('div');
-      sub.className='hof-team-sub';
-      sub.textContent=subParts.join('   ');
+      sub.className='hof-pro-sub';
+      if(g){
+        const l=document.createElement('div');
+        l.textContent = '감독  ' + g;
+        sub.appendChild(l);
+      }
+      if(a){
+        const l=document.createElement('div');
+        l.textContent = '부감독  ' + a;
+        sub.appendChild(l);
+      }
       tbox.appendChild(sub);
     }
 
-    top.appendChild(icon);
-    top.appendChild(tbox);
+    chip.appendChild(icon);
+    chip.appendChild(tbox);
 
-    const lines=document.createElement('div');
-    lines.className='hof-pro-lines';
-    const ordered=['단장','감독','부감독','운영팀','대회 진행자','대회진행자','진행자','운영진'];
-    ordered.forEach(k=>{
-      const v=d[k];
-      if(!v) return;
-      const line=document.createElement('div');
-      line.className='hof-pro-line';
-      const kk=document.createElement('span');
-      kk.className='k';
-      kk.textContent=k+':';
-      line.appendChild(kk);
-      // organizer gets green star prefix
-      if(/대회\s*진행자|대회진행자|진행자/.test(k)){
-        const star=document.createElement('span');
-        star.className='hof-organizer-star';
-        star.textContent='*';
-        line.appendChild(document.createTextNode(' '));
-        line.appendChild(star);
-      }
-      line.appendChild(document.createTextNode(' ' + v));
-      lines.appendChild(line);
-    });
-
-    card.appendChild(badge);
-    card.appendChild(top);
-    if(lines.children.length) card.appendChild(lines);
-    return card;
+    side.appendChild(badge);
+    side.appendChild(chip);
+    return side;
   };
 
   const wrap=document.createElement('div');
   wrap.className='hof-pro-podium';
-  wrap.appendChild(makeCard(win,'win'));
-  if(hasRunner) wrap.appendChild(makeCard(run,'runner'));
+  wrap.appendChild(makeSide(win,'win'));
+  if(hasRunner) wrap.appendChild(makeSide(run,'runner'));
+
+  if(organizer){
+    const org = document.createElement('div');
+    org.className = 'hof-pro-organizer';
+    const k = document.createElement('span');
+    k.className='k';
+    k.textContent='대회진행 :';
+    org.appendChild(k);
+    org.appendChild(document.createTextNode(' ' + organizer));
+    wrap.appendChild(org);
+  }
 
   const tr=document.createElement('tr');
   const td=document.createElement('td');
@@ -4237,8 +4237,8 @@ function renderProPodiumFromBlockData(tableEl, blockData){
       const d=obj.lines;
       const g = d['감독'];
       const a = d['부감독'];
-      if(g) subParts.append('감독 ' + g);
-      if(a) subParts.append('부감독 ' + a);
+      if(g) subParts.push('감독 ' + g);
+      if(a) subParts.push('부감독 ' + a);
       if(subParts.length){
         const sub=document.createElement('div');
         sub.className='hof-team-sub';

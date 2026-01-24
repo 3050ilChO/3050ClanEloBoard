@@ -2144,16 +2144,41 @@ td.rank-cell .rank-num{ font-weight:900; }
 
 
 
-/* HOF: On small screens keep TST/TSL tables as tables (avoid card stacking) */
+/* HOF: TST/TSL on smaller screens
+   - Keep readability by preserving column widths and allowing swipe inside the card.
+   - Avoid the "one character per line" look caused by forced word-break on fixed tables.
+*/
 @media (max-width: 820px){
-  /* HOF TST/TSL: ensure columns shrink/grow responsively (fix overlap) */
+  /* allow horizontal swipe INSIDE the HOF table area (not the whole page) */
+  .hof-table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
   #hofInlineTable.hof-league-tsl,
-  #hofInlineTable.hof-league-tst{ width:100%; table-layout:fixed; }
+  #hofInlineTable.hof-league-tst{
+    width:max-content !important;
+    min-width: 760px !important;  /* keep columns readable */
+    table-layout:auto !important; /* avoid squeezing to single characters */
+  }
+
   #hofInlineTable.hof-league-tsl td,
-  #hofInlineTable.hof-league-tst td{ overflow:hidden; text-overflow:ellipsis; }
-  /* Allow winner/runner cells to wrap when needed */
-  #hofInlineTable.hof-league-tsl tr.hof-tier-row td,
-  #hofInlineTable.hof-league-tst tr.hof-tier-row td{ white-space:normal; word-break:break-word; }
+  #hofInlineTable.hof-league-tst td{
+    white-space:nowrap !important; /* keep IDs readable */
+    word-break:normal !important;
+    overflow:visible !important;
+    text-overflow:clip !important;
+  }
+
+  /* organizer line can wrap naturally */
+  #hofInlineTable.hof-league-tsl .hof-organizers-merged,
+  #hofInlineTable.hof-league-tst .hof-organizers-merged{
+    white-space:normal;
+    overflow-wrap:anywhere;
+  }
+}
+
+@media (max-width: 520px){
+  /* slightly smaller text/padding only for TST/TSL, keep overall theme intact */
+  #hofInlineTable.hof-league-tsl td,
+  #hofInlineTable.hof-league-tst td{ font-size:12px; padding:6px 6px; }
 }
 
 /* Organizer cells (대회진행/진행자) normalized into one line */
