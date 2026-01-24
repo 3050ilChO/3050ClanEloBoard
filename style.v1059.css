@@ -2701,6 +2701,17 @@ td.rank-cell .rank-num{ font-weight:900; }
 /* PRO: force-hide any stage cards always */
 #hofInline.hof-league-pro .hof-stage-cards{ display:none !important; }
 
+
+/* TST/TSL: when stage cards exist, always hide the table and show cards (all screen sizes) */
+#hofInline.hof-league-tst.hof-has-stagecards #hofInlineTable,
+#hofInline.hof-league-tsl.hof-has-stagecards #hofInlineTable{
+  display:none !important;
+}
+#hofInline.hof-league-tst.hof-has-stagecards .hof-stage-cards,
+#hofInline.hof-league-tsl.hof-has-stagecards .hof-stage-cards{
+  display:block !important;
+}
+
 /* Small screens: TST/TSL behavior depends on whether stage cards exist */
 @media (max-width: 980px){
   /* When cards exist, hide table and show cards */
@@ -2746,3 +2757,30 @@ td.rank-cell .rank-num{ font-weight:900; }
 
 /* v1058: ensure TST title row does not appear (TST명예의전당) */
 .hof-league-tst tr.hof-title-merged{ display:none !important; }
+
+
+
+/* === HOF: TST/TSL Stage Cards (always-on, responsive like screenshot) === */
+/* Show stage-cards whenever they exist, regardless of viewport width */
+#hofInline.hof-has-stagecards .hof-stage-cards{ display:block !important; }
+/* For TST/TSL, prefer stage-cards over table at all widths (table remains fallback if cards fail to build) */
+#hofInline.hof-league-tst.hof-has-stagecards #hofInlineTable,
+#hofInline.hof-league-tsl.hof-has-stagecards #hofInlineTable{ display:none !important; }
+#hofInline.hof-league-tst.hof-has-stagecards .hof-stage-cards,
+#hofInline.hof-league-tsl.hof-has-stagecards .hof-stage-cards{ display:block !important; }
+
+/* Keep the card column readable on wide screens (matches attached screenshot feel) */
+#hofInline .hof-stage-cards{
+  max-width: 560px;
+  margin-left:auto;
+  margin-right:auto;
+  width:100%;
+  padding: 0 8px;
+}
+#hofInline .hof-stage-card{
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+}
+#hofInline .hof-stage-title{ font-size:15px; }
+#hofInline .hof-stage-line{ font-size:13.5px; }
+#hofInline .hof-stage-organizer{ line-height:1.35; }
+

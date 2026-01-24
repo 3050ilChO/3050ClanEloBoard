@@ -2204,15 +2204,29 @@ async function fetchGVIZbyUrl_v12b(fullUrl){
     const m = String(fullUrl).match(/spreadsheets\/d\/([^/]+)\/edit.*?[?&#]gid=(\d+)/);
     if(!m) throw new Error("Invalid sheet URL: "+fullUrl);
     const id=m[1], gid=m[2];
-    const gviz = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&gid=${gid}`;
-    const res = await fetch(gviz,{cache:'no-store'});
+    const gvizBase = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&gid=${gid}`;
+    const gviz = (window.USE_PROXY ? window.PROXY_URL : '') + gvizBase;
+    const res = await fetch(gviz, {cache:'no-store'});
     const text = await res.text();
-    const body = (text.match(/setResponse\((.*)\);?\s*$/s)||[])[1];
-    const json = JSON.parse(body);
-    const table=json.table||{};
-    const rows=(table.rows||[]).map(r=>(r.c||[]).map(c=>(c&&(c.f??c.v))??''));
+    let payload = text;
+
+    // Handle both raw JSON and the common GVIZ wrapper: google.visualization.Query.setResponse(...)
+    const mWrap = payload.match(/setResponse\((.*)\)\s*;?\s*$/s);
+    if(mWrap && mWrap[1]) payload = mWrap[1];
+
+    // Otherwise, trim to the first '{' and the last '}'
+    const first = payload.indexOf('{');
+    const last  = payload.lastIndexOf('}');
+    if(first >= 0 && last >= 0) payload = payload.slice(first, last+1);
+
+    const json = JSON.parse(payload);
+    const table = json.table || {};
+    const rows = (table.rows||[]).map(r => (r.c||[]).map(c => (c && (c.f ?? c.v)) ?? ''));
     return rows;
-  }catch(e){ console.error('fetchGVIZbyUrl_v12b error', e); return []; }
+  }catch(e){
+    console.error('fetchGVIZbyUrl_v12b error', e);
+    return [];
+  }
 }
 
 /* v12e rank row click strong */
@@ -3011,6 +3025,35 @@ window.openPlayer = async function(bCellValue){
     const rows = Array.from(tbody.querySelectorAll('tr'));
     const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
 
+    // If there is a separate season row under the title, fold it into the title and remove the season row.
+    try{
+      let titleIdx=-1, seasonIdx=-1;
+      for(let i=0;i<Math.min(6, rows.length); i++){
+        const t = norm(rows[i].textContent);
+        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
+        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
+      }
+      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
+        const titleRow = rows[titleIdx];
+        const seasonRow = rows[seasonIdx];
+        const seasonTxt = norm(seasonRow.textContent);
+        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
+        if(titleCell && seasonTxt){
+          // Append season to the title (left aligned)
+          const base = norm(titleCell.textContent);
+          if(base && base.indexOf(seasonTxt)===-1){
+            titleCell.textContent = base + '  ' + seasonTxt;
+          }
+        }
+        // remove season row entirely
+        seasonRow.remove();
+        // refresh rows array (used later)
+        // eslint-disable-next-line no-unused-vars
+        rows.splice(seasonIdx,1);
+      }
+    }catch(_){}
+
+
     const makeBadge = (type)=>{
       const wrap = document.createElement('div');
       wrap.className = 'hof-place-badge ' + (type==='win' ? 'win' : 'runner');
@@ -3107,102 +3150,307 @@ rows.forEach(tr=>{
   
   // PRO: transform the raw table into a 2-column podium layout (match desired roster-style card)
   function renderProPodiumFromBlock(tableEl, blockData){
-    // Render into the existing <table id="hofInlineTable"> by creating card rows.
-    // This avoids invalid DOM (div inside table) and keeps layout stable.
+    // Render PROLEAGUE as 2-column podium cards (우승/준우승) like the screenshot.
+    // We render into the existing <table> by placing a single <td colspan="N"> cell.
     if(!tableEl) return;
     const thead = tableEl.querySelector('thead');
     const tbody = tableEl.querySelector('tbody');
-    if(!thead || !tbody){ return; }
+    if(!thead || !tbody) return;
     thead.innerHTML = '';
     tbody.innerHTML = '';
 
     const norm = (s)=> String(s||'').replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').trim();
     const isUrl = (v)=> /^https?:\/\//i.test(String(v||'').trim());
+    const isImgish = (v)=> isUrl(v) || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(String(v||'').trim());
+    const cleanVal = (v)=>{
+      const s = norm(v);
+      if(!s) return '';
+      if(s==='-' || s==='—' || s==='–') return '-';
+      return s;
+    };
 
-    // Find header row that contains both 우승 and 준우승.
-    let headerR = -1; let cWin = -1; let cRun = -1;
+    // Find header row that contains 우승 and 준우승 (2-column matrix style)
+// or detect the legacy "vertical" layout where 우승/준우승 are in the first column.
+    let headerR=-1, cWin=-1, cRun=-1;
     for(let r=0;r<(blockData||[]).length;r++){
       const row = blockData[r] || [];
       for(let c=0;c<row.length;c++){
         const t = norm(row[c]);
-        if(t==='우승') cWin = c;
-        if(t==='준우승') cRun = c;
+        if(/^우\s*승$/.test(t)) cWin=c;
+        if(/^준\s*우\s*승$/.test(t)) cRun=c;
       }
-      if(cWin>=0 && cRun>=0){ headerR = r; break; }
-      cWin = -1; cRun = -1;
+      if(cWin>=0 && cRun>=0){ headerR=r; break; }
+      cWin=-1; cRun=-1;
     }
 
-    // Fallback: if not found, just show raw table
-    if(headerR<0 || cWin<0 || cRun<0){
+    // --- Legacy vertical layout fallback (most common old proleague sheets) ---
+    // Example rows:
+    // 우승 | (logo) | 팀명 | 감독 | ... | 부감독 | ...
+    // 준우승 | (logo) | 팀명 | 감독 | ... | 부감독 | ...
+    if(headerR < 0){
+      // Legacy vertical layouts vary a lot across early seasons (S1~S4 especially).
+      // Some sheets don't keep 우승/준우승 in the first column, so we scan the whole row.
+      const findRowByAnyCell = (re)=>{
+        for(let r=0;r<(blockData||[]).length;r++){
+          const row = blockData[r] || [];
+          for(let c=0;c<row.length;c++){
+            const t = norm(row[c]);
+            if(re.test(t)) return r;
+          }
+        }
+        return -1;
+      };
+      const rWinV = findRowByAnyCell(/(^|\s)우\s*승($|\s)/);
+      const rRunV = findRowByAnyCell(/준\s*우\s*승/);
+
+      if(rWinV >= 0){
+        const colCount = Math.max(...(blockData||[]).map(r=> (r||[]).length), 1);
+
+        const pickValue = (row, labels)=>{
+          // labels: array of regex to match within the row
+          const cells = (row||[]).map(norm);
+          // If the row is like: [우승, logo, team, 감독, name, 부감독, name]
+          // Use heuristics: team name is first non-url, non-empty after logo.
+          const isUrl = (v)=> /^https?:\/\//i.test(String(v||'').trim());
+          const isImgish = (v)=> isUrl(v) || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(String(v||'').trim());
+          const cleanVal = (v)=>{
+            const s = norm(v);
+            if(!s) return '';
+            if(s==='-' || s==='—' || s==='–') return '-';
+            return s;
+          };
+
+          // Try explicit labels first (e.g. "팀명", "감독", "부감독")
+          for(let i=0;i<cells.length;i++){
+            const t = cells[i];
+            if(!t) continue;
+            if(labels.some(rx=>rx.test(t))){
+              // take the next meaningful cell(s)
+              for(let j=i+1;j<cells.length;j++){
+                const v = cleanVal(cells[j]);
+                if(v && !isUrl(v) && !isImgish(v)) return v;
+              }
+            }
+          }
+
+          // Heuristic fallback:
+          // logo is usually at index 1; team name around index 2.
+          for(let j=1;j<cells.length;j++){
+            const v = cleanVal(cells[j]);
+            if(!v) continue;
+            if(isImgish(v)) continue;
+            if(isUrl(v)) continue;
+            return v;
+          }
+          const __isVice = Array.isArray(labels) && labels.some(rx=>{ try{return /부감독/.test(rx.source||'') || /부감독/.test(String(rx));}catch(_){return false;} });
+            return __isVice ? '-' : '';
+          };
+
+        const pickLogo = (row)=>{
+          const cells = (row||[]).map(norm);
+          const isUrl = (v)=> /^https?:\/\//i.test(String(v||'').trim());
+          const isImgish = (v)=> isUrl(v) || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(String(v||'').trim());
+          for(let j=1;j<cells.length;j++){
+            const v=cells[j];
+            if(v && isImgish(v)) return v;
+          }
+          return '';
+        };
+
+        const winLogo = pickLogo(blockData[rWinV]||[]);
+        const runLogo = pickLogo(blockData[rRunV]||[]);
+
+        // Team name / coach / subcoach
+        const winName  = pickValue(blockData[rWinV]||[], [/^팀\s*명$/]);
+        const runName  = pickValue(blockData[rRunV]||[], [/^팀\s*명$/]);
+
+        const winCoach = pickValue(blockData[rWinV]||[], [/^감\s*독$/]);
+        const runCoach = pickValue(blockData[rRunV]||[], [/^감\s*독$/]);
+
+        const winSub   = pickValue(blockData[rWinV]||[], [/^부\s*감\s*독$/]);
+        const runSub   = pickValue(blockData[rRunV]||[], [/^부\s*감\s*독$/]);
+
+        // Organizer row (if present)
+        let organizer = '';
+        for(let r=0;r<(blockData||[]).length;r++){
+          const row = blockData[r] || [];
+          let labelIdx = -1;
+          for(let c=0;c<row.length;c++){
+            const t = norm(row[c]);
+            if(/^(대회\s*진행자|대회진행자|진행자|운영진|운영팀)$/.test(t)) { labelIdx = c; break; }
+          }
+          if(labelIdx >= 0){
+            organizer = row.slice(labelIdx+1).map(norm).filter(x=>x && !/^https?:\/\//i.test(x)).join(' ').trim();
+            break;
+          }
+        }
+
+        const makeCard = (place, logo, name, coach, sub)=>{
+          const isWin = (place==='우승');
+          const card = document.createElement('div');
+          card.className = 'hof-pro-card ' + (isWin?'win':'runner');
+
+          const badge = document.createElement('div');
+          badge.className = 'hof-pro-badge';
+          const crownImg = document.createElement('img');
+          crownImg.className = 'hof-pro-crown';
+          crownImg.alt = place;
+          crownImg.src = isWin ? './crown_gold.png' : './crown_silver.png';
+          const lbl = document.createElement('div');
+          lbl.className = 'hof-pro-place';
+          lbl.textContent = place;
+          badge.appendChild(crownImg);
+          badge.appendChild(lbl);
+
+          const body = document.createElement('div');
+          body.className = 'hof-pro-body';
+
+          const iconWrap = document.createElement('div');
+          iconWrap.className = 'hof-pro-iconwrap';
+
+          const icon = document.createElement('div');
+          icon.className = 'hof-pro-icon';
+          if(logo){
+            const img = document.createElement('img');
+            img.src = logo;
+            img.alt = '';
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.referrerPolicy = 'no-referrer';
+            icon.appendChild(img);
+          }
+          iconWrap.appendChild(badge);
+          iconWrap.appendChild(icon);
+
+          const txt = document.createElement('div');
+          txt.className = 'hof-pro-text';
+          const nm = document.createElement('div');
+          nm.className = 'hof-pro-name';
+          nm.textContent = name || '';
+          txt.appendChild(nm);
+
+          const subline = [];
+          if(coach) subline.push('감독 : ' + coach);
+          if(sub) subline.push('부감독 : ' + sub);
+          if(subline.length){
+            const st = document.createElement('div');
+            st.className = 'hof-pro-sub';
+            st.textContent = subline.join(' / ');
+            txt.appendChild(st);
+          }
+
+          body.appendChild(iconWrap);
+          body.appendChild(txt);
+
+          card.appendChild(body);
+          return card;
+        };
+
+        const podium = document.createElement('div');
+        podium.className = 'hof-pro-podium';
+        podium.appendChild(makeCard('우승', winLogo, winName, winCoach, winSub));
+        if(rRunV >= 0){ podium.appendChild(makeCard('준우승', runLogo, runName, runCoach, runSub)); }
+
+        const wrap = document.createElement('div');
+        wrap.className = 'hof-pro-wrap';
+        wrap.appendChild(podium);
+
+        if(organizer){
+          const org = document.createElement('div');
+          org.className = 'hof-pro-organizer';
+          org.textContent = '대회진행자 : ' + organizer;
+          wrap.appendChild(org);
+        }
+
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = colCount;
+        td.className = 'hof-pro-podium-cell';
+        td.appendChild(wrap);
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+      }
+
+      // If even vertical fallback fails, keep default table render
       renderTable(tableEl, blockData||[]);
-      try{ convertImageUrlCells(tableEl); }catch(_){ }
-      try{ applyTableDataLabels(tableEl); }catch(_){ }
+      try{convertImageUrlCells(tableEl);}catch(_){}
       return;
     }
 
-    const pickImage = (rIdx, colIdx)=>{
-      const v = (blockData[rIdx]||[])[colIdx];
-      const t = norm(v);
-      if(isUrl(t)) return t;
-      return '';
-    };
+    const colCount = Math.max(...(blockData||[]).map(r=> (r||[]).length), 1);
 
-    const imgRow = headerR+1;
-    const winLogo = pickImage(imgRow, cWin);
-    const runLogo = pickImage(imgRow, cRun);
+    // try to find logo row shortly after header
+    let logoR=-1;
+    for(let r=headerR+1; r<Math.min(headerR+6, blockData.length); r++){
+      const row = blockData[r]||[];
+      if(isImgish(row[cWin]) || isImgish(row[cRun])) { logoR=r; break; }
+    }
+    const winLogo = (logoR>=0 && cleanVal((blockData[logoR]||[])[cWin]) && isImgish((blockData[logoR]||[])[cWin])) ? norm((blockData[logoR]||[])[cWin]) : '';
+    const runLogo = (logoR>=0 && cleanVal((blockData[logoR]||[])[cRun]) && isImgish((blockData[logoR]||[])[cRun])) ? norm((blockData[logoR]||[])[cRun]) : '';
 
-    const wanted = ['팀명','감독','부감독','운영팀','대회 진행자','대회진행자','진행자','운영'];
+    // Extract key/value rows
     const details = { win:{}, runner:{} };
-
+    let organizer = '';
+    const wanted = ['팀명','감독','부감독'];
     for(let r=headerR+1; r<(blockData||[]).length; r++){
       const row = blockData[r] || [];
-      // find label in row
-      let label = '';
+      const rowTxt = norm(row.join(' '));
+      // organizer row: label anywhere in row
+      const first = norm(row[0]);
+      if(!organizer && /^(대회\s*진행자|대회진행자|진행자|운영진|운영팀)$/.test(first)){
+        // join remaining cells (skip urls and dashes)
+        const rest = row.slice(1).map(cleanVal).filter(x=> x && !isUrl(x)).join(' ').trim();
+        if(rest) organizer = rest;
+        continue;
+      }
+      // Find label cell
+      let label='';
       for(let c=0;c<row.length;c++){
         const t = norm(row[c]);
-        if(wanted.includes(t)) { label = t; break; }
+        if(wanted.includes(t)) { label=t; break; }
       }
       if(!label) continue;
-      const wv = norm(row[cWin] ?? '');
-      const rv = norm(row[cRun] ?? '');
-      if(wv && wv!=='-' && !isUrl(wv)) details.win[label]=wv;
-      if(rv && rv!=='-' && !isUrl(rv)) details.runner[label]=rv;
+      const wv = cleanVal(row[cWin]);
+      const rv = cleanVal(row[cRun]);
+      if(wv && !isUrl(wv)) details.win[label]=wv;
+      if(rv && !isUrl(rv)) details.runner[label]=rv;
     }
 
-    // Normalize labels
-    const get = (obj, keys)=>{
-      for(const k of keys){ if(obj[k]) return obj[k]; }
-      return '';
-    };
+    const winName = cleanVal(details.win['팀명']);
+    const runName = cleanVal(details.runner['팀명']);
+    const winCoach = cleanVal(details.win['감독']);
+    const winSub = cleanVal(details.win['부감독']);
+    const runCoach = cleanVal(details.runner['감독']);
+    const runSub = cleanVal(details.runner['부감독']);
 
-    const winName = get(details.win, ['팀명']) || '-';
-    const runName = get(details.runner, ['팀명']) || '-';
-
-    const makeCard = (type)=>{
-      const isWin = type==='win';
-      const crown = isWin ? './crown_gold.png' : './crown_silver.png';
-      const place = isWin ? '우승' : '준우승';
-      const logo = isWin ? winLogo : runLogo;
-      const d = isWin ? details.win : details.runner;
-
+    const makeCard = (place, logo, name, coach, sub)=>{
+      const isWin = (place==='우승');
       const card = document.createElement('div');
       card.className = 'hof-pro-card ' + (isWin?'win':'runner');
 
+      // Badge (우승/준우승 + 왕관) sits *above* the team logo.
       const badge = document.createElement('div');
-      badge.className = 'hof-place-badge ' + (isWin?'win':'runner');
+      badge.className = 'hof-pro-badge';
       const crownImg = document.createElement('img');
-      crownImg.className = 'hof-place-crown';
+      crownImg.className = 'hof-pro-crown';
       crownImg.alt = place;
-      crownImg.src = crown;
+      crownImg.src = isWin ? './crown_gold.png' : './crown_silver.png';
       const lbl = document.createElement('div');
-      lbl.className = 'hof-place-label';
+      lbl.className = 'hof-pro-place';
       lbl.textContent = place;
-      badge.appendChild(crownImg); badge.appendChild(lbl);
+      badge.appendChild(crownImg);
+      badge.appendChild(lbl);
 
-      const chip = document.createElement('div');
-      chip.className = 'hof-pro-chip';
+      const body = document.createElement('div');
+      body.className = 'hof-pro-body';
+
+      // Logo box (bigger) with the badge pinned above it.
+      const iconWrap = document.createElement('div');
+      iconWrap.className = 'hof-pro-iconwrap';
+
       const icon = document.createElement('div');
-      icon.className = 'hof-team-icon';
+      icon.className = 'hof-pro-icon';
       if(logo){
         const img = document.createElement('img');
         img.src = logo;
@@ -3212,70 +3460,58 @@ rows.forEach(tr=>{
         img.referrerPolicy = 'no-referrer';
         icon.appendChild(img);
       }
-      const tbox = document.createElement('div');
+      iconWrap.appendChild(badge);
+      iconWrap.appendChild(icon);
+
+      const txt = document.createElement('div');
+      txt.className = 'hof-pro-text';
       const nm = document.createElement('div');
-      nm.className = 'hof-team-name';
-      nm.textContent = isWin ? winName : runName;
-      tbox.appendChild(nm);
+      nm.className = 'hof-pro-name';
+      nm.textContent = name || '';
+      txt.appendChild(nm);
 
-      // subtitle 감독/부감독
-      const subParts=[];
-      const coach = get(d, ['감독']);
-      const sub = get(d, ['부감독']);
-      if(coach) subParts.push('감독 ' + coach);
-      if(sub) subParts.push('부감독 ' + sub);
-      if(subParts.length){
-        const s = document.createElement('div');
-        s.className = 'hof-team-sub';
-        s.textContent = subParts.join('   ');
-        tbox.appendChild(s);
+      const subline = [];
+      if(coach) subline.push('감독 ' + coach);
+      if(sub) subline.push('부감독 ' + sub);
+      if(subline.length){
+        const st = document.createElement('div');
+        st.className = 'hof-pro-sub';
+        st.textContent = subline.join('   ');
+        txt.appendChild(st);
       }
 
-      chip.appendChild(icon);
-      chip.appendChild(tbox);
+      body.appendChild(iconWrap);
+      body.appendChild(txt);
 
-      const lines = document.createElement('div');
-      lines.className = 'hof-pro-lines';
-      const lineKeys = [
-        ['감독',['감독']],
-        ['부감독',['부감독']],
-        ['운영팀',['운영팀']],
-        ['대회 진행자',['대회 진행자','대회진행자','진행자']]
-      ];
-      for(const [label, keys] of lineKeys){
-        const v = get(d, keys);
-        if(!v) continue;
-        const line = document.createElement('div');
-        line.className = 'hof-pro-line';
-        const kk = document.createElement('span');
-        kk.className = 'k';
-        kk.textContent = (label==='대회 진행자'?'운영팀':label) + ':';
-        line.appendChild(kk);
-        line.appendChild(document.createTextNode(' ' + v));
-        lines.appendChild(line);
-      }
-
-      card.appendChild(badge);
-      card.appendChild(chip);
-      if(lines.children.length) card.appendChild(lines);
+      card.appendChild(body);
       return card;
     };
 
-    const wrap = document.createElement('div');
-    wrap.className = 'hof-pro-podium-v';
-    wrap.appendChild(makeCard('win'));
-    // Only show runner if there is a meaningful team name
-    if(runName && runName !== '-' && runName !== '—') wrap.appendChild(makeCard('runner'));
+    const podium = document.createElement('div');
+    podium.className = 'hof-pro-podium';
+    podium.appendChild(makeCard('우승', winLogo, winName, winCoach, winSub));
+    if(rRunV >= 0){ podium.appendChild(makeCard('준우승', runLogo, runName, runCoach, runSub)); }
 
-    // insert as a single cell row
+    const wrap = document.createElement('div');
+    wrap.className = 'hof-pro-wrap';
+    wrap.appendChild(podium);
+
+    if(organizer){
+      const org = document.createElement('div');
+      org.className = 'hof-pro-organizer';
+      org.textContent = '대회진행 : ' + organizer;
+      wrap.appendChild(org);
+    }
+
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 1;
+    td.colSpan = colCount;
     td.className = 'hof-pro-podium-cell';
     td.appendChild(wrap);
     tr.appendChild(td);
     tbody.appendChild(tr);
   }
+
 
   // TST/TSL: merge title/season/organizer rows to match the intended "single merged left-aligned cell" style.
   function mergeTstTslHeaderRows(tableEl, leagueKey){
@@ -3286,6 +3522,35 @@ rows.forEach(tr=>{
 
     const rows = Array.from(tbody.querySelectorAll('tr'));
     const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
+
+    // If there is a separate season row under the title, fold it into the title and remove the season row.
+    try{
+      let titleIdx=-1, seasonIdx=-1;
+      for(let i=0;i<Math.min(6, rows.length); i++){
+        const t = norm(rows[i].textContent);
+        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
+        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
+      }
+      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
+        const titleRow = rows[titleIdx];
+        const seasonRow = rows[seasonIdx];
+        const seasonTxt = norm(seasonRow.textContent);
+        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
+        if(titleCell && seasonTxt){
+          // Append season to the title (left aligned)
+          const base = norm(titleCell.textContent);
+          if(base && base.indexOf(seasonTxt)===-1){
+            titleCell.textContent = base + '  ' + seasonTxt;
+          }
+        }
+        // remove season row entirely
+        seasonRow.remove();
+        // refresh rows array (used later)
+        // eslint-disable-next-line no-unused-vars
+        rows.splice(seasonIdx,1);
+      }
+    }catch(_){}
+
 
     const mergeRowAll = (tr, cls)=>{
       const tds = Array.from(tr.children||[]);
@@ -3368,6 +3633,35 @@ rows.forEach(tr=>{
     if(!tbody) return;
     const tierSet = new Set(['갓','킹','퀸','잭','스페이드','조커','히든']);
     const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
+
+    // If there is a separate season row under the title, fold it into the title and remove the season row.
+    try{
+      let titleIdx=-1, seasonIdx=-1;
+      for(let i=0;i<Math.min(6, rows.length); i++){
+        const t = norm(rows[i].textContent);
+        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
+        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
+      }
+      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
+        const titleRow = rows[titleIdx];
+        const seasonRow = rows[seasonIdx];
+        const seasonTxt = norm(seasonRow.textContent);
+        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
+        if(titleCell && seasonTxt){
+          // Append season to the title (left aligned)
+          const base = norm(titleCell.textContent);
+          if(base && base.indexOf(seasonTxt)===-1){
+            titleCell.textContent = base + '  ' + seasonTxt;
+          }
+        }
+        // remove season row entirely
+        seasonRow.remove();
+        // refresh rows array (used later)
+        // eslint-disable-next-line no-unused-vars
+        rows.splice(seasonIdx,1);
+      }
+    }catch(_){}
+
     Array.from(tbody.querySelectorAll('tr')).forEach(tr=>{
       const tds = Array.from(tr.children||[]);
       if(tds.length < 3) return;
@@ -3403,14 +3697,18 @@ rows.forEach(tr=>{
   // seasons: list of season labels
   // meta: per-row season metadata (legacy row-filter mode)
   // blocks: { byLabel: Map<label, {label, num, data:[][]}>, order:[label...] } (grid/block mode)
-  const HOF_INLINE_CACHE = { pro: null, tst: null, tsl: null };
-  let HOF_INLINE_CURRENT = 'pro';
+  var HOF_INLINE_CACHE = (window.HOF_INLINE_CACHE && typeof window.HOF_INLINE_CACHE==='object') ? window.HOF_INLINE_CACHE : { pro: null, tst: null, tsl: null };
+window.HOF_INLINE_CACHE = HOF_INLINE_CACHE;
+var HOF_INLINE_CURRENT = window.HOF_INLINE_CURRENT || 'pro';
+window.HOF_INLINE_CURRENT = HOF_INLINE_CURRENT;
+var HOF_INLINE_REQ_TOKEN = window.HOF_INLINE_REQ_TOKEN || 0;
+window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
 
   // --- HOF season extraction (grid/block style sheets) ---
   const SEASON_CELL_PAT = /(S|시즌)\s*0*\d+\b/i;
   const normalizeCellText = (s)=> _normSeasonText(String(s||''));
 
-  function detectSeasonCellsFromData(data, seasonPat){
+  function detectSeasonCellsFromData(data){
     const out = [];
     const isUrl = (v)=> /^https?:\/\//i.test(String(v||'').trim());
     for(let r=0;r<data.length;r++){
@@ -3422,8 +3720,7 @@ rows.forEach(tr=>{
         if(/\.(png|jpe?g|gif|webp)(\?|$)/i.test(rawStr)) continue;
         const txt = normalizeCellText(raw);
         if(!txt) continue;
-        const pat = seasonPat || SEASON_CELL_PAT;
-        if(!pat.test(txt)) continue;
+        if(!SEASON_CELL_PAT.test(txt)) continue;
         const num = extractSeasonNum(txt);
         if(!num) continue;
         out.push({ r, c, label: txt, num });
@@ -3455,12 +3752,8 @@ rows.forEach(tr=>{
     return trimmed;
   }
 
-  function buildSeasonBlocksFromData(data, leagueKey){
-    // season label detection differs by league (PRO has year-range seasons like 19-20프로리그)
-    const seasonPat = (leagueKey==='pro')
-      ? /(프로리그\b.*((S|시즌)\s*0*\d+\b|\d{2}\s*-\s*\d{2}))|(\b\d{2}\s*-\s*\d{2}\s*프로리그\b)/i
-      : SEASON_CELL_PAT;
-    const seasonCells = detectSeasonCellsFromData(data, seasonPat);
+  function buildSeasonBlocksFromData(data){
+    const seasonCells = detectSeasonCellsFromData(data);
     if(!seasonCells.length) return null;
 
     // Heuristic: block-mode if we have at least 2 season cells (grid OR vertical blocks)
@@ -3553,26 +3846,221 @@ rows.forEach(tr=>{
   function renderBlockTable(tableEl, block, leagueKey){
     if(!tableEl) return;
     const k = String(leagueKey||'').toLowerCase();
-    const data = (block && block.data) ? block.data : [];
+
+    // Tag current league on the inline table for responsive CSS hooks
+    try{
+      tableEl.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl');
+      if(k==='pro') tableEl.classList.add('hof-league-pro');
+      if(k==='tst') tableEl.classList.add('hof-league-tst');
+      if(k==='tsl') tableEl.classList.add('hof-league-tsl');
+
+      // Also tag the container so CSS can reliably scope mobile/resize behavior
+      const inline = document.getElementById('hofInline');
+      if(inline){
+        inline.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl');
+        if(k==='pro') inline.classList.add('hof-league-pro');
+        if(k==='tst') inline.classList.add('hof-league-tst');
+        if(k==='tsl') inline.classList.add('hof-league-tsl');
+      }
+}catch(_){}
+
+    let data = (block && block.data) ? block.data : [];
+    // Normalize: some old TST blocks include a standalone title row like "TST명예의전당"
+    // (often split with line breaks: "TST\n명예의전\n당"). Remove it reliably.
+    try{
+      if(String(leagueKey||'').toLowerCase()==='tst' && Array.isArray(data)){
+        const _norm=(s)=>String(s||'')
+          .replace(/[\u200b-\u200d\ufeff]/g,'')
+          .replace(/\xa0/g,' ')
+          .replace(/\s+/g,' ')
+          .trim();
+        const _tight=(s)=>_norm(s).replace(/\s+/g,'');
+        data = data.filter(row=>{
+          const r = Array.isArray(row)? row : [];
+          const joined = _tight(r.join(' '));
+          // kill pure title rows
+          if(joined.includes('TST명예의전당')) return false;
+          // also remove any non-season header row that contains "명예의전당" (even if spaced)
+          if(joined.includes('명예의전당') && !/\(시즌\d+\)/.test(joined) && !/시즌\d+/.test(joined)) return false;
+          return true;
+        });
+      }
+    }catch(_){ }
+
+
+    // Cache last rendered block per league for responsive rebuilds (e.g., stage cards on resize)
+    try{
+      window.__HOF_LAST_BLOCK = window.__HOF_LAST_BLOCK || {};
+      window.__HOF_LAST_BLOCK[k] = { data: Array.isArray(data) ? data : [], ts: Date.now() };
+    }catch(_){ }
 
     // Always render as a normal table first
     renderTable(tableEl, data);
+
+    // Final guard: remove the first title row 'TST 명예의전당' if it survived (DOM-level cleanup)
+    try{
+      if(k==='tst' && tableEl){
+        const rows = tableEl.querySelectorAll('tr');
+        const tight = (s)=>String(s||'').replace(/[\u200b-\u200d\ufeff]/g,'').replace(/\xa0/g,' ').replace(/\s+/g,'');
+        rows.forEach(tr=>{
+          const t = tight(tr.textContent);
+          if(t.includes('TST명예의전당')) tr.remove();
+        });
+      }
+    }catch(_){ }
+
+
+    // PRO: render as podium cards (우승/준우승) like the Proleague screenshot
+    if(k==='pro'){
+      try{ renderProPodiumFromBlock(tableEl, data); }catch(_){ renderTable(tableEl, data); }
+      return;
+    }
+    try{ if(k==='tst' || k==='tsl'){ trimEmptyTstTslHeaderStub(tableEl); } }catch(_){ }
+
     try{ markHofTitleCells(tableEl); }catch(_){ }
     try{ convertImageUrlCells(tableEl); }catch(_){ }
     try{ applyTableDataLabels(tableEl); }catch(_){ }
 
+    // 공통: "대회진행자/운영팀" 같이 여러 칸으로 퍼지는 행을 1칸으로 병합(모바일/축소에서 빈칸처럼 보이는 현상 방지)
+    try{ mergeOrganizerRowAnyLeague(tableEl, k); }catch(_){ }
+
     // PROLEAGUE: the sheet is laid out as a 2-column podium (우승/준우승) matrix.
     // Convert the matrix into the premium podium cards (우승 위 / 준우승 아래).
-    // PROLEAGUE: convert matrix to stacked podium cards
-    if(k==='pro'){
-      try{ if(renderProPodiumFromBlockData(tableEl, data)) return; }catch(_){ }
-    }
+    // PROLEAGUE: render as table so 우승/준우승 2열 구조가 그대로 보이도록 유지
 
     // TST/TSL (table mode)
     try{ decorateHofPlacements(tableEl, k); }catch(_){ }
     try{ mergeTierIntoNameCells(tableEl, k); }catch(_){ }
     try{ normalizeOrganizerCells(tableEl, k); }catch(_){ }
     try{ mergeTstTslHeaderAndOrganizer(tableEl, k); }catch(_){ }
+    
+
+// Build mobile stage-cards for TST/TSL (TSL-style cards on small screens)
+try{
+  // Ensure any lingering HOF stage cards/flags are cleared before rebuilding (prevents TST->TSL blank on mobile)
+  const inline = document.getElementById('hofInline');
+  if(inline) inline.classList.remove('hof-has-stagecards','hof-inline-tst','hof-inline-tsl');
+  // Remove any previously mounted card containers (both inside inline and next to table)
+  if(tableEl && tableEl.parentElement){
+    tableEl.parentElement.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove());
+  }
+  const box = document.querySelector('#hofInline .hof-stage-cards');
+  if(box) box.remove();
+}catch(_){}
+
+try{ removeTstHallOfFameHeaderRows(tableEl, k); }catch(_){}
+
+try{ renderStageCardsForMobile(tableEl, data, k); }catch(_){ }
+
+    // v1067 HARD FORCE: If stage-cards were mounted but flags/styles didn't flip, force them.
+    try{
+      const inline=document.getElementById('hofInline');
+      const hasCard=(inline && inline.querySelector('.hof-stage-card')) || (tableEl && tableEl.parentElement && tableEl.parentElement.querySelector('.hof-stage-card'));
+      if((k==='tst' || k==='tsl') && hasCard){
+        if(inline) inline.classList.add('hof-has-stagecards');
+        try{ tableEl.style.display='none'; }catch(_){ }
+      }
+    }catch(_){ }
+
+  }
+
+  
+  // TST/TSL: some sheet layouts produce an empty first header cell (stub column) that looks like
+  // a useless blank column when the viewport is narrow. Hide that *header stub only*.
+  function trimEmptyTstTslHeaderStub(tableEl){
+    const norm = (s)=> String(s||'').replace(/[\u200b-\u200d\ufeff]/g,'').replace(/\xa0/g,' ').replace(/\s+/g,' ').trim();
+    const thead = tableEl.tHead;
+    if(!thead) return;
+    Array.from(thead.querySelectorAll('tr')).forEach(tr=>{
+      const cells = Array.from(tr.children||[]);
+      if(!cells.length) return;
+      const first = cells[0];
+      if(first && !norm(first.textContent)){
+        first.style.display='none';
+      }
+    });
+  }
+
+// ALL LEAGUES: merge organizer value cells into a single cell so it never looks like
+  // there's a useless empty column when the viewport is small.
+  function mergeOrganizerRowAnyLeague(tableEl, leagueKey){
+    if(!tableEl) return;
+    const tbody = (tableEl.tBodies && tableEl.tBodies.length) ? tableEl.tBodies[0] : null;
+    if(!tbody) return;
+    const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
+
+    // If there is a separate season row under the title, fold it into the title and remove the season row.
+    try{
+      let titleIdx=-1, seasonIdx=-1;
+      for(let i=0;i<Math.min(6, rows.length); i++){
+        const t = norm(rows[i].textContent);
+        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
+        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
+      }
+      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
+        const titleRow = rows[titleIdx];
+        const seasonRow = rows[seasonIdx];
+        const seasonTxt = norm(seasonRow.textContent);
+        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
+        if(titleCell && seasonTxt){
+          // Append season to the title (left aligned)
+          const base = norm(titleCell.textContent);
+          if(base && base.indexOf(seasonTxt)===-1){
+            titleCell.textContent = base + '  ' + seasonTxt;
+          }
+        }
+        // remove season row entirely
+        seasonRow.remove();
+        // refresh rows array (used later)
+        // eslint-disable-next-line no-unused-vars
+        rows.splice(seasonIdx,1);
+      }
+    }catch(_){}
+
+    const isLabel = (t)=> /^(대회\s*진행자|대회진행자|진행자|운영진|운영팀)$/.test(t);
+
+    Array.from(tbody.querySelectorAll('tr')).forEach(tr=>{
+      const tds = Array.from(tr.children||[]);
+      if(tds.length < 3) return;
+      const label = norm(tds[0].textContent);
+      if(!isLabel(label)) return;
+
+      // Find the first value cell (could be empty due to sheet layout)
+      let firstVal = tds[1];
+      let startIdx = 1;
+      if(!norm(firstVal.textContent)){
+        // if second cell is empty but later cells have content, start merging from the first non-empty
+        for(let i=2;i<tds.length;i++){
+          if(norm(tds[i].textContent)) { firstVal = tds[i]; startIdx = i; break; }
+        }
+      }
+
+      const rest = tds.slice(startIdx+1);
+      const merged = norm([firstVal.innerText||firstVal.textContent||'', ...rest.map(td=> td.innerText||td.textContent||'')].join(' '));
+      firstVal.textContent = merged;
+
+      // Merge into one cell spanning to the end
+      firstVal.colSpan = tds.length - startIdx;
+      firstVal.style.textAlign = 'left';
+      firstVal.classList.add('hof-organizers-merged');
+      rest.forEach(td=> td.remove());
+
+      // If we started at idx>1, remove any empty cells between label and firstVal
+      for(let i=1;i<startIdx;i++){
+        try{ tds[i].remove(); }catch(_){ }
+      }
+
+      // Add green star prefix once
+      if(!firstVal.querySelector('.hof-organizer-star')){
+        const star = document.createElement('span');
+        star.className='hof-organizer-star';
+        star.textContent='*';
+        const txt = document.createTextNode(' ' + merged);
+        firstVal.textContent='';
+        firstVal.appendChild(star);
+        firstVal.appendChild(txt);
+      }
+    });
   }
 
   // TST/TSL: merge multi-line organizer IDs (ilChO, MARVEL, Arirang, sOnic`, Inter, ...)
@@ -3583,6 +4071,35 @@ rows.forEach(tr=>{
     const tbody = (tableEl.tBodies && tableEl.tBodies.length) ? tableEl.tBodies[0] : null;
     if(!tbody) return;
     const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
+
+    // If there is a separate season row under the title, fold it into the title and remove the season row.
+    try{
+      let titleIdx=-1, seasonIdx=-1;
+      for(let i=0;i<Math.min(6, rows.length); i++){
+        const t = norm(rows[i].textContent);
+        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
+        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
+      }
+      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
+        const titleRow = rows[titleIdx];
+        const seasonRow = rows[seasonIdx];
+        const seasonTxt = norm(seasonRow.textContent);
+        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
+        if(titleCell && seasonTxt){
+          // Append season to the title (left aligned)
+          const base = norm(titleCell.textContent);
+          if(base && base.indexOf(seasonTxt)===-1){
+            titleCell.textContent = base + '  ' + seasonTxt;
+          }
+        }
+        // remove season row entirely
+        seasonRow.remove();
+        // refresh rows array (used later)
+        // eslint-disable-next-line no-unused-vars
+        rows.splice(seasonIdx,1);
+      }
+    }catch(_){}
+
     const joiner = ' · ';
 
     Array.from(tbody.querySelectorAll('tr')).forEach(tr=>{
@@ -3618,6 +4135,35 @@ rows.forEach(tr=>{
     if(!rows.length) return;
 
     const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
+
+    // If there is a separate season row under the title, fold it into the title and remove the season row.
+    try{
+      let titleIdx=-1, seasonIdx=-1;
+      for(let i=0;i<Math.min(6, rows.length); i++){
+        const t = norm(rows[i].textContent);
+        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
+        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
+      }
+      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
+        const titleRow = rows[titleIdx];
+        const seasonRow = rows[seasonIdx];
+        const seasonTxt = norm(seasonRow.textContent);
+        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
+        if(titleCell && seasonTxt){
+          // Append season to the title (left aligned)
+          const base = norm(titleCell.textContent);
+          if(base && base.indexOf(seasonTxt)===-1){
+            titleCell.textContent = base + '  ' + seasonTxt;
+          }
+        }
+        // remove season row entirely
+        seasonRow.remove();
+        // refresh rows array (used later)
+        // eslint-disable-next-line no-unused-vars
+        rows.splice(seasonIdx,1);
+      }
+    }catch(_){}
+
 
     // Merge first two rows if they contain "명예의전당" and season title.
     for(let r=0; r<Math.min(3, rows.length); r++){
@@ -3666,6 +4212,545 @@ rows.forEach(tr=>{
       }
     });
   }
+
+// TST/TSL: build mobile-friendly stage cards from a season block (matrix-style sheet)
+function renderStageCardsFromBlockData(blockData, leagueKey){
+  const k = String(leagueKey||'').toLowerCase();
+  if(k!=='tst' && k!=='tsl') return null;
+  if(!Array.isArray(blockData) || !blockData.length) return null;
+
+  const norm = (s)=> String(s||'')
+    .replace(/[\u200B-\u200D\uFEFF]/g,'')
+    .replace(/\u00A0/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+
+  const rowNorm = (row)=> (row||[]).map(norm);
+
+  // Find organizer row
+  let organizerRow = null;
+  for(const r of blockData){
+    const rr = rowNorm(r);
+    if(rr.some(x=>/대회\s*진행자|대회진행자|진행자|대회\s*진행/.test(x))){
+      organizerRow = rr;
+      break;
+    }
+  }
+  let organizer = '';
+  if(organizerRow){
+    organizer = organizerRow
+      .filter((v,i)=> i!==0 && !!v && !/대회\s*진행자|대회진행자|진행자|대회\s*진행/.test(v))
+      .join(', ')
+      .replace(/\s*,\s*/g, ', ')
+      .trim();
+  }
+
+  // Winner / Runner rows
+  let winRow=null, runRow=null;
+  for(const r of blockData){
+    const rr = rowNorm(r);
+    if(!winRow && rr.some(x=>x==='우승' || (/(^|\s)우\s*승($|\s)/.test(x) && !/준\s*우\s*승/.test(x)))) winRow = rr;
+    if(!runRow && rr.some(x=>/준\s*우\s*승/.test(x))) runRow = rr;
+  }
+
+  // Stage header row: first row with multiple non-empty labels (excluding 우승/준우승/진행자)
+  let headerRow=null;
+  for(const r of blockData){
+    const rr = rowNorm(r);
+    const filled = rr.filter(Boolean);
+    if(filled.length < 3) continue;
+    if(filled.some(x=>/우\s*승|준\s*우\s*승|대회\s*진행자|대회진행자|진행자/.test(x))) continue;
+    const stageLike = filled.filter(x=>/스테이지/.test(x) || /^[A-Z]$/.test(x) || /^[가-힣]{1,4}$/.test(x)).length;
+    if(stageLike >= 2){
+      headerRow = rr;
+      break;
+    }
+  }
+
+  if(!headerRow || !winRow || !runRow) return null;
+
+  // Determine stage columns: take all non-empty header cells except those that look like row labels
+  const cols = [];
+  for(let c=0;c<headerRow.length;c++){
+    const h = headerRow[c];
+    if(!h) continue;
+    if(c===0 && /명예의전당/.test(h)) continue;
+    if(winRow[c] && /우\s*승/.test(winRow[c])) continue;
+    cols.push(c);
+  }
+  if(!cols.length) return null;
+
+  const letters = ['S','A','B','C','D','E','F','G','H','I','J'];
+
+  const cards = cols.map((c, idx)=>{
+    const rawTitle = headerRow[c];
+    let title = rawTitle;
+    if(!/스테이지/.test(title)){
+      const L = letters[idx] || String(idx+1);
+      title = `${L}스테이지(${rawTitle})`;
+    }
+    const win = winRow[c] || '';
+    const run = runRow[c] || '';
+    return { title, win, run, organizer };
+  }).filter(o=> o && (o.win || o.run));
+
+  if(!cards.length) return null;
+  return cards;
+}
+
+function ensureHofStageCardsContainer(){
+  const inline = document.getElementById('hofInline');
+  if(!inline) return null;
+  let box = inline.querySelector('.hof-stage-cards');
+  if(!box){
+    box = document.createElement('div');
+    box.className = 'hof-stage-cards';
+    inline.appendChild(box);
+  }
+  return box;
+}
+
+function clearHofStageCards(){
+  const inline = document.getElementById('hofInline');
+  if(!inline) return;
+  inline.classList.remove('hof-has-stagecards','hof-inline-tst','hof-inline-tsl','hof-inline-pro');
+  const box = inline.querySelector('.hof-stage-cards');
+  if(box) box.innerHTML='';
+}
+
+
+function removeTstHallOfFameHeaderRows(tableEl, leagueKey){
+  const k = String(leagueKey||'').toLowerCase();
+  if(!tableEl || k!=='tst') return;
+  const tight = (s)=>String(s||'')
+    .replace(/[​-‍﻿]/g,'')
+    .replace(/\u00a0/g,' ')
+    .replace(/\s+/g,'')
+    .trim();
+  const isBadRow = (tr)=>{
+    const t = tight(tr ? tr.textContent : '');
+    if(!t) return false;
+    // Remove "TST명예의전당" (including line-break split variants)
+    if(t.includes('TST명예의전당')) return true;
+    // Remove any standalone "명예의전당" row that is not a season label
+    if(t.includes('명예의전당') && !t.includes('시즌')) return true;
+    return false;
+  };
+  try{
+    if(tableEl.tHead){
+      Array.from(tableEl.tHead.querySelectorAll('tr')).forEach(tr=>{ if(isBadRow(tr)) tr.remove(); });
+    }
+  }catch(_){}
+  try{
+    const tbodies = tableEl.tBodies ? Array.from(tableEl.tBodies) : [];
+    tbodies.forEach(tb=>{
+      Array.from(tb.querySelectorAll('tr')).forEach(tr=>{ if(isBadRow(tr)) tr.remove(); });
+    });
+  }catch(_){}
+
+  // Also remove/hide any single cell that contains the header text (sometimes it's a merged stub cell, not a whole row)
+  try{
+    Array.from(tableEl.querySelectorAll('th,td')).forEach(cell=>{
+      const t = tight(cell.textContent||'');
+      if(t.includes('TST명예의전당') || (t.includes('명예의전당') && !t.includes('시즌'))){
+        cell.textContent='';
+        cell.style.display='none';
+      }
+    });
+  }catch(_){}
+}
+
+function removeTstTitleRows(tableEl, leagueKey){
+  const k = String(leagueKey||'').toLowerCase();
+  if(!tableEl || k!=='tst') return;
+  const tbody = tableEl.tBodies && tableEl.tBodies.length ? tableEl.tBodies[0] : null;
+  if(!tbody) return;
+  Array.from(tbody.querySelectorAll('tr')).forEach(tr=>{
+    const txt = (tr.textContent||'').replace(/\s+/g,' ').trim();
+    if(/명예의전당/.test(txt) && !/시즌\s*\d+/i.test(txt)){
+      tr.remove();
+    }
+  });
+}
+
+function mountStageCardsFromBlock(blockData, leagueKey){
+  const k = String(leagueKey||'').toLowerCase();
+  if(k!=='tst' && k!=='tsl') return false;
+  const cards = renderStageCardsFromBlockData(blockData, k);
+  const inline = document.getElementById('hofInline');
+  if(!inline) return false;
+
+  const box = ensureHofStageCardsContainer();
+  if(!box) return false;
+  box.innerHTML = '';
+
+  if(!cards || !cards.length){
+    inline.classList.remove('hof-has-stagecards');
+    return false;
+  }
+
+  inline.classList.add('hof-has-stagecards');
+  inline.classList.add(k==='tst'?'hof-inline-tst':'hof-inline-tsl');
+
+  cards.forEach(card=>{
+    const el = document.createElement('div');
+    el.className = 'hof-stage-card';
+
+    const title = document.createElement('div');
+    title.className = 'hof-stage-title';
+    title.textContent = card.title;
+
+    const win = document.createElement('div');
+    win.className = 'hof-stage-line win';
+    const wLabel = document.createElement('span');
+    wLabel.className = 'hof-stage-label';
+    wLabel.textContent = '우승';
+    const wVal = document.createElement('span');
+    wVal.className = 'hof-stage-value';
+    wVal.textContent = card.win || '-';
+    win.appendChild(document.createTextNode('🏆 '));
+    win.appendChild(wLabel);
+    win.appendChild(document.createTextNode(' '));
+    win.appendChild(wVal);
+
+    const run = document.createElement('div');
+    run.className = 'hof-stage-line runner';
+    const rLabel = document.createElement('span');
+    rLabel.className = 'hof-stage-label';
+    rLabel.textContent = '준우승';
+    const rVal = document.createElement('span');
+    rVal.className = 'hof-stage-value';
+    rVal.textContent = card.run || '-';
+    run.appendChild(document.createTextNode('🥈 '));
+    run.appendChild(rLabel);
+    run.appendChild(document.createTextNode(' '));
+    run.appendChild(rVal);
+
+    el.appendChild(title);
+    el.appendChild(win);
+    el.appendChild(run);
+
+    if(card.organizer){
+      const org = document.createElement('div');
+      org.className = 'hof-stage-org';
+      const star = document.createElement('span');
+      star.className = 'hof-organizer-star';
+      star.textContent = '★';
+      org.appendChild(star);
+      org.appendChild(document.createTextNode(' 대회진행자 : ' + card.organizer));
+      el.appendChild(org);
+    }
+
+    box.appendChild(el);
+  });
+
+  return true;
+}
+
+
+
+
+// Build stage cards directly from the already-rendered HTML table (robust for TST wide sheets)
+function mountStageCardsFromRenderedTable(tableEl, leagueKey){
+  const k = String(leagueKey||'').toLowerCase();
+  if(!tableEl || (k!=='tst' && k!=='tsl')) return false;
+
+  const norm = (s)=> String(s||'')
+    .replace(/[\u200B-\u200D\uFEFF]/g,'')
+    .replace(/\u00A0/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+
+  // Find header cells (stage labels) from thead; fall back to first tbody row if needed
+  let headerCells = [];
+  try{
+    const thead = tableEl.tHead;
+    if(thead){
+      const trs = Array.from(thead.querySelectorAll('tr'));
+      // pick the row with the most non-empty THs (usually the stage label row)
+      let best = null, bestCount = 0;
+      trs.forEach(tr=>{
+        const ths = Array.from(tr.querySelectorAll('th'));
+        const filled = ths.map(th=>norm(th.textContent)).filter(Boolean);
+        if(filled.length > bestCount){ bestCount = filled.length; best = ths; }
+      });
+      if(best && bestCount>=2) headerCells = best.map(th=>norm(th.textContent));
+    }
+  }catch(_){}
+  if(!headerCells.length){
+    try{
+      const tr = tableEl.querySelector('tbody tr');
+      if(tr){
+        const tds = Array.from(tr.children||[]);
+        headerCells = tds.map(td=>norm(td.textContent));
+      }
+    }catch(_){}
+  }
+
+  // Locate winner / runner / organizer rows
+  const rows = Array.from(tableEl.querySelectorAll('tbody tr'));
+  const findRowByLabel = (reLabel)=>{
+    for(const tr of rows){
+      const cells = Array.from(tr.children||[]);
+      if(!cells.length) continue;
+      const first = norm(cells[0].textContent);
+      const all = norm(tr.textContent);
+      if(reLabel.test(first) || reLabel.test(all)) return cells;
+    }
+    return null;
+  };
+
+  const winCells = (()=>{ 
+    for(const tr of rows){
+      const cells = Array.from(tr.children||[]);
+      if(!cells.length) continue;
+      const txt0 = norm(cells[0].textContent);
+      const txtAll = norm(tr.textContent);
+      // Winner row: contains '우승' but not '준우승' (handles emoji prefix like '🏅 우승')
+      if((/우\s*승/.test(txt0) && !/준\s*우\s*승/.test(txt0)) || (/우\s*승/.test(txtAll) && !/준\s*우\s*승/.test(txtAll))) return cells;
+    }
+    return null;
+  })();
+  const runCells = (()=>{ 
+    for(const tr of rows){
+      const cells = Array.from(tr.children||[]);
+      if(!cells.length) continue;
+      const txt0 = norm(cells[0].textContent);
+      const txtAll = norm(tr.textContent);
+      if(/준\s*우\s*승/.test(txt0) || /준\s*우\s*승/.test(txtAll)) return cells;
+    }
+    return null;
+  })();
+  const orgCells = findRowByLabel(/대회\s*진행자|대회진행자|진행자/);
+
+  if(!winCells || !runCells) return false;
+
+  // Determine which columns are stages: if header has stage labels, use those indices.
+  // If header is missing or includes row-label, skip col0.
+  const stageStart = 1;
+  const maxCols = Math.max(winCells.length, runCells.length, headerCells.length);
+  const cards = [];
+  for(let c=stageStart; c<maxCols; c++){
+    const rawTitle = headerCells[c] || '';
+    // Skip empty columns
+    const wv = norm(winCells[c] ? winCells[c].textContent : '');
+    const rv = norm(runCells[c] ? runCells[c].textContent : '');
+    if(!wv && !rv) continue;
+
+    let title = rawTitle;
+    if(!title){
+      title = `스테이지 ${c}`;
+    }
+    // Make sure it looks like "X스테이지( ... )" when possible
+    if(!/스테이지/.test(title) && rawTitle){
+      title = rawTitle;
+    }
+    cards.push({ title, win: wv || '-', run: rv || '-', organizer: '' });
+  }
+
+  // Organizer value (usually on same row, col1+...)
+  let organizer = '';
+  if(orgCells){
+    organizer = orgCells
+      .map((td,i)=> i===0 ? '' : norm(td.textContent))
+      .filter(Boolean)
+      .join(', ')
+      .replace(/\s*,\s*/g, ', ')
+      .trim();
+  }
+  cards.forEach(c=>{ c.organizer = organizer; });
+
+  if(!cards.length) return false;
+
+  // Mount cards
+  const inline = document.getElementById('hofInline');
+  if(!inline) return false;
+  const box = ensureHofStageCardsContainer();
+  if(!box) return false;
+  box.innerHTML = '';
+  inline.classList.add('hof-has-stagecards');
+  inline.classList.add(k==='tst'?'hof-inline-tst':'hof-inline-tsl');
+
+  cards.forEach(card=>{
+    const el = document.createElement('div');
+    el.className = 'hof-stage-card';
+
+    const title = document.createElement('div');
+    title.className = 'hof-stage-title';
+    title.textContent = card.title;
+
+    const win = document.createElement('div');
+    win.className = 'hof-stage-line win';
+    const wLabel = document.createElement('span');
+    wLabel.className = 'hof-stage-label';
+    wLabel.textContent = '우승';
+    const wVal = document.createElement('span');
+    wVal.className = 'hof-stage-value';
+    wVal.textContent = card.win || '-';
+    win.appendChild(document.createTextNode('🏆 '));
+    win.appendChild(wLabel);
+    win.appendChild(document.createTextNode(' '));
+    win.appendChild(wVal);
+
+    const run = document.createElement('div');
+    run.className = 'hof-stage-line runner';
+    const rLabel = document.createElement('span');
+    rLabel.className = 'hof-stage-label';
+    rLabel.textContent = '준우승';
+    const rVal = document.createElement('span');
+    rVal.className = 'hof-stage-value';
+    rVal.textContent = card.run || '-';
+    run.appendChild(document.createTextNode('🥈 '));
+    run.appendChild(rLabel);
+    run.appendChild(document.createTextNode(' '));
+    run.appendChild(rVal);
+
+    el.appendChild(title);
+    el.appendChild(win);
+    el.appendChild(run);
+
+    if(card.organizer){
+      const org = document.createElement('div');
+      org.className = 'hof-stage-org';
+      const star = document.createElement('span');
+      star.className = 'hof-organizer-star';
+      star.textContent = '★';
+      org.appendChild(star);
+      org.appendChild(document.createTextNode(' 대회진행자 : ' + card.organizer));
+      el.appendChild(org);
+    }
+    box.appendChild(el);
+  });
+
+  // Hide original table once cards are mounted
+  try{ tableEl.style.display = 'none'; }catch(_){}
+  return true;
+}
+
+// TST wide-sheet helper: build stage cards from a matrix where stages are columns.
+// Reliable for the current TST tab layout:
+//   - a header row contains multiple "...스테이지" labels across columns
+//   - a row labeled "우승" has winner values per stage column
+//   - a row labeled "준우승" has runner values per stage column
+//   - a row labeled "대회 진행자" (optional) has organizer names across columns
+function mountStageCardsFromTstWideMatrix(tableEl, blockData){
+  if(!tableEl || !Array.isArray(blockData) || !blockData.length) return false;
+
+  const norm = (s)=> String(s||'')
+    .replace(/[​-‍﻿]/g,'')
+    .replace(/\u00A0/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+
+  const isWinLabel = (t)=>{ const s=norm(t); return s && /우\s*승/.test(s) && !/준\s*우\s*승/.test(s); };
+  const isRunLabel = (t)=>{ const s=norm(t); return s && /준\s*우\s*승/.test(s); };
+  const isOrgLabel = (t)=>{ const s=norm(t); return s && /(대회\s*진행자|대회진행자|진행자)/.test(s); };
+  const hasStageLabel = (t)=>{ const s=norm(t); return s && /(스테이지|16강|32강|64강|8강|4강|준결승|결승)/.test(s); };
+
+  // Find header row with multiple stage labels
+  let rHeader = -1;
+  for(let r=0; r<Math.min(blockData.length, 12); r++){
+    const row = blockData[r] || [];
+    const stageCnt = row.map(hasStageLabel).filter(Boolean).length;
+    if(stageCnt >= 2){ rHeader = r; break; }
+  }
+
+  // Find win/run/org rows
+  let rWin=-1, rRun=-1, rOrg=-1;
+  for(let r=0; r<blockData.length; r++){
+    const row = blockData[r] || [];
+    const first = norm(row[0]);
+    const joined = norm(row.join(' '));
+    if(rWin<0 && (isWinLabel(first) || isWinLabel(joined))) rWin = r;
+    if(rRun<0 && (isRunLabel(first) || isRunLabel(joined))) rRun = r;
+    if(rOrg<0 && (isOrgLabel(first) || isOrgLabel(joined))) rOrg = r;
+  }
+  if(rHeader<0 || rWin<0 || rRun<0) return false;
+
+  const header = blockData[rHeader] || [];
+  const winRow = blockData[rWin] || [];
+  const runRow = blockData[rRun] || [];
+  const orgRow = (rOrg>=0 ? (blockData[rOrg]||[]) : []);
+
+  // Build organizer string (spread across cells)
+  let organizer = '';
+  if(orgRow && orgRow.length){
+    organizer = orgRow
+      .map((v,i)=> i===0 ? '' : norm(v))
+      .filter(Boolean)
+      .join(', ')
+      .replace(/\s*,\s*/g, ', ')
+      .trim();
+  }
+
+  const cards = [];
+  for(let c=1; c<Math.max(header.length, winRow.length, runRow.length); c++){
+    const title = norm(header[c]);
+    const wv = norm(winRow[c]);
+    const rv = norm(runRow[c]);
+    if(!title && !wv && !rv) continue;
+    // Skip columns that aren't stages if header is noisy
+    if(title && !hasStageLabel(title) && (hasStageLabel(header.join(' ')) )){
+      // If the header row clearly has stages, ignore non-stage columns.
+      continue;
+    }
+    if(!wv && !rv) continue;
+    cards.push({ title: title || `스테이지 ${c}`, win: wv || '-', run: rv || '-', organizer });
+  }
+  if(!cards.length) return false;
+
+  const inline = document.getElementById('hofInline');
+  if(!inline) return false;
+  const box = ensureHofStageCardsContainer();
+  if(!box) return false;
+  box.innerHTML = '';
+  inline.classList.add('hof-has-stagecards','hof-inline-tst');
+  inline.classList.remove('hof-inline-tsl');
+
+  cards.forEach(card=>{
+    const el = document.createElement('div');
+    el.className = 'hof-stage-card';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'hof-stage-title';
+    titleEl.textContent = card.title;
+
+    const mkLine = (emoji,label,value)=>{
+      const line = document.createElement('div');
+      line.className = 'hof-stage-line';
+      line.appendChild(document.createTextNode(emoji + ' '));
+      const lab = document.createElement('span');
+      lab.className='hof-stage-label';
+      lab.textContent = label;
+      const val = document.createElement('span');
+      val.className='hof-stage-value';
+      val.textContent = value;
+      line.appendChild(lab);
+      line.appendChild(document.createTextNode(' '));
+      line.appendChild(val);
+      return line;
+    };
+
+    el.appendChild(titleEl);
+    el.appendChild(mkLine('🏆','우승',card.win));
+    el.appendChild(mkLine('🥈','준우승',card.run));
+
+    if(card.organizer){
+      const org = document.createElement('div');
+      org.className = 'hof-stage-org';
+      const star = document.createElement('span');
+      star.className = 'hof-organizer-star';
+      star.textContent='★';
+      org.appendChild(star);
+      org.appendChild(document.createTextNode(' 대회진행자 : ' + card.organizer));
+      el.appendChild(org);
+    }
+    box.appendChild(el);
+  });
+
+  try{ tableEl.style.display='none'; }catch(_){ }
+  return true;
+}
 
 
   
@@ -3854,10 +4939,335 @@ rows.forEach(tr=>{
   tableEl.classList.add('hof-pro-podium-table');
 }
 
-  // --- TST/TSL header row + organizer row merging ---of-pro-podium-table');
+
+
+  // TST/TSL: On small screens, the wide stage table becomes unreadable.
+  // Build a mobile-friendly "stage cards" view where each stage shows 우승/준우승 as readable lines.
+  function renderStageCardsForMobile(tableEl, blockData, leagueKey){
+      // Build cards first; only hide the original table if cards were successfully created.
+      let __built = 0;
+      const __k0 = String(leagueKey||'').toLowerCase();
+const k = String(leagueKey||'').toLowerCase();
+    if(!tableEl) return;
+
+    // Always remove old cards (prevents leakage between leagues / seasons)
+    const parent = tableEl.parentElement;
+    if(!parent) return;
+    parent.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove());
+
+    // Reset stagecards flag (will be re-added if we successfully build cards)
+    try{
+      const inline = document.getElementById('hofInline');
+      if(inline) inline.classList.remove('hof-has-stagecards');
+    }catch(_){}
+
+    if(k!=='tst' && k!=='tsl') return;
+    if(!Array.isArray(blockData) || !blockData.length) return;
+
+    const norm = (s)=> String(s||'')
+      .replace(/[\u200b-\u200d\ufeff]/g,'')
+      .replace(/\xa0/g,' ')
+      .replace(/[​-‍﻿]/g,'')
+      .replace(/ /g,' ')
+      .replace(/\s+/g,' ')
+      .trim();
+
+    // ---- TST SPECIAL (forced): parse the season block matrix and render the same card UI as TSL.
+    // The TST sheet is a wide "stage-by-column" table; DOM layout varies a lot due to merged headers,
+    // so we rely on the already-normalized matrix (blockData) for a deterministic result.
+    if(k==='tst'){
+      // TST is a wide stage-by-column table and merged headers vary a lot.
+      // 가장 확실한 방법: 이미 렌더된 table에서 직접 읽어서 카드로 변환한다.
+      let __ok = false;
+      try{
+        if(typeof mountStageCardsFromRenderedTable === 'function'){
+          __ok = !!mountStageCardsFromRenderedTable(tableEl, k);
+        }
+      }catch(_){}
+      if(__ok) return;
+
+      // 2nd choice: parse the wide "stage-by-column" matrix directly (robust for current TST tab)
+      try{
+        if(typeof mountStageCardsFromTstWideMatrix === 'function'){
+          __ok = !!mountStageCardsFromTstWideMatrix(tableEl, blockData);
+        }
+      }catch(_){ }
+      if(__ok) return;
+
+      // Fallback: matrix(blockData) 기반 파싱
+      try{
+        if(typeof mountStageCardsFromBlock === 'function'){
+          __ok = !!mountStageCardsFromBlock(blockData, k);
+          if(__ok){
+            try{ tableEl.style.display='none'; }catch(_){}
+          }
+        }
+      }catch(_){}
+      if(__ok) return;
+    }
+const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4위|S\s*스테이지|A\s*스테이지|B\s*스테이지|C\s*스테이지|D\s*스테이지|E\s*스테이지|F\s*스테이지)/i;
+    const tierRe  = /(갓|킹|퀸|잭|스페이드|조커|히든|\d+\s*티어|[1-7]\s*티어|\b[1-7]\b)/i;
+
+    const findRowAny = (re)=>{
+      for(let r=0;r<blockData.length;r++){
+        const row = blockData[r] || [];
+        for(let c=0;c<row.length;c++){
+          const t = norm(row[c]);
+          if(t && re.test(t)) return r;
+        }
+      }
+      return -1;
+    };
+
+    // Locate key rows (robust across old/new sheets)
+    // Older TST seasons sometimes use labels like "우승자", "준우승자", "우승팀" etc.
+    // We treat any cell that contains "우승" but NOT "준우승" as the winner label.
+    const isWinLabel = (t)=>{
+      const s = norm(t);
+      if(!s) return false;
+      if(/준\s*우\s*승/.test(s)) return false;
+      if(/우\s*승/.test(s)) return true;
+      return false;
+    };
+    const isRunLabel = (t)=>{
+      const s = norm(t);
+      if(!s) return false;
+      return /준\s*우\s*승/.test(s);
+    };
+
+    const findRowBy = (pred)=>{
+      for(let r=0;r<blockData.length;r++){
+        const row = blockData[r] || [];
+        for(let c=0;c<row.length;c++){
+          const t = row[c];
+          if(pred(t)) return r;
+        }
+      }
+      return -1;
+    };
+
+    const rWin = findRowBy(isWinLabel);
+    const rRun = findRowBy(isRunLabel);
+    const rOrg = findRowAny(/대회\s*진행자|대회진행자|진행자/);
+
+    // If we can't find winner/runner, we can't build cards reliably
+    if(rWin < 0 && rRun < 0) return;
+
+    const maxCols = Math.max(...blockData.map(r=> (r||[]).length), 0);
+    if(maxCols <= 1) return;
+
+    const getCell = (r,c)=>{
+      if(r<0) return '';
+      const row = blockData[r] || [];
+      return norm(row[c]);
+    };
+
+    // Determine which column is the "label column" (where '우승/준우승' text sits)
+    const findLabelCol = (r, re)=>{
+      if(r<0) return -1;
+      const row = blockData[r] || [];
+      for(let c=0;c<row.length;c++){
+        if(re.test(norm(row[c]))) return c;
+      }
+      return -1;
+    };
+    const labelColWin = findLabelCol(rWin, /(우\s*승)/);
+    const labelColRun = findLabelCol(rRun, /(준\s*우\s*승)/);
+    const labelCol = (labelColWin>=0) ? labelColWin : (labelColRun>=0 ? labelColRun : 0);
+
+    // Choose a header row near the winner row that has stage/tier labels.
+    // Look up to 6 rows above the winner row; pick the one with most stage/tier hits.
+    const anchorRow = (rWin>=0 ? rWin : rRun);
+    let headerR = -1, headerScore = -1;
+    for(let r=Math.max(0, anchorRow-6); r<anchorRow; r++){
+      const row = (blockData[r]||[]).map(norm);
+      const score = row.filter(t=>stageRe.test(t) || tierRe.test(t)).length;
+      if(score > headerScore){
+        headerScore = score;
+        headerR = (score>=1) ? r : headerR;
+      }
+    }
+
+    // Fallback: if no stage/tier header found, use the immediate row above anchor
+    if(headerR < 0 && anchorRow-1 >= 0) headerR = anchorRow-1;
+
+    const header = (headerR>=0 ? (blockData[headerR]||[]).map(norm) : []);
+
+    // Build column list: any column (except labelCol) where winner or runner has a value
+    const cols = [];
+    for(let c=0; c<maxCols; c++){
+      if(c===labelCol) continue;
+      const vWin = getCell(rWin, c);
+      const vRun = getCell(rRun, c);
+      if(!vWin && !vRun) continue;
+
+      let lab = header[c] || '';
+      // If header label is empty or not meaningful, try row-specific stage labels (some sheets have stage labels in the first data row)
+      if(!lab || (!stageRe.test(lab) && !tierRe.test(lab) && lab.length<=1)){
+        // scan a couple of rows above for something usable in this column
+        for(let rr=Math.max(0, anchorRow-3); rr<anchorRow; rr++){
+          const cand = norm((blockData[rr]||[])[c]);
+          if(cand && (stageRe.test(cand) || tierRe.test(cand) || cand.length>=2)){
+            lab = cand; break;
+          }
+        }
+      }
+      cols.push({ col:c, label: lab || '' });
+    }
+
+    if(!cols.length) return;
+
+    // Organizer: scan row for first non-empty to the right of label col
+    let organizer = '';
+    if(rOrg>=0){
+      for(let c=0; c<(blockData[rOrg]||[]).length; c++){
+        if(c===labelCol) continue;
+        const v = getCell(rOrg,c);
+        if(v){ organizer = v; break; }
+      }
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'hof-stage-cards';
+
+    const stageNameFromTier = (label, idx)=>{
+      const t = norm(label||'');
+      // For old TSL seasons where header shows tiers, map to S/A/B/C/D/E/F
+      const tierOrder = ['갓','킹','퀸','잭','스페이드','조커','히든','1티어','2티어','3티어','4티어','5티어','6티어','7티어','1','2','3','4','5','6','7'];
+      const hitTier = tierOrder.find(x => t.replace(/\s+/g,'') === x.replace(/\s+/g,''));
+      if(hitTier){
+        const map = ['S','A','B','C','D','E','F'];
+        const mapped = map[Math.min(idx, map.length-1)] || 'S';
+        return `${mapped}스테이지(${t})`;
+      }
+      // If already has "스테이지" keep it
+      if(/스테이지/i.test(t)) return t;
+      return t || `스테이지${idx+1}`;
+    };
+
+    let built = 0;
+    cols.forEach((it, idx)=>{
+      const col = it.col;
+      const label = stageNameFromTier(it.label, idx);
+      let winner = getCell(rWin, col);
+      let runner = getCell(rRun, col);
+
+      // Make TST match TSL visual output on mobile/resize.
+      // Some TST seasons can include tier tokens (e.g., "갓DayDream" or "갓 DayDream")
+      // inside the winner/runner values. Since the stage title already contains the tier
+      // (e.g., "S스테이지(갓)"), strip the leading tier token so the line reads like TSL.
+      if(k==='tst'){
+        const hasTierInTitle = /(갓|킹|퀸|잭|스페이드|조커|히든|\d+\s*티어|[1-7]\s*티어)/.test(label);
+        if(hasTierInTitle){
+          const stripTier = (v)=> String(v||'')
+            .replace(/^(갓|킹|퀸|잭|스페이드|조커|히든)\s*/,'')
+            .replace(/^(갓|킹|퀸|잭|스페이드|조커|히든)/,'')
+            .replace(/^\d+\s*티어\s*/,'')
+            .replace(/^[1-7]\s*티어\s*/,'')
+            .trim();
+          winner = stripTier(winner);
+          runner = stripTier(runner);
+        }
+      }
+
+      // only build cards that have at least one value
+      if(!winner && !runner) return;
+
+      const card = document.createElement('div');
+      card.className = 'hof-stage-card';
+
+      const title = document.createElement('div');
+      title.className = 'hof-stage-title';
+      title.textContent = label;
+      card.appendChild(title);
+
+      const mkLine = (place, value)=>{
+        if(!value) return;
+        const line = document.createElement('div');
+        line.className = 'hof-stage-line';
+
+        const badge = document.createElement('span');
+        badge.className = 'hof-stage-badge';
+        badge.textContent = (place==='win') ? '🏆' : '🥈';
+        line.appendChild(badge);
+
+        const lab = document.createElement('span');
+        lab.className = 'hof-stage-label';
+        lab.textContent = (place==='win') ? '우승' : '준우승';
+        line.appendChild(lab);
+
+        const val = document.createElement('span');
+        val.className = 'hof-stage-value';
+        val.textContent = value;
+        line.appendChild(val);
+
+        card.appendChild(line);
+      };
+
+      mkLine('win', winner);
+      mkLine('run', runner);
+
+      if(organizer){
+        const org = document.createElement('div');
+        org.className = 'hof-stage-organizer';
+        org.innerHTML = `<span class="hof-organizer-star">★</span><span class="k">대회진행자</span> : ${organizer}`;
+        card.appendChild(org);
+      }
+
+      wrap.appendChild(card);
+      built++;
+    });
+
+    if(!built) return;
+
+    parent.appendChild(wrap);
+    // Cards use .hof-stage-card (not .stage-card)
+    __built = wrap.querySelectorAll('.hof-stage-card').length;
+
+    // TST/TSL: user wants the table view completely removed.
+    // If cards were built, hide the original table at all viewport sizes.
+    try{
+      if(__built > 0){
+        tableEl.style.display = 'none';
+      }
+    }catch(_){ }
+    try{
+      const inline = document.getElementById('hofInline');
+      if(inline){
+        if(__built>0) inline.classList.add('hof-has-stagecards');
+        else inline.classList.remove('hof-has-stagecards');
+      }
+    }catch(_){}
   }
 
-  // --- TST/TSL header row + organizer row merging ---
+  // Legacy (row-filter) seasons: build a matrix from the currently rendered table
+  // so we can reuse renderStageCardsForMobile and keep seasons 1~8 consistent with 9~12 on mobile.
+  function hofTableToMatrix(tableEl){
+    if(!tableEl) return [];
+    const norm = (s)=> String(s||'').replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').trim();
+    const mat = [];
+    const pullRow = (tr)=>{
+      const out = [];
+      Array.from(tr.children||[]).forEach(td=>{
+        const img = td && td.querySelector ? td.querySelector('img') : null;
+        if(img && img.src){ out.push(norm(img.src)); return; }
+        out.push(norm(td ? (td.innerText != null ? td.innerText : td.textContent) : ''));
+      });
+      mat.push(out);
+    };
+    try{
+      if(tableEl.tHead){
+        Array.from(tableEl.tHead.querySelectorAll('tr')).forEach(pullRow);
+      }
+      Array.from(tableEl.tBodies||[]).forEach(tb=>{
+        Array.from(tb.querySelectorAll('tr')).forEach(pullRow);
+      });
+    }catch(_){ }
+    return mat;
+  }
+
+
+// --- TST/TSL header row + organizer row merging ---
   function mergeTstTslHeaderRows(tableEl, leagueKey){
     const k = String(leagueKey||'').toLowerCase();
     if(!tableEl || (k!=='tst' && k!=='tsl')) return;
@@ -3865,6 +5275,35 @@ rows.forEach(tr=>{
     if(!tbody) return;
     const rows = Array.from(tbody.querySelectorAll('tr'));
     const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
+
+    // If there is a separate season row under the title, fold it into the title and remove the season row.
+    try{
+      let titleIdx=-1, seasonIdx=-1;
+      for(let i=0;i<Math.min(6, rows.length); i++){
+        const t = norm(rows[i].textContent);
+        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
+        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
+      }
+      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
+        const titleRow = rows[titleIdx];
+        const seasonRow = rows[seasonIdx];
+        const seasonTxt = norm(seasonRow.textContent);
+        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
+        if(titleCell && seasonTxt){
+          // Append season to the title (left aligned)
+          const base = norm(titleCell.textContent);
+          if(base && base.indexOf(seasonTxt)===-1){
+            titleCell.textContent = base + '  ' + seasonTxt;
+          }
+        }
+        // remove season row entirely
+        seasonRow.remove();
+        // refresh rows array (used later)
+        // eslint-disable-next-line no-unused-vars
+        rows.splice(seasonIdx,1);
+      }
+    }catch(_){}
+
 
     const mergeRow = (tr, cls)=>{
       const tds = Array.from(tr.children||[]);
@@ -3912,41 +5351,26 @@ rows.forEach(tr=>{
     });
   }
 // PRO sidebar season list: extract winner/runner team names from a block for display.
-function extractPodiumFromBlockData(blockData){
-  const out = { win:'', runner:'' };
-  if(!Array.isArray(blockData)) return out;
-  const norm = (s)=> String(s||'').replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').trim();
+  function extractPodiumFromBlockData(blockData){
+    const out = { win:'', runner:'' };
+    if(!Array.isArray(blockData)) return out;
+    const norm = (s)=> String(s||'').replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').trim();
+    const isUrl = (v)=> /^https?:\/\//i.test(String(v||'').trim());
 
-  // Find header row and the "우승/준우승" column indices
-  let headerR=-1, cWin=-1, cRun=-1;
-  for(let r=0;r<blockData.length;r++){
-    const row = blockData[r]||[];
-    for(let c=0;c<row.length;c++){
-      const t = norm(row[c]);
-      if(t==='우승' && cWin<0) cWin=c;
-      if(t==='준우승' && cRun<0) cRun=c;
-    }
-    if(cWin>=0 && cRun>=0){ headerR=r; break; }
-  }
-  if(headerR<0) return out;
-
-  const winValCol = Math.min((cWin>=0? cWin+1 : 1), (blockData[headerR]||[]).length-1);
-  const runValCol = Math.min((cRun>=0? cRun+1 : winValCol+2), (blockData[headerR]||[]).length-1);
-
-  // Scan label rows for "팀명"
-  for(let r=headerR+1; r<blockData.length; r++){
-    const row = blockData[r]||[];
-    const label = norm(row[0]);
-    if(label==='팀명'){
-      const w = norm(row[winValCol]);
-      const u = norm(row[runValCol]);
-      if(w) out.win = w;
-      if(u) out.runner = u;
-      break;
-    }
-  }
-  return out;
-}
+    for(const row of blockData){
+      const r = row || [];
+      for(let c=0;c<r.length;c++){
+        const cell = norm(r[c]);
+        if(!cell) continue;
+        if(/준\s*우\s*승/.test(cell)){
+          // find next meaningful non-url cell to the right
+          for(let j=c+1;j<r.length;j++){
+            const vRaw = r[j];
+            const v = norm(vRaw);
+            if(!v || isUrl(vRaw)) continue;
+            out.runner = v;
+            break;
+          }
         }
         if((/(^|\s)우\s*승($|\s)/.test(cell)) && !/준\s*우\s*승/.test(cell)){
           for(let j=c+1;j<r.length;j++){
@@ -3964,180 +5388,23 @@ function extractPodiumFromBlockData(blockData){
 
 
   // PRO: render podium cards from a season block laid out like the sheet screenshot:
-//   [우승 | 준우승] header row, image/logo row, then label rows (팀명/감독/부감독/운영팀 ...)
-function renderProPodiumFromBlockData(tableEl, blockData){
-  if(!tableEl) return false;
-  if(!Array.isArray(blockData) || !blockData.length) return false;
+  //   [우승 | 준우승] header row, image/logo row, then label rows (팀명/감독/부감독/운영팀 ...)
+  function renderProPodiumFromBlockData(tableEl, blockData){
+    if(!tableEl) return false;
+    if(!Array.isArray(blockData) || !blockData.length) return false;
 
-  const norm = (s)=> String(s||'').replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').trim();
-  const extractUrl = (v)=>{
-    const s = String(v||'').trim();
-    const m = s.match(/https?:\/\/[^\s'"<>]+/i);
-    return m ? m[0] : '';
-  };
+    const norm = (s)=> String(s||'').replace(/[​-‍﻿]/g,'').replace(/ /g,' ').replace(/\s+/g,' ').trim();
+    const isUrl = (v)=> /^https?:\/\//i.test(String(v||'').trim());
 
-  // find header row containing 우승 && 준우승
-  let headerR=-1, cWin=-1, cRun=-1;
-  for(let r=0;r<blockData.length;r++){
-    const row = blockData[r]||[];
-    for(let c=0;c<row.length;c++){
-      const t = norm(row[c]);
-      if(t==='우승' && cWin<0) cWin=c;
-      if(t==='준우승' && cRun<0) cRun=c;
-    }
-    if(cWin>=0 && cRun>=0){ headerR=r; break; }
-  }
-  if(headerR<0 || cWin<0) return false;
-  if(cRun<0) cRun = cWin+2;
-
-  const headerRow = blockData[headerR] || [];
-  // winner/runner VALUE columns are usually the next column to the right of each label column
-  const winValCol = Math.min(cWin+1, headerRow.length-1);
-  const runValCol = Math.min(cRun+1, headerRow.length-1);
-
-  // attempt to pick logo row: the next row with URL-ish values at winVal/runVal cols
-  let logoR=-1;
-  for(let r=headerR+1; r<Math.min(headerR+10, blockData.length); r++){
-    const row = blockData[r]||[];
-    const wUrl = extractUrl(row[winValCol]);
-    const uUrl = extractUrl(row[runValCol]);
-    if(wUrl || uUrl){ logoR=r; break; }
-  }
-
-  const win = { label:'우승', name:'-', logo:'', lines:{} };
-  const run = { label:'준우승', name:'-', logo:'', lines:{} };
-
-  if(logoR>=0){
-    const row = blockData[logoR]||[];
-    win.logo = extractUrl(row[winValCol]);
-    run.logo = extractUrl(row[runValCol]);
-  }
-
-  const wanted = ['팀명','감독','부감독','운영팀','대회 진행자','대회진행자','진행자','운영진','단장'];
-  for(let r=headerR+1; r<blockData.length; r++){
-    const row = blockData[r]||[];
-    const label = norm(row[0]);
-    if(!wanted.includes(label)) continue;
-
-    const wv = norm(row[winValCol]);
-    const rv = norm(row[runValCol]);
-
-    if(label==='팀명'){
-      if(wv) win.name = wv;
-      if(rv) run.name = rv;
-    }else{
-      if(wv) win.lines[label]=wv;
-      if(rv) run.lines[label]=rv;
-    }
-  }
-
-  // if runner-up is missing in the sheet for this season, hide it
-  const hasRunner = (run.name && run.name!=='-' && run.name!=='—') || Object.keys(run.lines).length || run.logo;
-
-  // Render a 2-column podium (winner left / runner right) and a single organizer line below.
-  const thead = tableEl.querySelector('thead');
-  const tbody = tableEl.querySelector('tbody');
-  if(!thead || !tbody) return false;
-  thead.innerHTML='';
-  tbody.innerHTML='';
-
-  // Extract organizer once (prefer explicit 진행자, fallback 운영팀/운영진)
-  const orgKeys = ['대회 진행자','대회진행자','진행자','운영팀','운영진'];
-  let organizer = '';
-  for(const k of orgKeys){ organizer = organizer || win.lines[k] || run.lines[k] || ''; }
-  // remove from side-lines to avoid duplication
-  for(const k of orgKeys){ delete win.lines[k]; delete run.lines[k]; }
-
-  const makeSide = (obj, type)=>{
-    const side = document.createElement('div');
-    side.className = 'hof-pro-side ' + (type==='win'?'win':'runner');
-
-    const badge = document.createElement('div');
-    badge.className = 'hof-place-badge ' + (type==='win'?'win':'runner');
-    const crown = document.createElement('img');
-    crown.className='hof-place-crown';
-    crown.alt = type==='win' ? '우승' : '준우승';
-    crown.src = type==='win' ? './crown_gold.png' : './crown_silver.png';
-    const lbl = document.createElement('div');
-    lbl.className='hof-place-label';
-    lbl.textContent = type==='win' ? '우승' : '준우승';
-    badge.appendChild(crown); badge.appendChild(lbl);
-
-    const chip = document.createElement('div');
-    chip.className = 'hof-pro-chip';
-
-    const icon = document.createElement('div');
-    icon.className = 'hof-team-icon';
-    if(obj.logo){
-      const img=document.createElement('img');
-      img.src=obj.logo; img.alt='';
-      img.loading='lazy'; img.decoding='async';
-      img.referrerPolicy='no-referrer';
-      icon.appendChild(img);
-    }
-
-    const tbox=document.createElement('div');
-    tbox.className='hof-team-text';
-    const nm=document.createElement('div');
-    nm.className='hof-team-name';
-    nm.textContent=obj.name||'-';
-    tbox.appendChild(nm);
-
-    // 감독/부감독은 스샷처럼 아래에 작은 글씨로 2줄
-    const d=obj.lines||{};
-    const g = d['감독'];
-    const a = d['부감독'];
-    if(g || a){
-      const sub=document.createElement('div');
-      sub.className='hof-pro-sub';
-      if(g){
-        const l=document.createElement('div');
-        l.textContent = '감독  ' + g;
-        sub.appendChild(l);
+    // find header row containing 우승 && 준우승
+    let headerR=-1, cWin=-1, cRun=-1;
+    for(let r=0;r<blockData.length;r++){
+      const row = blockData[r]||[];
+      for(let c=0;c<row.length;c++){
+        const t = norm(row[c]);
+        if(t==='우승' && cWin<0) cWin=c;
+        if(t==='준우승' && cRun<0) cRun=c;
       }
-      if(a){
-        const l=document.createElement('div');
-        l.textContent = '부감독  ' + a;
-        sub.appendChild(l);
-      }
-      tbox.appendChild(sub);
-    }
-
-    chip.appendChild(icon);
-    chip.appendChild(tbox);
-
-    side.appendChild(badge);
-    side.appendChild(chip);
-    return side;
-  };
-
-  const wrap=document.createElement('div');
-  wrap.className='hof-pro-podium';
-  wrap.appendChild(makeSide(win,'win'));
-  if(hasRunner) wrap.appendChild(makeSide(run,'runner'));
-
-  if(organizer){
-    const org = document.createElement('div');
-    org.className = 'hof-pro-organizer';
-    const k = document.createElement('span');
-    k.className='k';
-    k.textContent='대회진행 :';
-    org.appendChild(k);
-    org.appendChild(document.createTextNode(' ' + organizer));
-    wrap.appendChild(org);
-  }
-
-  const tr=document.createElement('tr');
-  const td=document.createElement('td');
-  td.colSpan = 1;
-  td.className='hof-pro-cell';
-  td.appendChild(wrap);
-  tr.appendChild(td);
-  tbody.appendChild(tr);
-
-  try{ tableEl.classList.add('hof-league-pro'); }catch(_){ }
-  return true;
-}
       if(cWin>=0 && cRun>=0){ headerR=r; break; }
       cWin=cWin; cRun=cRun;
     }
@@ -4161,13 +5428,35 @@ function renderProPodiumFromBlockData(tableEl, blockData){
 
     if(logoR>=0){
       const row = blockData[logoR]||[];
-      const w = row[cWin];
-      const u = row[cRun];
-      if(isUrl(w)) win.logo = String(w).trim();
-      if(isUrl(u)) run.logo = String(u).trim();
+      win.logo = pickImg(row, cWin);
+      run.logo = pickImg(row, cRun);
     }
 
     const wanted = ['팀명','감독','부감독','운영팀','대회 진행자','대회진행자','진행자','운영진'];
+    const isLabel = (t)=> wanted.includes(t) || t==='우승' || t==='준우승' || /준\s*우\s*승/.test(t) || (/(^|\s)우\s*승($|\s)/.test(t) && !/준\s*우\s*승/.test(t));
+    const pickVal = (row, col)=>{
+      const r=row||[];
+      for(let j=col; j<r.length; j++){
+        const raw=r[j];
+        const t=norm(raw);
+        if(!t) continue;
+        if(isUrl(raw)) continue;
+        if(isLabel(t)) continue;
+        return t;
+      }
+      return '';
+    };
+    const pickImg = (row, col)=>{
+      const r=row||[];
+      for(let j=col; j<r.length; j++){
+        const raw=r[j];
+        const t=String(raw||'').trim();
+        if(!t) continue;
+        if(isUrl(t) || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(t)) return t;
+      }
+      return '';
+    };
+
     for(let r=headerR+1; r<blockData.length; r++){
       const row = blockData[r]||[];
       // find label cell in this row
@@ -4177,8 +5466,8 @@ function renderProPodiumFromBlockData(tableEl, blockData){
         if(wanted.includes(t)) { labelCol=c; label=t; break; }
       }
       if(labelCol<0) continue;
-      const wv = norm(row[cWin]);
-      const rv = norm(row[cRun]);
+      const wv = pickVal(row, cWin);
+      const rv = pickVal(row, cRun);
       if(label==='팀명'){
         if(wv) win.name = wv;
         if(rv) run.name = rv;
@@ -4313,12 +5602,21 @@ function renderProPodiumFromBlockData(tableEl, blockData){
           picked = Object.values(cache.blocks.byLabel).find(b=>b && b.num===want) || null;
         }
       }
-      if(picked) renderBlockTable(tableEl, picked, k);
+      if(picked){
+        renderBlockTable(tableEl, picked, k);
+        return;
+      }
+      // Fallback: if block label matching fails, try row-filter mode on the already-rendered table.
+      // (This prevents "전체목록"으로 보이는 현상 when labels differ slightly.)
+      try{ applySeasonFilter(tableEl, label, k); }catch(_){ }
+      try{ decorateHofPlacements(tableEl); }catch(_){ }
+      try{ if(k==='tst' || k==='tsl'){ const mat=hofTableToMatrix(tableEl); renderStageCardsForMobile(tableEl, mat, k); } }catch(_){ }
       return;
     }
     // legacy row-filter mode
     applySeasonFilter(tableEl, label, k);
     try{ decorateHofPlacements(tableEl); }catch(_){ }
+    try{ if(k==='tst' || k==='tsl'){ const mat=hofTableToMatrix(tableEl); renderStageCardsForMobile(tableEl, mat, k); } }catch(_){ }
   }
 
   // Expose for renderSeasonBar (defined in global scope below)
@@ -4326,7 +5624,23 @@ function renderProPodiumFromBlockData(tableEl, blockData){
 
 
   async function openHOF(key){
-    HOF_INLINE_CURRENT = key || 'pro';
+    const myReq = ++HOF_INLINE_REQ_TOKEN; try{ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN; }catch(_){ }
+    HOF_INLINE_CURRENT = key || 'pro'; try{ window.HOF_INLINE_CURRENT = HOF_INLINE_CURRENT; }catch(_){ }
+    // reset HOF table visibility on every tab switch (prevents blank screen if stage-cards build fails)
+    try{ const t=document.getElementById('hofInlineTable'); if(t){ t.style.display=''; if(t.parentElement) t.parentElement.classList.remove('hof-stage-only'); } }catch(_){ }
+    // Clear stage-cards + flags right away to avoid mobile blank when switching leagues (TST -> TSL etc.)
+    try{
+      const inline=document.getElementById('hofInline');
+      if(inline) inline.classList.remove('hof-has-stagecards','hof-inline-tst','hof-inline-tsl');
+      // Remove any previously appended stage-card containers
+      const wrap=document.querySelector('#hofInline .hof-stage-cards');
+      if(wrap) wrap.remove();
+      const table=document.getElementById('hofInlineTable');
+      if(table && table.parentElement){
+        table.parentElement.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove());
+      }
+    }catch(_){}
+
     const c = cfg[key];
     if(!c) return;
     if(!c.url){
@@ -4337,6 +5651,25 @@ function renderProPodiumFromBlockData(tableEl, blockData){
     const titleEl = $("hofInlineTitle");
     const statusEl = $("hofInlineStatus");
     const tableEl = $("hofInlineTable");
+
+    // Prevent league content (especially TST/TSL mobile cards) from leaking into other views.
+    // When the viewport is small, CSS can show leftover .hof-stage-cards even after switching to PRO.
+    try{
+      const p = tableEl && tableEl.parentElement;
+      if(p) p.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove());
+    }catch(_){ }
+
+    // Tag the wrapper so CSS can safely scope responsive rules per-league.
+    try{
+      const box = $('hofInline');
+      if(box){
+        box.classList.remove('hof-inline-pro','hof-inline-tst','hof-inline-tsl');
+        box.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl');
+        
+        box.classList.add(key==='pro'?'hof-inline-pro':key==='tst'?'hof-inline-tst':'hof-inline-tsl');
+        box.classList.add(key==='pro'?'hof-league-pro':key==='tst'?'hof-league-tst':'hof-league-tsl');
+      }
+    }catch(_){ }
 
     // Tag table with current league for CSS tweaks
     if(tableEl){
@@ -4357,6 +5690,7 @@ function renderProPodiumFromBlockData(tableEl, blockData){
     try{
       // URL(edit?gid=...) 기반으로 그대로 로딩 → 기존 연동 유지
       let data = await fetchGVIZbyUrl_v12b(c.url);
+      if(myReq !== HOF_INLINE_REQ_TOKEN) return;
       data = normData(data);
       if(!data.length){
         if(statusEl) statusEl.textContent = '데이터가 없습니다.';
@@ -4366,7 +5700,7 @@ function renderProPodiumFromBlockData(tableEl, blockData){
       if(tableEl){
       // --- Prefer block/grid season rendering when the sheet is laid out in columns (your current HOF sheet) ---
       try{
-        const blocks = buildSeasonBlocksFromData(data, key);
+        const blocks = buildSeasonBlocksFromData(data);
         if(blocks && blocks.order && blocks.order.length){
           const active = blocks.order[0];
           // Cache blocks per league
@@ -4489,34 +5823,50 @@ function renderProPodiumFromBlockData(tableEl, blockData){
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', bindOnce);
   else bindOnce();
 
+  // Keep HOF readable on mobile/resize:
+  // - TST/TSL: ensure stage cards exist for the currently rendered season
+  // - PRO: ensure no leaked stage cards remain
+  (function(){
+    let t = null;
+    const run = ()=>{
+      try{
+        const tableEl = document.getElementById('hofInlineTable');
+        const inline = document.getElementById('hofInline');
+        if(!tableEl || !inline) return;
+        const k = (window.HOF_INLINE_CURRENT || 'pro').toLowerCase();
+        // Always remove leaked stage cards in PRO
+        if(k==='pro'){
+          inline.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove());
+          return;
+        }
+        if(k!=='tst' && k!=='tsl') return;
+        // Rebuild cards from last rendered block data (block mode)
+        const last = (window.__HOF_LAST_BLOCK && window.__HOF_LAST_BLOCK[k]) ? window.__HOF_LAST_BLOCK[k] : null;
+        if(last && Array.isArray(last.data) && last.data.length){
+          renderStageCardsForMobile(tableEl, last.data, k);
+        }
+      }catch(_){ }
+    };
+    window.addEventListener('resize', ()=>{
+      if(t) clearTimeout(t);
+      t = setTimeout(run, 120);
+    });
+  })();
+
   document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeMobile(); });
 })();
 
 
 
 function extractSeasonNum(s){
-  const t = String(s||'').replace(/[–—−]/g,'-');
-  // Prefer year-range ordering when present (e.g. "24-25프로리그", "19-20프로리그")
-  let mYear = t.match(/(\d{2})\s*-\s*(\d{2})/);
-  const hasYear = !!mYear;
-
+  const t = String(s||'');
   // Prefer explicit "시즌#" (e.g. "스타리그25 윈터 (시즌12)") over any other digits.
+  // Robust: don't rely on \b boundaries (Korean + punctuation can break \b)
   let m = t.match(/시즌\s*0*(\d+)/i);
   // Then allow S# when it looks like an actual season label.
+  // (Avoid accidental matches inside long tokens; season cells are already URL-filtered upstream.)
   if(!m) m = t.match(/(?:^|[^A-Za-z0-9])S\s*0*(\d+)/i);
-
-  const seasonNum = m ? parseInt(m[1],10) : 0;
-
-  // If we have a year-range, use the start year as the primary numeric key.
-  if(hasYear){
-    const y = parseInt(mYear[1],10);
-    return isNaN(y) ? 0 : y;
-  }
-
-  // PRO special-case: "3050프로리그 S9" has no year-range but should sort above old year-based seasons.
-  if(seasonNum && /3050\s*프로리그/i.test(t)) return 100 + seasonNum;
-
-  return seasonNum || 0;
+  return m ? parseInt(m[1],10) : 0;
 }
 
 /* === 시즌 대표 행 감지 (예: 스타리그 2019 (시즌1)) === */
@@ -4683,33 +6033,8 @@ function renderSeasonBar(seasons, active, leagueKey){
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'hof-season-btn' + (label === act ? ' active' : '');
-    // PRO: show winner + runner-up summary in the season list (sidebar)
-    const kSummary = (leagueKey || HOF_INLINE_CURRENT || 'pro');
-    const sumRoot = (window.__HOF_SEASON_SUMMARY && window.__HOF_SEASON_SUMMARY[kSummary]) ? window.__HOF_SEASON_SUMMARY[kSummary] : null;
-    const sum = sumRoot ? (sumRoot[_normSeasonText(label)] || sumRoot[label] || null) : null;
-    if(sum && (sum.win || sum.runner)){
-      btn.classList.add('has-podium');
-      const top = document.createElement('div');
-      top.className = 'hof-season-top';
-      top.textContent = label;
-      const pod = document.createElement('div');
-      pod.className = 'hof-season-podium';
-
-      const w = document.createElement('div');
-      w.className = 'hof-season-line win';
-      w.textContent = (sum.win ? ('우승 ' + sum.win) : '우승 -');
-
-      const r = document.createElement('div');
-      r.className = 'hof-season-line runner';
-      r.textContent = (sum.runner ? ('준우승 ' + sum.runner) : '준우승 -');
-
-      pod.appendChild(w);
-      pod.appendChild(r);
-      btn.appendChild(top);
-      btn.appendChild(pod);
-    }else{
-      btn.textContent = label;
-    }
+    // Season buttons: show ONLY the season label (no winner/runner-up subtext)
+    btn.textContent = label;
     btn.title = label;
     btn.addEventListener('click', () => {
       bar.querySelectorAll('.hof-season-btn').forEach(b=>b.classList.remove('active'));
@@ -4964,9 +6289,9 @@ document.addEventListener('DOMContentLoaded', () => {
     for(let r=anchor; r<startScan; r++){
       // 첫 번째 이미지 URL(팀 로고) 찾기
       if (!logoUrl){
-        const urlC&&idate = cleanCell(rows[r]?.[s] || rows[r]?.[s+1] || rows[r]?.[s+2] || '');
-        if (/^https?:\/\//i.test(urlC&&idate) && /\.(png|jpg|jpeg|webp)(\?|$)/i.test(urlC&&idate)){
-          logoUrl = urlC&&idate;
+        const urlCandidate = cleanCell(rows[r]?.[s] || rows[r]?.[s+1] || rows[r]?.[s+2] || '');
+        if (/^https?:\/\//i.test(urlCandidate) && /\.(png|jpg|jpeg|webp)(\?|$)/i.test(urlCandidate)){
+          logoUrl = urlCandidate;
         }
       }
 
