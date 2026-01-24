@@ -3234,6 +3234,7 @@ rows.forEach(tr=>{
       const card = document.createElement('div');
       card.className = 'hof-pro-card ' + (isWin?'win':'runner');
 
+      // Badge (우승/준우승 + 왕관) sits *above* the team logo.
       const badge = document.createElement('div');
       badge.className = 'hof-pro-badge';
       const crownImg = document.createElement('img');
@@ -3249,6 +3250,10 @@ rows.forEach(tr=>{
       const body = document.createElement('div');
       body.className = 'hof-pro-body';
 
+      // Logo box (bigger) with the badge pinned above it.
+      const iconWrap = document.createElement('div');
+      iconWrap.className = 'hof-pro-iconwrap';
+
       const icon = document.createElement('div');
       icon.className = 'hof-pro-icon';
       if(logo){
@@ -3260,6 +3265,8 @@ rows.forEach(tr=>{
         img.referrerPolicy = 'no-referrer';
         icon.appendChild(img);
       }
+      iconWrap.appendChild(badge);
+      iconWrap.appendChild(icon);
 
       const txt = document.createElement('div');
       txt.className = 'hof-pro-text';
@@ -3278,10 +3285,9 @@ rows.forEach(tr=>{
         txt.appendChild(st);
       }
 
-      body.appendChild(icon);
+      body.appendChild(iconWrap);
       body.appendChild(txt);
 
-      card.appendChild(badge);
       card.appendChild(body);
       return card;
     };
@@ -4158,7 +4164,7 @@ rows.forEach(tr=>{
     const norm = (s)=> String(s||'').replace(/[​-‍﻿]/g,'').replace(/ /g,' ').replace(/\s+/g,' ').trim();
 
     // 1) Prefer "스테이지" layout (newer seasons)
-    const stageRe = /스테이지/;
+    const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4위)/;
     const tierRe  = /(갓|킹|퀸|잭|스페이드|조커|히든)/;
 
     let headerR = -1;
@@ -4304,6 +4310,33 @@ rows.forEach(tr=>{
     try{ const inline=document.getElementById('hofInline'); if(inline) inline.classList.add('hof-has-stagecards'); }catch(_){ }
     parent.appendChild(wrap);
   }
+
+  // Legacy (row-filter) seasons: build a matrix from the currently rendered table
+  // so we can reuse renderStageCardsForMobile and keep seasons 1~8 consistent with 9~12 on mobile.
+  function hofTableToMatrix(tableEl){
+    if(!tableEl) return [];
+    const norm = (s)=> String(s||'').replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').trim();
+    const mat = [];
+    const pullRow = (tr)=>{
+      const out = [];
+      Array.from(tr.children||[]).forEach(td=>{
+        const img = td && td.querySelector ? td.querySelector('img') : null;
+        if(img && img.src){ out.push(norm(img.src)); return; }
+        out.push(norm(td ? (td.innerText != null ? td.innerText : td.textContent) : ''));
+      });
+      mat.push(out);
+    };
+    try{
+      if(tableEl.tHead){
+        Array.from(tableEl.tHead.querySelectorAll('tr')).forEach(pullRow);
+      }
+      Array.from(tableEl.tBodies||[]).forEach(tb=>{
+        Array.from(tb.querySelectorAll('tr')).forEach(pullRow);
+      });
+    }catch(_){ }
+    return mat;
+  }
+
 
 // --- TST/TSL header row + organizer row merging ---
   function mergeTstTslHeaderRows(tableEl, leagueKey){
@@ -4564,8 +4597,8 @@ rows.forEach(tr=>{
       const d=obj.lines;
       const g = d['감독'];
       const a = d['부감독'];
-      if(g) subParts.append('감독 ' + g);
-      if(a) subParts.append('부감독 ' + a);
+      if(g) subParts.push('감독 ' + g);
+      if(a) subParts.push('부감독 ' + a);
       if(subParts.length){
         const sub=document.createElement('div');
         sub.className='hof-team-sub';
@@ -4648,11 +4681,13 @@ rows.forEach(tr=>{
       // (This prevents "전체목록"으로 보이는 현상 when labels differ slightly.)
       try{ applySeasonFilter(tableEl, label, k); }catch(_){ }
       try{ decorateHofPlacements(tableEl); }catch(_){ }
+      try{ if(k==='tst' || k==='tsl'){ const mat=hofTableToMatrix(tableEl); renderStageCardsForMobile(tableEl, mat, k); } }catch(_){ }
       return;
     }
     // legacy row-filter mode
     applySeasonFilter(tableEl, label, k);
     try{ decorateHofPlacements(tableEl); }catch(_){ }
+    try{ if(k==='tst' || k==='tsl'){ const mat=hofTableToMatrix(tableEl); renderStageCardsForMobile(tableEl, mat, k); } }catch(_){ }
   }
 
   // Expose for renderSeasonBar (defined in global scope below)
@@ -4684,7 +4719,10 @@ rows.forEach(tr=>{
       const box = $('hofInline');
       if(box){
         box.classList.remove('hof-inline-pro','hof-inline-tst','hof-inline-tsl');
+        box.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl');
+        
         box.classList.add(key==='pro'?'hof-inline-pro':key==='tst'?'hof-inline-tst':'hof-inline-tsl');
+        box.classList.add(key==='pro'?'hof-league-pro':key==='tst'?'hof-league-tst':'hof-league-tsl');
       }
     }catch(_){ }
 
