@@ -3894,6 +3894,16 @@ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
       window.__HOF_LAST_BLOCK[k] = { data: Array.isArray(data) ? data : [], ts: Date.now() };
     }catch(_){ }
 
+    // TST/TSL: prevent flash by keeping the table invisible while we build stage cards.
+    // (We still render into the real table DOM because some parsers rely on it.)
+    let __restoreVis = false;
+    try{
+      if((k==='tst' || k==='tsl') && tableEl){
+        __restoreVis = (tableEl.style.visibility !== 'hidden');
+        tableEl.style.visibility = 'hidden';
+      }
+    }catch(_){ }
+
     // Always render as a normal table first
     renderTable(tableEl, data);
 
@@ -3951,6 +3961,18 @@ try{
 try{ removeTstHallOfFameHeaderRows(tableEl, k); }catch(_){}
 
 try{ renderStageCardsForMobile(tableEl, data, k); }catch(_){ }
+
+    // If cards were built, renderStageCardsForMobile hides the table.
+    // If not, restore visibility so the table can be seen.
+    try{
+      if((k==='tst' || k==='tsl') && tableEl){
+        const parent = tableEl.parentElement;
+        const built = parent ? parent.querySelectorAll('.hof-stage-card').length : 0;
+        if(built <= 0){
+          tableEl.style.visibility = '';
+        }
+      }
+    }catch(_){ }
 
     // v1067 HARD FORCE: If stage-cards were mounted but flags/styles didn't flip, force them.
     try{
@@ -4461,8 +4483,17 @@ function mountStageCardsFromRenderedTable(tableEl, leagueKey){
     .replace(/\s+/g,' ')
     .trim();
 
-  // Find header cells (stage labels) from thead; fall back to first tbody row if needed
+  // Find header cells (stage labels).
+  // IMPORTANT: GViz HTML for TST/TSL often inserts a merged "season title" row (e.g., "TST 25 (시즌1)")
+  // as the FIRST tbody row. If we naively use that row as the header, card titles become wrong and the
+  // winner/runner columns shift (e.g., "우승 : 우승").
+  // Strategy:
+  //  1) Prefer thead (if present)
+  //  2) Otherwise scan tbody for the row that contains MULTIPLE stage labels ("...스테이지" etc.)
+  //  3) Fall back to the first tbody row only if we still can't find a stage-header row.
   let headerCells = [];
+  const hasStageLabel = (t)=>{ const s=norm(t); return s && /(스테이지|16강|32강|64강|8강|4강|준결승|결승)/.test(s); };
+
   try{
     const thead = tableEl.tHead;
     if(thead){
@@ -4477,6 +4508,27 @@ function mountStageCardsFromRenderedTable(tableEl, leagueKey){
       if(best && bestCount>=2) headerCells = best.map(th=>norm(th.textContent));
     }
   }catch(_){}
+
+  // Scan tbody for a real stage header row (preferred for TST wide tables)
+  if(!headerCells.length){
+    try{
+      const trs = Array.from(tableEl.querySelectorAll('tbody tr'));
+      let bestRow = null, bestCnt = 0;
+      for(const tr of trs){
+        const cells = Array.from(tr.children||[]);
+        if(!cells.length) continue;
+        const vals = cells.map(td=>norm(td.textContent));
+        const cnt = vals.filter(hasStageLabel).length;
+        if(cnt >= 2 && cnt > bestCnt){
+          bestCnt = cnt;
+          bestRow = vals;
+        }
+      }
+      if(bestRow) headerCells = bestRow;
+    }catch(_){}
+  }
+
+  // Last resort: first tbody row
   if(!headerCells.length){
     try{
       const tr = tableEl.querySelector('tbody tr');
@@ -4535,7 +4587,11 @@ function mountStageCardsFromRenderedTable(tableEl, leagueKey){
     // Skip empty columns
     const wv = norm(winCells[c] ? winCells[c].textContent : '');
     const rv = norm(runCells[c] ? runCells[c].textContent : '');
-    if(!wv && !rv) continue;
+    // Guard: sometimes merged/collapsed columns shift so that label text leaks into value cells.
+    // If value is literally the label (e.g., wv === '우승'), treat it as empty.
+    const wvClean = (/^우\s*승$/.test(wv) ? '' : wv);
+    const rvClean = (/^준\s*우\s*승$/.test(rv) ? '' : rv);
+    if(!wvClean && !rvClean) continue;
 
     let title = rawTitle;
     if(!title){
@@ -4545,7 +4601,7 @@ function mountStageCardsFromRenderedTable(tableEl, leagueKey){
     if(!/스테이지/.test(title) && rawTitle){
       title = rawTitle;
     }
-    cards.push({ title, win: wv || '-', run: rv || '-', organizer: '' });
+    cards.push({ title, win: wvClean || '-', run: rvClean || '-', organizer: '' });
   }
 
   // Organizer value (usually on same row, col1+...)
@@ -4553,7 +4609,7 @@ function mountStageCardsFromRenderedTable(tableEl, leagueKey){
   if(orgCells){
     organizer = orgCells
       .map((td,i)=> i===0 ? '' : norm(td.textContent))
-      .filter(Boolean)
+      .filter(v=> v && !/(대회\s*진행자|대회진행자|진행자)/.test(v)) // drop label if it leaks into value cells
       .join(', ')
       .replace(/\s*,\s*/g, ', ')
       .trim();
@@ -5614,9 +5670,12 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
       return;
     }
     // legacy row-filter mode
+    // Prevent table flash during season switch for TST/TSL
+    try{ if(tableEl && (k==='tst' || k==='tsl')) tableEl.style.visibility='hidden'; }catch(_){ }
     applySeasonFilter(tableEl, label, k);
     try{ decorateHofPlacements(tableEl); }catch(_){ }
     try{ if(k==='tst' || k==='tsl'){ const mat=hofTableToMatrix(tableEl); renderStageCardsForMobile(tableEl, mat, k); } }catch(_){ }
+    try{ if(tableEl && (k==='tst' || k==='tsl')){ const built=(tableEl.parentElement?tableEl.parentElement.querySelectorAll('.hof-stage-card').length:0); if(built<=0) tableEl.style.visibility=''; } }catch(_){ }
   }
 
   // Expose for renderSeasonBar (defined in global scope below)
@@ -5678,6 +5737,17 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
     }
 
     if(titleEl) titleEl.textContent = c.title;
+    // Prevent 0.1s table flash for TST/TSL: hide table while building cards
+    try{
+      if(tableEl && (key==='tst' || key==='tsl')){
+        tableEl.style.visibility = 'hidden';
+        // ensure it's not display:none so we can build cards off DOM if needed
+        if(tableEl.style.display==='none') tableEl.style.display='';
+      }else if(tableEl){
+        // restore for PRO or other views
+        tableEl.style.visibility = '';
+      }
+    }catch(_){ }
     // menu active
     const proBtn = $('hofPro'); const tstBtn = $('hofTST'); const tslBtn = $('hofTSL');
     [proBtn,tstBtn,tslBtn].forEach(b=>{ if(!b) return; b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
