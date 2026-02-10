@@ -35,7 +35,11 @@ const NUM_TO_TIER = {1:'갓',2:'킹',3:'퀸',4:'잭',5:'스페이드',6:'조커'
 const HOF_LINKS = {
   pro: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=1658280214#gid=1658280214",
   tst: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=381201435#gid=381201435",
-  tsl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=2130451924#gid=2130451924"
+  tsl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=2130451924#gid=2130451924",
+  // New HOF menus (sheet-name based; works even if gid changes)
+  msl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=MSL",
+  tcl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=TCL",
+  race: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=종족최강전"
 };
 
 function initHOFButtons(){
@@ -459,7 +463,78 @@ async function openPlayer(bCellValue){
     .map(([name, v]) => ({ name, total: v.w + v.l, w: v.w, l: v.l, pct: (v.w+v.l) ? Math.round(v.w*1000/(v.w+v.l))/10 : 0 }))
     .sort((a, b) => b.total - a.total);
 
-  const leagueHtml = `
+
+// === 상대전(H2H) 집계: "가장 승을 많이 올린 상대" + "최다 매치 TOP5" ===
+// ✅ 요청사항 반영: (개인전)경기기록데이터 탭에서
+//  - 본인 승리 시 L열 점수 합산
+//  - 본인 패배 시 O열 점수 합산
+//  → 상대별 합산값을 "상대 ELO포인트"로 표시 (+면 ▲, -면 ▼)
+
+// (개인전)경기기록데이터는 별도 스프레드시트(URLS_V12.matches)에서 읽습니다.
+let matchLog = [];
+try{
+  // sheet 이름은 사용자가 제공한 그대로
+  matchLog = await fetchGVIZ({ id: "1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet: "(개인전)경기기록데이터", range: "A:O" });
+}catch(e){ matchLog = []; }
+
+const oppAgg = {}; // {상대ID: {w,l, elo}}
+const toNum = (v)=>{
+  const s = String(v??'').replace(/,/g,'').trim();
+  if(!s) return 0;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+};
+
+if(matchLog && matchLog.length>1){
+  const H2 = matchLog[0]||[];
+  const R2 = matchLog.slice(1);
+  const iW2 = findIdx(H2, /승자\s*선수|winner/i);
+  const iL2 = findIdx(H2, /패자\s*선수|loser/i);
+
+  // L열(12번째) / O열(15번째) — 0-indexed
+  const idxWinDelta = 11;  // L
+  const idxLoseDelta = 14; // O
+
+  R2.forEach(rr=>{
+    const winRaw = (iW2>=0? rr[iW2] : '') || '';
+    const loseRaw= (iL2>=0? rr[iL2] : '') || '';
+    const winName = lc(winRaw);
+    const loseName= lc(loseRaw);
+
+    const isWin = (winName === you);
+    const isLose= (loseName === you);
+    if(!isWin && !isLose) return;
+
+    const opp = String(isWin ? loseRaw : winRaw).split('/')[0].trim();
+    if(!opp) return;
+
+    oppAgg[opp] = oppAgg[opp] || { w:0, l:0, elo:0 };
+    if(isWin) oppAgg[opp].w++;
+    if(isLose) oppAgg[opp].l++;
+
+    // 요청 기준: 승리=L, 패배=O
+    const delta = isWin ? toNum(rr[idxWinDelta]) : toNum(rr[idxLoseDelta]);
+    oppAgg[opp].elo += delta;
+  });
+}
+
+const oppRows = Object.entries(oppAgg).map(([name,v])=>{
+  const total = (v.w||0) + (v.l||0);
+  const pct = total ? Math.round((v.w||0)*1000/total)/10 : 0;
+  const elo = Math.round((v.elo||0)*10)/10;
+  return { name, total, w:v.w||0, l:v.l||0, pct, elo };
+});
+
+const mostWinOpp = oppRows
+  .slice()
+  .sort((a,b)=> (b.w-a.w) || (b.total-a.total) || (a.name>b.name?1:-1))[0] || null;
+
+const topMatch5 = oppRows
+  .slice()
+  .sort((a,b)=> (b.total-a.total) || (b.w-a.w) || (a.name>b.name?1:-1))
+  .slice(0,5);
+
+const leagueHtml = `
     <h3>공식 및 이벤트대회 성적 (리그명 기준)</h3>
     <div class="table-wrap">
       <table class="detail">
@@ -478,6 +553,89 @@ async function openPlayer(bCellValue){
       </table>
     </div>
   `;
+
+  const h2hHtml = (()=> {
+    const fmtDelta = (n)=>{
+      const v = Math.round((Number(n||0))*10)/10;
+      const sign = v>0 ? "+" : "";
+      return sign + v.toFixed(1);
+    };
+    const arrow = (v)=>{
+      const n = Number(v||0);
+      if(n>0) return `<span class="h2h-arrow up">▲</span>`;
+      if(n<0) return `<span class="h2h-arrow down">▼</span>`;
+      return `<span class="h2h-arrow flat">–</span>`;
+    };
+    const normId = (s)=> String(s||'').split('/')[0].trim();
+    const getEloOf = (pid)=>{
+      const target = lc(normId(pid));
+      const rr = rows.find(r=> lc(normId(r[COL.B])) === target);
+      return rr ? String(rr[COL.J] ?? '').trim() : '-';
+    };
+
+    if(!mostWinOpp){
+      return `
+        <hr class="gold"/>
+        <h3>가장 승을 많이 올린 상대</h3>
+        <div class="muted" style="margin-top:8px">데이터 없음</div>
+      `;
+    }
+
+    const oppId = mostWinOpp.name;
+    const leftWins = mostWinOpp.w || 0;
+    const rightWins = mostWinOpp.l || 0;
+    const total = leftWins + rightWins;
+    const leftRate = total ? (Math.round(leftWins*1000/total)/10).toFixed(1) : "0.0";
+    const rightRate = total ? (Math.round(rightWins*1000/total)/10).toFixed(1) : "0.0";
+
+    const myEloNow = String(eloText||'-');
+    const oppEloNow = getEloOf(oppId);
+
+    const delta = mostWinOpp.elo || 0;
+
+    const top5 = (topMatch5 && topMatch5.length) ? `
+      <div class="h2h-top5">
+        ${topMatch5.map(r=>{
+          const d = r.elo || 0;
+          return `
+            <div class="h2h-top5-item">
+              <div class="h2h-top5-name blue">${r.name}</div>
+              <div class="h2h-top5-rec">${r.total}전 (${r.w}승 ${r.l}패) · ${r.pct}%</div>
+              <div class="h2h-top5-elo">ELO포인트: ${fmtDelta(d)} ${arrow(d)}</div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    ` : `<div class="muted" style="margin-top:8px">데이터 없음</div>`;
+
+    return `
+      <hr class="gold"/>
+      <h3>가장 승을 많이 올린 상대</h3>
+      <div class="h2h-matchup">
+        <div class="h2h-side">
+          <div class="h2h-id red">${playerName}</div>
+          <div class="h2h-elo-now">현재 ELO : <strong>${myEloNow}</strong></div>
+          <div class="h2h-wins">${leftWins}</div>
+          <div class="h2h-winrate">${leftRate}% WINS</div>
+        </div>
+
+        <div class="h2h-center">
+          <div class="h2h-vs">VS</div>
+          <div class="h2h-delta">${oppId} 상대 ELO포인트 : <strong>${fmtDelta(delta)}</strong> ${arrow(delta)}</div>
+        </div>
+
+        <div class="h2h-side">
+          <div class="h2h-id blue">${oppId}</div>
+          <div class="h2h-elo-now">현재 ELO : <strong>${oppEloNow}</strong></div>
+          <div class="h2h-wins">${rightWins}</div>
+          <div class="h2h-winrate">${rightRate}% WINS</div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:14px">최다 매치 TOP 5</h3>
+      ${top5}
+    `;
+  })();
 
   if(body){
     const cz=curStats.counts.Z, cp=curStats.counts.P, ct=curStats.counts.T, ctot=curStats.total;
@@ -510,6 +668,7 @@ async function openPlayer(bCellValue){
       <script>/* placeholder to keep HTML validators happy */</script>
       <hr class="gold"/>
       ${leagueHtml}
+      ${h2hHtml}
 
     `;
   }
@@ -1979,22 +2138,34 @@ function formatDateSafe(value){
 /* GViz helper: accept full Google Sheets URL with edit?gid=... */
 async function fetchGVIZbyUrl_v12b(fullUrl){
   try{
-    const m = String(fullUrl).match(/spreadsheets\/d\/([^/]+)\/edit.*?[?&#]gid=(\d+)/);
-    if(!m) throw new Error("Invalid sheet URL: "+fullUrl);
-    const id=m[1], gid=m[2];
-    const gvizBase = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&gid=${gid}`;
+    const s = String(fullUrl||'').trim();
+    const u = new URL(s);
+    const parts = u.pathname.split('/').filter(Boolean);
+    const dIdx = parts.indexOf('d');
+    const id = (dIdx>=0 && parts[dIdx+1]) ? parts[dIdx+1] : null;
+    const gid = u.searchParams.get('gid') || (u.hash.match(/gid=(\d+)/)?.[1]) || null;
+    const sheet = u.searchParams.get('sheet') || null;
+    if(!id || (!gid && !sheet)) throw new Error("Invalid sheet URL: "+fullUrl);
+
+    let gvizBase = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json`;
+    if(gid) gvizBase += `&gid=${gid}`;
+    if(sheet) gvizBase += `&sheet=${encodeURIComponent(sheet)}`;
     const gviz = (window.USE_PROXY ? window.PROXY_URL : '') + gvizBase;
+
     const res = await fetch(gviz, {cache:'no-store'});
     const text = await res.text();
     let payload = text;
-// H&&le both raw JSON && the common GVIZ wrapper: google.visualization.Query.setResponse(...)
-const mWrap = payload.match(/setResponse\((.*)\)\s*;?\s*$/s);
-if(mWrap && mWrap[1]) payload = mWrap[1];
-// Otherwise, trim to the first '{' && the last '}'
-const first = payload.indexOf('{');
-const last = payload.lastIndexOf('}');
-if(first >= 0 && last >= 0) payload = payload.slice(first, last+1);
-const json = JSON.parse(payload);
+
+    // Handle GVIZ wrapper: google.visualization.Query.setResponse(...)
+    const mWrap = payload.match(/setResponse\((.*)\)\s*;?\s*$/s);
+    if(mWrap && mWrap[1]) payload = mWrap[1];
+
+    // Trim to JSON object
+    const first = payload.indexOf('{');
+    const last = payload.lastIndexOf('}');
+    if(first >= 0 && last >= 0) payload = payload.slice(first, last+1);
+
+    const json = JSON.parse(payload);
     const table = json.table || {};
     const rows = (table.rows||[]).map(r => (r.c||[]).map(c => (c && (c.f ?? c.v)) ?? ''));
     return rows;
@@ -2201,20 +2372,32 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 /* robust GViz parser (v12b) */
 async function fetchGVIZbyUrl_v12b(fullUrl){
   try{
-    const m = String(fullUrl).match(/spreadsheets\/d\/([^/]+)\/edit.*?[?&#]gid=(\d+)/);
-    if(!m) throw new Error("Invalid sheet URL: "+fullUrl);
-    const id=m[1], gid=m[2];
-    const gvizBase = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&gid=${gid}`;
+    const s = String(fullUrl||'').trim();
+    const u = new URL(s);
+    const parts = u.pathname.split('/').filter(Boolean);
+    const dIdx = parts.indexOf('d');
+    const id = (dIdx>=0 && parts[dIdx+1]) ? parts[dIdx+1] : null;
+
+    const gid = u.searchParams.get('gid') || (u.hash.match(/gid=(\d+)/)?.[1]) || null;
+    const sheet = u.searchParams.get('sheet') || null;
+
+    // allow plain /edit URL too (default to gid=0 when nothing specified)
+    const gidFinal = (gid || (!sheet ? '0' : null));
+
+    if(!id) throw new Error("Invalid sheet URL: " + fullUrl);
+
+    let gvizBase = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json`;
+    if(gidFinal != null) gvizBase += `&gid=${gidFinal}`;
+    if(sheet) gvizBase += `&sheet=${encodeURIComponent(sheet)}`;
+
     const gviz = (window.USE_PROXY ? window.PROXY_URL : '') + gvizBase;
     const res = await fetch(gviz, {cache:'no-store'});
     const text = await res.text();
     let payload = text;
 
-    // Handle both raw JSON and the common GVIZ wrapper: google.visualization.Query.setResponse(...)
     const mWrap = payload.match(/setResponse\((.*)\)\s*;?\s*$/s);
     if(mWrap && mWrap[1]) payload = mWrap[1];
 
-    // Otherwise, trim to the first '{' and the last '}'
     const first = payload.indexOf('{');
     const last  = payload.lastIndexOf('}');
     if(first >= 0 && last >= 0) payload = payload.slice(first, last+1);
@@ -2939,7 +3122,10 @@ window.openPlayer = async function(bCellValue){
   const cfg={
     pro:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.pro : ''), title:"프로리그 PROLEAGUE" },
     tst:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tst : ''), title:"TST 3050토너먼트" },
-    tsl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tsl : ''), title:"TSL 3050스타리그" }
+    tsl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tsl : ''), title:"TSL 3050스타리그" },
+    msl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.msl : ''), title:"MSL 퀸.잭 리그" },
+    tcl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tcl : ''), title:"TCL Challenger League" },
+    race:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.race : ''), title:"종족최강전 Race Championship" }
   };
 
   const $ = (id)=>document.getElementById(id);
@@ -2949,21 +3135,44 @@ window.openPlayer = async function(bCellValue){
 
   function normData(data){
     if(!Array.isArray(data) || !data.length) return [];
-    let maxCols = 0
+    const clean = (v)=> String(v??'')
+      .replace(/[\u200B-\u200D\uFEFF]/g,'')
+      .replace(/\u00A0/g,' ')
+      .trim();
+    const isBlank = (v)=> {
+      const s = clean(v);
+      // Treat common "invisible" placeholders as empty
+      return s==='' || s==='-' || s==='—' || s==='–';
+    };
+
+    let maxCols = 0;
     for(const r of data){ maxCols = Math.max(maxCols, (r||[]).length); }
-    // detect last useful col
+
+    // detect last useful col (ignore trailing empty/nbsp/zero-width cells)
     let last = maxCols - 1;
     while(last>=0){
       let allEmpty = true;
       for(const r of data){
         const v = (r||[])[last];
-        if(v!=null && String(v).trim()!==''){ allEmpty=false; break; }
+        if(!isBlank(v)){ allEmpty=false; break; }
       }
       if(!allEmpty) break;
       last -= 1;
     }
     if(last < 0) return [];
-    return data.map(r => (r||[]).slice(0, last+1));
+
+    // also trim leading fully-empty columns (some sheets have padding columns)
+    let first = 0;
+    while(first<=last){
+      let allEmpty = true;
+      for(const r of data){
+        const v = (r||[])[first];
+        if(!isBlank(v)){ allEmpty=false; break; }
+      }
+      if(!allEmpty) break;
+      first += 1;
+    }
+    return data.map(r => (r||[]).slice(first, last+1));
   }
 
 
@@ -5725,15 +5934,15 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
         box.classList.remove('hof-inline-pro','hof-inline-tst','hof-inline-tsl');
         box.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl');
         
-        box.classList.add(key==='pro'?'hof-inline-pro':key==='tst'?'hof-inline-tst':'hof-inline-tsl');
-        box.classList.add(key==='pro'?'hof-league-pro':key==='tst'?'hof-league-tst':'hof-league-tsl');
+        box.classList.add(key==='pro'?'hof-inline-pro':key==='tst'?'hof-inline-tst':key==='tsl'?'hof-inline-tsl':key==='msl'?'hof-inline-msl':key==='tcl'?'hof-inline-tcl':'hof-inline-race');
+        box.classList.add(key==='pro'?'hof-league-pro':key==='tst'?'hof-league-tst':key==='tsl'?'hof-league-tsl':key==='msl'?'hof-league-msl':key==='tcl'?'hof-league-tcl':'hof-league-race');
       }
     }catch(_){ }
 
     // Tag table with current league for CSS tweaks
     if(tableEl){
       tableEl.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl');
-      tableEl.classList.add(key==='pro'?'hof-league-pro':key==='tst'?'hof-league-tst':'hof-league-tsl');
+      tableEl.classList.add(key==='pro'?'hof-league-pro':key==='tst'?'hof-league-tst':key==='tsl'?'hof-league-tsl':key==='msl'?'hof-league-msl':key==='tcl'?'hof-league-tcl':'hof-league-race');
     }
 
     if(titleEl) titleEl.textContent = c.title;
@@ -5750,8 +5959,9 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
     }catch(_){ }
     // menu active
     const proBtn = $('hofPro'); const tstBtn = $('hofTST'); const tslBtn = $('hofTSL');
-    [proBtn,tstBtn,tslBtn].forEach(b=>{ if(!b) return; b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
-    const pickBtn = (key==='pro')?proBtn:(key==='tst')?tstBtn:tslBtn;
+    const mslBtn = $('hofMSL'); const tclBtn = $('hofTCL'); const raceBtn = $('hofRACE');
+    [proBtn,tstBtn,tslBtn,mslBtn,tclBtn,raceBtn].forEach(b=>{ if(!b) return; b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
+    const pickBtn = (key==='pro')?proBtn:(key==='tst')?tstBtn:(key==='tsl')?tslBtn:(key==='msl')?mslBtn:(key==='tcl')?tclBtn:raceBtn;
     if(pickBtn){ pickBtn.classList.add('active'); pickBtn.setAttribute('aria-selected','true'); }
     if(statusEl){ statusEl.style.display='block'; statusEl.textContent = '시트에서 데이터를 불러오는 중…'; }
     const inlineBox = $('hofInline');
@@ -5864,6 +6074,9 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
     const proBtn = $("hofPro");
     const tstBtn = $("hofTST");
     const tslBtn = $("hofTSL");
+    const mslBtn = $("hofMSL");
+    const tclBtn = $("hofTCL");
+    const raceBtn = $("hofRACE");
 
     // Stop bubbling so any legacy parent click h&&lers (that used to open Google Sheets) won't fire.
     const guard = (e)=>{ try{ e.preventDefault(); }catch(_){} try{ e.stopPropagation(); }catch(_){} try{ e.stopImmediatePropagation(); }catch(_){} };
@@ -5879,6 +6092,19 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
     if(tslBtn && !tslBtn.dataset.bound){
       tslBtn.dataset.bound='1';
       tslBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tsl'); });
+    }
+
+    if(mslBtn && !mslBtn.dataset.bound){
+      mslBtn.dataset.bound='1';
+      mslBtn.addEventListener('click', (e)=>{ guard(e); openHOF('msl'); });
+    }
+    if(tclBtn && !tclBtn.dataset.bound){
+      tclBtn.dataset.bound='1';
+      tclBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tcl'); });
+    }
+    if(raceBtn && !raceBtn.dataset.bound){
+      raceBtn.dataset.bound='1';
+      raceBtn.addEventListener('click', (e)=>{ guard(e); openHOF('race'); });
     }
 
     // Auto render default (latest) when section exists

@@ -2228,3 +2228,72 @@ td.rank-cell .rank-num{ font-weight:900; }
 /* HOF: remove rounded border/outline behind place label */
 .hof-place-badge{ border:0 !important; background:transparent !important; padding:0 !important; box-shadow:none !important; border-radius:0 !important; }
 
+
+
+
+/* === Player Detail H2H (최다승 상대/최다매치 TOP5) === */
+.h2h-matchup{
+  display:flex;
+  align-items:stretch;
+  justify-content:space-between;
+  gap:18px;
+  padding:16px 14px;
+  border:1px solid rgba(0,0,0,0.08);
+  border-radius:12px;
+  background:#fff;
+}
+.h2h-side{
+  flex:1 1 0;
+  text-align:center;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:6px;
+}
+.h2h-center{
+  flex:0 0 220px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  gap:10px;
+  text-align:center;
+}
+.h2h-id{ font-size:18px; font-weight:800; }
+.h2h-id.red{ color:#d63a3a; }
+.h2h-id.blue{ color:#2f6fe0; }
+.h2h-elo-now{ font-size:13px; opacity:0.9; }
+.h2h-wins{ font-size:48px; font-weight:900; line-height:1; }
+.h2h-winrate{ font-size:13px; font-weight:700; letter-spacing:0.3px; opacity:0.95; }
+.h2h-vs{ font-weight:900; font-size:18px; opacity:0.9; }
+.h2h-delta{ font-size:13px; line-height:1.35; }
+.h2h-arrow{ font-weight:900; margin-left:6px; }
+.h2h-arrow.up{ color:#d63a3a; }
+.h2h-arrow.down{ color:#2f6fe0; }
+.h2h-arrow.flat{ color:#888; }
+
+.h2h-top5{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap:10px;
+  margin-top:10px;
+}
+.h2h-top5-item{
+  border:1px solid rgba(0,0,0,0.08);
+  border-radius:12px;
+  padding:10px 10px;
+  background:#fff;
+}
+.h2h-top5-name{ font-weight:900; font-size:14px; margin-bottom:4px; }
+.h2h-top5-rec{ font-size:12px; opacity:0.9; }
+.h2h-top5-elo{ font-size:12px; margin-top:6px; opacity:0.95; }
+
+@media (max-width: 980px){
+  .h2h-center{ flex-basis: 180px; }
+  .h2h-top5{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px){
+  .h2h-matchup{ flex-direction:column; }
+  .h2h-center{ flex-basis:auto; }
+  .h2h-top5{ grid-template-columns: 1fr; }
+}
