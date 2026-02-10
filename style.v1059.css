@@ -773,14 +773,15 @@ img, svg, canvas{max-width:100%; height:auto;}
 
 /* ===== Player detail race table responsive ===== */
 @media (max-width: 720px){
-  table.detail{
+  #player table.detail{
     display:block !important;
     width:100% !important;
-    overflow-x:hidden !important;
+    overflow-x:auto !important;
     -webkit-overflow-scrolling:touch;
     white-space:nowrap;
+    min-width:600px;
   }
-  table.detail th, table.detail td{
+  #player table.detail th, #player table.detail td{
     white-space:nowrap !important;
   }
 }
@@ -1101,7 +1102,12 @@ img, svg, canvas{max-width:100%; height:auto;}
 @media (max-width: 900px){.topmenu{justify-content:center}}
 
 #proRankTable{width:100%}
-.season-card .table-wrap{overflow:auto}
+.season-card .table-wrap{overflow:visible}
+
+/* season-card mobile overflow */
+@media (max-width: 720px){
+  .season-card .table-wrap{overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;}
+}
 
 
 /* ===== Fixed Header Layout (logo+YT left, search centered, menu right) ===== */

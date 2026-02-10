@@ -875,7 +875,7 @@ try {
       l:String(iLoseN>=0? r[iLoseN]:""),
       m:String(iMap>=0? r[iMap]:""),
       lg:String(iLeague>=0? r[iLeague]:"")
-    })).sort((a,b)=> (a.d > b.d ? 1 : -1))).slice(-10);
+    })).sort((a,b)=> (a.d > b.d ? 1 : -1))).slice(-10).reverse();
 
     const rowHtml = rows10.map(r=>{
       const opp = (lc(r.w)===you) ? r.l : r.w;
@@ -2582,14 +2582,43 @@ function getTierRankForPlayer(playerRow, allRows, H){
     const IDX_TIER = 3; // D
     const IDX_ELO  = 9; // J
     const IDX_NAME = 1; // B
+
     const myName = String(playerRow[IDX_NAME]||'').split('/')[0].trim().toLowerCase();
     const myTier = String(playerRow[IDX_TIER]||'').trim();
-    // same-tier rows
-    const same = allRows.filter(r => String(r[IDX_TIER]||'').trim() === myTier);
+    if(!myName || !myTier) return {tierRank:null, totalInTier:0, tierName: myTier};
+
+    // --- 동일한 기준(5경기 이상)으로 티어 순위 계산 ---
+    const rows = Array.isArray(allRows) ? allRows : [];
+    const sameTier = rows.filter(r => String(r[IDX_TIER]||'').trim() === myTier);
+
+    // 경기수 계산 (MATCH_SRC가 없으면 fallback: 기존 전체 인원 기준)
+    let qualified = sameTier;
+    try{
+      const MH = (MATCH_SRC && MATCH_SRC[0]) ? MATCH_SRC[0] : [];
+      const MR = (MATCH_SRC && MATCH_SRC.length>1) ? MATCH_SRC.slice(1) : [];
+      const iW = findIdx(MH, /승자\s*선수|winner/i);
+      const iL = findIdx(MH, /패자\s*선수|loser/i);
+
+      function gamesOf(rawName){
+        const name = String(rawName||'').split('/')[0].trim().toLowerCase();
+        if(!name) return 0;
+        let c=0;
+        for(const r of MR){
+          const w = lc(r[iW]||''); const l = lc(r[iL]||'');
+          if(w===name || l===name) c++;
+        }
+        return c;
+      }
+
+      qualified = sameTier.filter(r => gamesOf(r[IDX_NAME]) >= 5);
+    }catch(e){ /* ignore, fallback */ }
+
     // sort by ELO desc
-    same.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
-    const rank = same.findIndex(r => String(r[IDX_NAME]||'').split('/')[0].trim().toLowerCase() === myName) + 1;
-    return {tierRank: rank>0?rank:null, totalInTier: same.length, tierName: myTier};
+    qualified.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
+
+    const rank = qualified.findIndex(r => String(r[IDX_NAME]||'').split('/')[0].trim().toLowerCase() === myName) + 1;
+
+    return {tierRank: rank>0?rank:null, totalInTier: qualified.length, tierName: myTier};
   }catch(e){ console.warn('getTierRankForPlayer error', e); return {tierRank:null, totalInTier:0, tierName:''}; }
 }
 
