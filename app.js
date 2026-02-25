@@ -31,11 +31,29 @@ try{
 const TIER_TO_NUM = {'갓':1,'킹':2,'퀸':3,'잭':4,'스페이드':5,'조커':6,'히든':7};
 const NUM_TO_TIER = {1:'갓',2:'킹',3:'퀸',4:'잭',5:'스페이드',6:'조커',7:'히든'};
 
+// === Global ID normalizer (whitespace/NBSP/zero-width/case-insensitive) ===
+// NOTE: Must be in global scope because openPlayer/search/h2h/etc. run outside IIFEs.
+if (typeof window !== 'undefined' && typeof window.normalizeId !== 'function') {
+  window.normalizeId = function normalizeId(v){
+    return String(v ?? '')
+      .replace(/\u00A0/g,' ')              // NBSP
+      .replace(/[\u200B-\u200D\uFEFF]/g,'') // zero-width
+      .replace(/\s+/g,'')                 // all whitespace
+      .toLowerCase();
+  };
+}
+
+// Local alias (keeps existing calls like normalizeId(x) working)
+const normalizeId = (typeof window !== 'undefined' && window.normalizeId) ? window.normalizeId : (v)=>String(v??'').toLowerCase();
+
+
 // === Hall of Fame popup links (configurable) ===
 const HOF_LINKS = {
   pro: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=1658280214#gid=1658280214",
   tst: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=381201435#gid=381201435",
   tsl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=2130451924#gid=2130451924",
+  // New HOF menus
+  tpl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=TPL",
   // New HOF menus (sheet-name based; works even if gid changes)
   msl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=MSL",
   tcl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=TCL",
@@ -375,7 +393,7 @@ async function openPlayer(bCellValue){
   const body=$('playerBody'); const title=$('playerTitle'); if(title) title.textContent=id; if(body) body.innerHTML='';
   if(!RANK_SRC.length) await loadRanking();
   const header = RANK_SRC[0]||[]; const rows = RANK_SRC.slice(1);
-  const row = rows.find(r=> lc(String(r[1]||'').split('/')[0].trim())===lc(id));
+  const row = rows.find(r=> normalizeId(String(r[1]||'').split('/')[0].trim())===normalizeId(id));
   if(!row){ if(body) body.innerHTML='<div class="err">선수를 찾을 수 없습니다.</div>'; activate('player'); return; }
 
   const COL = { B:1, C:2, D:3, J:9, L:11 };
@@ -387,10 +405,10 @@ async function openPlayer(bCellValue){
 
   const data = MATCH_SRC.length? MATCH_SRC : await fetchGVIZ(SHEETS.matches);
   const MH = data[0]||[]; const M = data.slice(1);
-  const you = lc(playerName);
+  const you = normalizeId(playerName);
   const yourRows = M.filter(r=>{
-    const w = lc(r[ findIdx(MH, /승자\s*선수|winner/i) ]||'');
-    const l = lc(r[ findIdx(MH, /패자\s*선수|loser/i) ]||'');
+    const w = normalizeId(r[ findIdx(MH, /승자\s*선수|winner/i) ]||'');
+    const l = normalizeId(r[ findIdx(MH, /패자\s*선수|loser/i) ]||'');
     return (w===you || l===you);
   });
 
@@ -498,27 +516,30 @@ if(matchLog && matchLog.length>1){
   R2.forEach(rr=>{
     const winRaw = (iW2>=0? rr[iW2] : '') || '';
     const loseRaw= (iL2>=0? rr[iL2] : '') || '';
-    const winName = lc(winRaw);
-    const loseName= lc(loseRaw);
+    const winName = normalizeId(winRaw);
+    const loseName= normalizeId(loseRaw);
 
     const isWin = (winName === you);
     const isLose= (loseName === you);
     if(!isWin && !isLose) return;
 
-    const opp = String(isWin ? loseRaw : winRaw).split('/')[0].trim();
-    if(!opp) return;
+    const oppRaw = String(isWin ? loseRaw : winRaw).split('/')[0].trim();
+    const oppKey = normalizeId(oppRaw);
+    if(!oppKey) return;
 
-    oppAgg[opp] = oppAgg[opp] || { w:0, l:0, elo:0 };
-    if(isWin) oppAgg[opp].w++;
-    if(isLose) oppAgg[opp].l++;
+    oppAgg[oppKey] = oppAgg[oppKey] || { disp: oppRaw, w:0, l:0, elo:0 };
+    if (oppRaw && (!oppAgg[oppKey].disp || oppRaw.length > oppAgg[oppKey].disp.length)) oppAgg[oppKey].disp = oppRaw;
+
+    if(isWin) oppAgg[oppKey].w++;
+    if(isLose) oppAgg[oppKey].l++;
 
     // 요청 기준: 승리=L, 패배=O
     const delta = isWin ? toNum(rr[idxWinDelta]) : toNum(rr[idxLoseDelta]);
-    oppAgg[opp].elo += delta;
+    oppAgg[oppKey].elo += delta;
   });
 }
 
-const oppRows = Object.entries(oppAgg).map(([name,v])=>{
+const oppRows = Object.entries(oppAgg).map(([key,v])=>{ const name = v.disp || key; 
   const total = (v.w||0) + (v.l||0);
   const pct = total ? Math.round((v.w||0)*1000/total)/10 : 0;
   const elo = Math.round((v.elo||0)*10)/10;
@@ -599,7 +620,7 @@ const leagueHtml = `
           const d = r.elo || 0;
           return `
             <div class="h2h-top5-item">
-              <div class="h2h-top5-name blue">${r.name}</div>
+              <div class="h2h-top5-name blue"><a href="#" class="h2h-player-link" data-player="${r.name}">${r.name}</a></div>
               <div class="h2h-top5-rec">${r.total}전 (${r.w}승 ${r.l}패) · ${r.pct}%</div>
               <div class="h2h-top5-elo">ELO포인트: ${fmtDelta(d)} ${arrow(d)}</div>
             </div>
@@ -625,7 +646,7 @@ const leagueHtml = `
         </div>
 
         <div class="h2h-side">
-          <div class="h2h-id blue">${oppId}</div>
+          <div class="h2h-id blue"><a href="#" class="h2h-player-link" data-player="${oppId}">${oppId}</a></div>
           <div class="h2h-elo-now">현재 ELO : <strong>${oppEloNow}</strong></div>
           <div class="h2h-wins">${rightWins}</div>
           <div class="h2h-winrate">${rightRate}% WINS</div>
@@ -671,6 +692,19 @@ const leagueHtml = `
       ${h2hHtml}
 
     `;
+
+
+      // ✅ H2H/Top5 아이디 클릭 → 해당 선수 상세로 이동
+      try{
+        body.querySelectorAll('.h2h-player-link').forEach(a=>{
+          a.addEventListener('click', ev=>{
+            ev.preventDefault();
+            ev.stopPropagation();
+            const pid = (a.getAttribute('data-player') || a.textContent || '').trim();
+            if(pid && typeof openPlayer==='function') openPlayer(pid);
+          });
+        });
+      }catch(_e){}
   }
 
   
@@ -764,67 +798,67 @@ try {
   }
 } catch(e){ console.warn('tier trend error', e); }
 
-// === ELO 변동추이 (정밀 v4: 전용 시트 '(개인전)경기기록데이터'에서 계산, 전체 기간) ===
+// === ELO 변동추이 (전원 공통: '(개인전)경기기록데이터' / 승자 C→M, 패자 F→P, 날짜별 최종값) ===
   try{
-    // 1) 전용 소스에서 원본 데이터 로드
     const eloSrc = { id:"1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet:"(개인전)경기기록데이터", range:"A:Z" };
     const E = await fetchGVIZ(eloSrc);
     if (!E.length) throw new Error("개인전 시트 비어있음");
-    const EH = E[0]||[]; const ER = E.slice(1);
-    const idxDate = EH.findIndex(h=>/날짜|경기일자|date/i.test(h));
-    const idxWinN = EH.findIndex(h=>/승자\s*선수|winner/i.test(h)); // C
-    const idxLoseN = EH.findIndex(h=>/패자\s*선수|loser/i.test(h)); // F
-    // 고정 인덱스: A:0 ... J:9, K:10, L:11, M:12, N:13, O:14, P:15
-    const K_PRE_WIN = 10, M_POST_WIN = 12, N_PRE_LOSE = 13, P_POST_LOSE = 15;
+    const ER = E.slice(1);
 
-    const cleanNum = x => {
-      const s = String(x??'').replace(/[^0-9.\-]/g,'').trim();
-      if (!s) return NaN;
+    // 고정 컬럼 (0-based): A=0(날짜), C=2(승자ID), F=5(패자ID), M=12(경기후 승자ELO), P=15(경기후 패자ELO)
+    const COL_DATE=0, COL_WIN=2, COL_LOSE=5, COL_POST_WIN=12, COL_POST_LOSE=15;
+
+    const cleanNum = (x)=>{
+      const s = String(x ?? '').replace(/[^0-9.\-]/g,'').trim();
+      if(!s) return NaN;
       const n = Number(s);
       return Number.isFinite(n) ? n : NaN;
     };
-    const toDate = s => {
-      const t = String(s||'').replace(/\./g,'-').replace(/\.$/,'').trim();
-      const d = new Date(t);
-      return Number.isNaN(d.getTime()) ? null : d;
+    const dateKey = (x)=>{
+      const s = String(x ?? '').trim();
+      if(!s) return null;
+      const t = s.replace(/\./g,'-').replace(/\//g,'-');
+      const m = t.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if(!m) return null;
+      const yy=m[1], mm=String(m[2]).padStart(2,'0'), dd=String(m[3]).padStart(2,'0');
+      return `${yy}-${mm}-${dd}`;
     };
 
-    // 2) 본인 경기만 필터 + 날짜/전후ELO 추출
-    const rowsMine = ER.map(r=>{
-      const dStr = String(idxDate>=0 ? r[idxDate] : "");
-      const d = toDate(dStr);
-      const isWin  = lc(r[idxWinN]||"")  === you;
-      const isLose = lc(r[idxLoseN]||"") === you;
-      let pre = NaN, post = NaN;
-      if (isWin)  { pre = cleanNum(r[K_PRE_WIN]); post = cleanNum(r[M_POST_WIN]); }
-      if (isLose) { pre = cleanNum(r[N_PRE_LOSE]); post = cleanNum(r[P_POST_LOSE]); }
-      return { dStr, d, pre, post, isMine: (isWin||isLose) };
-    }).filter(x=> x.isMine && x.d).sort((a,b)=> (a.d>b.d?1:-1));
+    const me = normalizeId(playerName);
 
-    // 3) 날짜별 최종 경기후 ELO만 사용
-    const byDay = new Map();
-    rowsMine.forEach(m => byDay.set(m.dStr, m)); // 같은 날 마지막 경기로 덮어쓰기
-    const daily = Array.from(byDay.entries())
-                  .sort((a,b)=> (new Date(a[0]) > new Date(b[0]) ? 1 : -1))
-                  .map(([dStr, m])=> ({ dStr, pre: m.pre, post: m.post }));
+    // 날짜별 최종(시트상 마지막 행) 경기후 ELO를 모음
+    const byDay = new Map(); // key -> {key, post}
+    for (let i=0;i<ER.length;i++){
+      const r = ER[i]||[];
+      const w = normalizeId(r[COL_WIN]);
+      const l = normalizeId(r[COL_LOSE]);
+      if (w!==me && l!==me) continue;
 
-    if (body && daily.length){
+      const k = dateKey(r[COL_DATE]);
+      if (!k) continue;
+
+      const post = (w===me) ? cleanNum(r[COL_POST_WIN]) : cleanNum(r[COL_POST_LOSE]);
+      if (!Number.isFinite(post)) continue;
+
+      byDay.set(k, { key:k, post });
+    }
+
+    const daily = Array.from(byDay.values()).sort((a,b)=> a.key.localeCompare(b.key));
+    if (body){
       body.insertAdjacentHTML('beforeend', `
         <hr class="gold"/>
         <h3>ELO 변동추이</h3>
         <div class="chart-wrap"><canvas id="eloChart" height="170"></canvas></div>
       `);
 
-      const labels = daily.map(x=>x.dStr);
-      const series = [];
-      let carry = Number(String(eloText).replace(/[^0-9.]/g,''));
-      if (!Number.isFinite(carry) || carry<300) carry = 1500;
-      daily.forEach(x=>{
-        let v = Number.isFinite(x.post) ? x.post : (Number.isFinite(x.pre) ? x.pre : carry);
-        if (!Number.isFinite(v)) v = carry;
-        series.push(Math.round(v*10)/10);
-        carry = v;
-      });
+      const labels = daily.map(x=>x.key);
+      const series = daily.map(x=> Math.round(x.post*10)/10);
+
+      // 마지막 점을 현재 표시 ELO와 동기화(표시 불일치 방지)
+      const cur = Number(String(eloText).replace(/[^0-9.\-]/g,''));
+      if (Number.isFinite(cur) && series.length){
+        series[series.length-1] = Math.round(cur*10)/10;
+      }
 
       const ctx = document.getElementById('eloChart')?.getContext('2d');
       if (ctx){
@@ -836,15 +870,15 @@ try {
             responsive:true,
             plugins:{
               legend:{ display:true },
-              title:{ display:true, text:'ELO 변동 추이 (전체 기간, 날짜별 최종값)' },
+              title:{ display:true, text:'ELO 변동 추이 (개인전 경기기록데이터 기준, 날짜별 최종값)' },
               datalabels:{ display:false }
             },
-            scales:{ y:{ title:{display:true,text:'ELO'} } }
+            scales:{ y:{ title:{ display:true, text:'ELO' } } }
           }
         });
       }
     }
-  }catch(e){ console.warn('elo v4 error', e); }
+  }catch(e){ console.warn('elo v5 error', e); }
 // --- 최근 10경기 승패 그래프 및 테이블 (중복 제거 버전) ---
 try {
   const iDate = findIdx(MH, /경기일자|date/i);
@@ -875,7 +909,7 @@ try {
       l:String(iLoseN>=0? r[iLoseN]:""),
       m:String(iMap>=0? r[iMap]:""),
       lg:String(iLeague>=0? r[iLeague]:"")
-    })).sort((a,b)=> (a.d > b.d ? 1 : -1))).slice(-10);
+    })).sort((a,b)=> (a.d > b.d ? 1 : -1))).slice(-10).reverse();
 
     const rowHtml = rows10.map(r=>{
       const opp = (lc(r.w)===you) ? r.l : r.w;
@@ -1402,6 +1436,15 @@ if (hamburger && mainMenu) {
 /* === v9_97_FinalDualColor_MapCompareFix === */
 (function(){
   function lc(s){ return String(s ?? '').toLowerCase(); }
+
+function normalizeId(v){
+  // remove normal/nbps/zero-width spaces and lower-case for stable matching
+  return String(v ?? '')
+    .replace(/\u00A0/g,' ')
+    .replace(/[\u200B-\u200D\uFEFF]/g,'')
+    .replace(/\s+/g,'')
+    .toLowerCase();
+}
   function $(id){
   const el = document.getElementById(id);
   if (el) return el;
@@ -2582,14 +2625,43 @@ function getTierRankForPlayer(playerRow, allRows, H){
     const IDX_TIER = 3; // D
     const IDX_ELO  = 9; // J
     const IDX_NAME = 1; // B
+
     const myName = String(playerRow[IDX_NAME]||'').split('/')[0].trim().toLowerCase();
     const myTier = String(playerRow[IDX_TIER]||'').trim();
-    // same-tier rows
-    const same = allRows.filter(r => String(r[IDX_TIER]||'').trim() === myTier);
+    if(!myName || !myTier) return {tierRank:null, totalInTier:0, tierName: myTier};
+
+    // --- 동일한 기준(5경기 이상)으로 티어 순위 계산 ---
+    const rows = Array.isArray(allRows) ? allRows : [];
+    const sameTier = rows.filter(r => String(r[IDX_TIER]||'').trim() === myTier);
+
+    // 경기수 계산 (MATCH_SRC가 없으면 fallback: 기존 전체 인원 기준)
+    let qualified = sameTier;
+    try{
+      const MH = (MATCH_SRC && MATCH_SRC[0]) ? MATCH_SRC[0] : [];
+      const MR = (MATCH_SRC && MATCH_SRC.length>1) ? MATCH_SRC.slice(1) : [];
+      const iW = findIdx(MH, /승자\s*선수|winner/i);
+      const iL = findIdx(MH, /패자\s*선수|loser/i);
+
+      function gamesOf(rawName){
+        const name = String(rawName||'').split('/')[0].trim().toLowerCase();
+        if(!name) return 0;
+        let c=0;
+        for(const r of MR){
+          const w = lc(r[iW]||''); const l = lc(r[iL]||'');
+          if(w===name || l===name) c++;
+        }
+        return c;
+      }
+
+      qualified = sameTier.filter(r => gamesOf(r[IDX_NAME]) >= 5);
+    }catch(e){ /* ignore, fallback */ }
+
     // sort by ELO desc
-    same.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
-    const rank = same.findIndex(r => String(r[IDX_NAME]||'').split('/')[0].trim().toLowerCase() === myName) + 1;
-    return {tierRank: rank>0?rank:null, totalInTier: same.length, tierName: myTier};
+    qualified.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
+
+    const rank = qualified.findIndex(r => String(r[IDX_NAME]||'').split('/')[0].trim().toLowerCase() === myName) + 1;
+
+    return {tierRank: rank>0?rank:null, totalInTier: qualified.length, tierName: myTier};
   }catch(e){ console.warn('getTierRankForPlayer error', e); return {tierRank:null, totalInTier:0, tierName:''}; }
 }
 
@@ -3122,11 +3194,13 @@ window.openPlayer = async function(bCellValue){
   const cfg={
     pro:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.pro : ''), title:"프로리그 PROLEAGUE" },
     tst:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tst : ''), title:"TST 3050토너먼트" },
+    tpl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tpl : ''), title:"TPL 갓/킹리그" },
     tsl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tsl : ''), title:"TSL 3050스타리그" },
     msl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.msl : ''), title:"MSL 퀸.잭 리그" },
-    tcl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tcl : ''), title:"TCL Challenger League" },
-    race:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.race : ''), title:"종족최강전 Race Championship" }
-  };
+    tcl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tcl : ''), title:"TCL(스페/조커/히든)" },
+};
+
+  const isHofCardLeague = (k)=> (k==='tst' || k==='tsl' || k==='tpl' || k==='msl' || k==='tcl');
 
   const $ = (id)=>document.getElementById(id);
 
@@ -3233,6 +3307,28 @@ window.openPlayer = async function(bCellValue){
     if(!tbody) return;
     const rows = Array.from(tbody.querySelectorAll('tr'));
     const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
+    // league key (needed for TPL/TCL special parsing)
+    let k = String(leagueKey||'').toLowerCase();
+    if(!k){
+      try{
+        if(tableEl.classList.contains('hof-league-tpl')) k='tpl';
+        else if(tableEl.classList.contains('hof-league-tcl')) k='tcl';
+        else if(tableEl.classList.contains('hof-league-msl')) k='msl';
+        else if(tableEl.classList.contains('hof-league-tsl')) k='tsl';
+        else if(tableEl.classList.contains('hof-league-tst')) k='tst';
+      }catch(_){ }
+    }
+    if(!k){
+      try{ k = String(window.HOF_INLINE_CURRENT||'').toLowerCase(); }catch(_){ }
+    }
+
+    // Simple key/value HOF tables (TPL/TCL): build a single stage card from the rendered table
+    // Some sheets are 2-column (label/value) and don't include stage labels in the matrix, so matrix parsing fails.
+    if((k==='tpl' || k==='tcl') && typeof mountSimpleKeyValueHofCardFromRenderedTable === 'function'){
+      try{ if(mountSimpleKeyValueHofCardFromRenderedTable(tableEl, k)) return; }catch(_){}
+    }
+
+
 
     // If there is a separate season row under the title, fold it into the title and remove the season row.
     try{
@@ -3265,16 +3361,17 @@ window.openPlayer = async function(bCellValue){
 
     const makeBadge = (type)=>{
       const wrap = document.createElement('div');
-      wrap.className = 'hof-place-badge ' + (type==='win' ? 'win' : 'runner');
+      const t = (type==='win' || type==='runner' || type==='third') ? type : 'runner';
+      wrap.className = 'hof-place-badge ' + t;
 
       const img = document.createElement('img');
       img.className = 'hof-place-crown';
-      img.alt = type==='win' ? '우승' : '준우승';
-      img.src = type==='win' ? './crown_gold.png' : './crown_silver.png';
+      img.alt = (t==='win') ? '우승' : (t==='runner') ? '준우승' : '3위';
+      img.src = (t==='win') ? './crown_gold.png' : (t==='runner') ? './crown_silver.png' : './crown_bronze.png';
 
       const label = document.createElement('div');
       label.className = 'hof-place-label';
-      label.textContent = type==='win' ? '우승' : '준우승';
+      label.textContent = (t==='win') ? '우승' : (t==='runner') ? '준우승' : '3위';
 
       wrap.appendChild(img);
       wrap.appendChild(label);
@@ -3320,7 +3417,8 @@ window.openPlayer = async function(bCellValue){
     };
 
 
-    const k = String(leagueKey || HOF_INLINE_CURRENT || 'pro').toLowerCase();
+    // Ensure league key is resolved (avoid redeclaring `k` in this scope)
+    k = k || String(leagueKey || HOF_INLINE_CURRENT || 'pro').toLowerCase();
     const wantChip = (k === 'pro');
 
 rows.forEach(tr=>{
@@ -3332,13 +3430,14 @@ rows.forEach(tr=>{
       let placeType = '';
       for(let i=0;i<tds.length;i++){
         const txt = norm(tds[i].textContent);
+        if(/(^|\s)3\s*위($|\s)/.test(txt) || /(^|\s)삼\s*위($|\s)/.test(txt) || /(^|\s)3rd($|\s)/i.test(txt)){ placeIdx = i; placeType='third'; break; }
         if(/준\s*우\s*승/.test(txt)){ placeIdx = i; placeType='runner'; break; }
         if(/(^|\s)우\s*승($|\s)/.test(txt) && !/준\s*우\s*승/.test(txt)){ placeIdx = i; placeType='win'; break; }
       }
       if(placeIdx < 0) return;
 
       tr.classList.add('hof-place-row');
-      tr.classList.add(placeType==='win' ? 'win' : 'runner');
+      tr.classList.add(placeType==='win' ? 'win' : (placeType==='third' ? 'third' : 'runner'));
 
       // Replace the placement cell with crown badge
       tds[placeIdx].innerHTML = '';
@@ -4058,18 +4157,24 @@ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
 
     // Tag current league on the inline table for responsive CSS hooks
     try{
-      tableEl.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl');
+      tableEl.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl','hof-league-tpl','hof-league-msl','hof-league-tcl');
       if(k==='pro') tableEl.classList.add('hof-league-pro');
       if(k==='tst') tableEl.classList.add('hof-league-tst');
       if(k==='tsl') tableEl.classList.add('hof-league-tsl');
+      if(k==='tpl') tableEl.classList.add('hof-league-tpl');
+      if(k==='msl') tableEl.classList.add('hof-league-msl');
+      if(k==='tcl') tableEl.classList.add('hof-league-tcl');
 
       // Also tag the container so CSS can reliably scope mobile/resize behavior
       const inline = document.getElementById('hofInline');
       if(inline){
-        inline.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl');
+        inline.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl','hof-league-tpl','hof-league-msl','hof-league-tcl');
         if(k==='pro') inline.classList.add('hof-league-pro');
         if(k==='tst') inline.classList.add('hof-league-tst');
         if(k==='tsl') inline.classList.add('hof-league-tsl');
+        if(k==='tpl') inline.classList.add('hof-league-tpl');
+        if(k==='msl') inline.classList.add('hof-league-msl');
+        if(k==='tcl') inline.classList.add('hof-league-tcl');
       }
 }catch(_){}
 
@@ -4107,7 +4212,7 @@ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
     // (We still render into the real table DOM because some parsers rely on it.)
     let __restoreVis = false;
     try{
-      if((k==='tst' || k==='tsl') && tableEl){
+      if(isHofCardLeague(k) && tableEl){
         __restoreVis = (tableEl.style.visibility !== 'hidden');
         tableEl.style.visibility = 'hidden';
       }
@@ -4134,7 +4239,7 @@ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
       try{ renderProPodiumFromBlock(tableEl, data); }catch(_){ renderTable(tableEl, data); }
       return;
     }
-    try{ if(k==='tst' || k==='tsl'){ trimEmptyTstTslHeaderStub(tableEl); } }catch(_){ }
+    try{ if (isHofCardLeague(k)) { trimEmptyTstTslHeaderStub(tableEl); } }catch(_){ }
 
     try{ markHofTitleCells(tableEl); }catch(_){ }
     try{ convertImageUrlCells(tableEl); }catch(_){ }
@@ -4158,7 +4263,7 @@ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
 try{
   // Ensure any lingering HOF stage cards/flags are cleared before rebuilding (prevents TST->TSL blank on mobile)
   const inline = document.getElementById('hofInline');
-  if(inline) inline.classList.remove('hof-has-stagecards','hof-inline-tst','hof-inline-tsl');
+  if(inline) inline.classList.remove('hof-has-stagecards','hof-inline-tst','hof-inline-tsl','hof-inline-tpl','hof-inline-msl','hof-inline-tcl');
   // Remove any previously mounted card containers (both inside inline and next to table)
   if(tableEl && tableEl.parentElement){
     tableEl.parentElement.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove());
@@ -4174,7 +4279,7 @@ try{ renderStageCardsForMobile(tableEl, data, k); }catch(_){ }
     // If cards were built, renderStageCardsForMobile hides the table.
     // If not, restore visibility so the table can be seen.
     try{
-      if((k==='tst' || k==='tsl') && tableEl){
+      if(isHofCardLeague(k) && tableEl){
         const parent = tableEl.parentElement;
         const built = parent ? parent.querySelectorAll('.hof-stage-card').length : 0;
         if(built <= 0){
@@ -4187,7 +4292,7 @@ try{ renderStageCardsForMobile(tableEl, data, k); }catch(_){ }
     try{
       const inline=document.getElementById('hofInline');
       const hasCard=(inline && inline.querySelector('.hof-stage-card')) || (tableEl && tableEl.parentElement && tableEl.parentElement.querySelector('.hof-stage-card'));
-      if((k==='tst' || k==='tsl') && hasCard){
+      if(isHofCardLeague(k) && hasCard){
         if(inline) inline.classList.add('hof-has-stagecards');
         try{ tableEl.style.display='none'; }catch(_){ }
       }
@@ -5226,7 +5331,7 @@ const k = String(leagueKey||'').toLowerCase();
       if(inline) inline.classList.remove('hof-has-stagecards');
     }catch(_){}
 
-    if(k!=='tst' && k!=='tsl') return;
+    if(k!=='tst' && k!=='tsl' && k!=='tpl' && k!=='msl' && k!=='tcl') return;
     if(!Array.isArray(blockData) || !blockData.length) return;
 
     const norm = (s)=> String(s||'')
@@ -5300,6 +5405,14 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
       return /준\s*우\s*승/.test(s);
     };
 
+
+    const isThirdLabel = (t)=>{
+      const s = norm(t);
+      if(!s) return false;
+      // accept: 3위 / 3 위 / 3위팀 / 3위 결정전 / 3-4위 etc.
+      return /3\s*위/.test(s) || /3\s*[-~]?\s*4\s*위/.test(s) || /\b3rd\b/i.test(s);
+    };
+
     const findRowBy = (pred)=>{
       for(let r=0;r<blockData.length;r++){
         const row = blockData[r] || [];
@@ -5313,6 +5426,7 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
 
     const rWin = findRowBy(isWinLabel);
     const rRun = findRowBy(isRunLabel);
+    const rThird = (typeof isThirdLabel==='function') ? findRowBy(isThirdLabel) : -1;
     const rOrg = findRowAny(/대회\s*진행자|대회진행자|진행자/);
 
     // If we can't find winner/runner, we can't build cards reliably
@@ -5407,7 +5521,7 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
       }
       // If already has "스테이지" keep it
       if(/스테이지/i.test(t)) return t;
-      return t || `스테이지${idx+1}`;
+      return t || ((k==='tpl' || k==='tcl' || k==='msl') ? '' : `스테이지${idx+1}`);
     };
 
     let built = 0;
@@ -5416,6 +5530,7 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
       const label = stageNameFromTier(it.label, idx);
       let winner = getCell(rWin, col);
       let runner = getCell(rRun, col);
+      let third = getCell(rThird, col);
 
       // Make TST match TSL visual output on mobile/resize.
       // Some TST seasons can include tier tokens (e.g., "갓DayDream" or "갓 DayDream")
@@ -5432,33 +5547,39 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
             .trim();
           winner = stripTier(winner);
           runner = stripTier(runner);
+          third = stripTier(third);
         }
       }
 
       // only build cards that have at least one value
-      if(!winner && !runner) return;
+      if(!winner && !runner && !third) return;
 
       const card = document.createElement('div');
       card.className = 'hof-stage-card';
 
-      const title = document.createElement('div');
-      title.className = 'hof-stage-title';
-      title.textContent = label;
-      card.appendChild(title);
+      const titleText = String(label||'').trim();
+      if(titleText && titleText!=='-' && titleText!=='–' && titleText!=='—' && titleText!=='－' && !/^스테이지\s*\d+$/.test(titleText) && !/^스테이지\d+$/.test(titleText)){
+        const title = document.createElement('div');
+        title.className = 'hof-stage-title';
+        title.textContent = titleText;
+        card.appendChild(title);
+      }
 
       const mkLine = (place, value)=>{
         if(!value) return;
+        const vv = String(value).trim();
+        if(!vv || vv==='-' || vv==='–' || vv==='—' || vv==='－') return;
         const line = document.createElement('div');
         line.className = 'hof-stage-line';
 
         const badge = document.createElement('span');
         badge.className = 'hof-stage-badge';
-        badge.textContent = (place==='win') ? '🏆' : '🥈';
+        badge.textContent = (place==='win') ? '🏆' : (place==='third') ? '🥉' : '🥈';
         line.appendChild(badge);
 
         const lab = document.createElement('span');
         lab.className = 'hof-stage-label';
-        lab.textContent = (place==='win') ? '우승' : '준우승';
+        lab.textContent = (place==='win') ? '우승' : (place==='third') ? '3위' : '준우승';
         line.appendChild(lab);
 
         const val = document.createElement('span');
@@ -5471,6 +5592,7 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
 
       mkLine('win', winner);
       mkLine('run', runner);
+      mkLine('third', third);
 
       if(organizer){
         const org = document.createElement('div');
@@ -5874,17 +5996,17 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
       // Fallback: if block label matching fails, try row-filter mode on the already-rendered table.
       // (This prevents "전체목록"으로 보이는 현상 when labels differ slightly.)
       try{ applySeasonFilter(tableEl, label, k); }catch(_){ }
-      try{ decorateHofPlacements(tableEl); }catch(_){ }
-      try{ if(k==='tst' || k==='tsl'){ const mat=hofTableToMatrix(tableEl); renderStageCardsForMobile(tableEl, mat, k); } }catch(_){ }
+      try{ decorateHofPlacements(tableEl, key); }catch(_){ }
+      try{ if (isHofCardLeague(k)) { const mat=hofTableToMatrix(tableEl); renderStageCardsForMobile(tableEl, mat, k); } }catch(_){ }
       return;
     }
     // legacy row-filter mode
     // Prevent table flash during season switch for TST/TSL
-    try{ if(tableEl && (k==='tst' || k==='tsl')) tableEl.style.visibility='hidden'; }catch(_){ }
+    try{ if(tableEl && isHofCardLeague(k)) tableEl.style.visibility='hidden'; }catch(_){ }
     applySeasonFilter(tableEl, label, k);
-    try{ decorateHofPlacements(tableEl); }catch(_){ }
-    try{ if(k==='tst' || k==='tsl'){ const mat=hofTableToMatrix(tableEl); renderStageCardsForMobile(tableEl, mat, k); } }catch(_){ }
-    try{ if(tableEl && (k==='tst' || k==='tsl')){ const built=(tableEl.parentElement?tableEl.parentElement.querySelectorAll('.hof-stage-card').length:0); if(built<=0) tableEl.style.visibility=''; } }catch(_){ }
+    try{ decorateHofPlacements(tableEl, key); }catch(_){ }
+    try{ if (isHofCardLeague(k)) { const mat=hofTableToMatrix(tableEl); renderStageCardsForMobile(tableEl, mat, k); } }catch(_){ }
+    try{ if(tableEl && isHofCardLeague(k)){ const built=(tableEl.parentElement?tableEl.parentElement.querySelectorAll('.hof-stage-card').length:0); if(built<=0) tableEl.style.visibility=''; } }catch(_){ }
   }
 
   // Expose for renderSeasonBar (defined in global scope below)
@@ -5899,7 +6021,7 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
     // Clear stage-cards + flags right away to avoid mobile blank when switching leagues (TST -> TSL etc.)
     try{
       const inline=document.getElementById('hofInline');
-      if(inline) inline.classList.remove('hof-has-stagecards','hof-inline-tst','hof-inline-tsl');
+      if(inline) inline.classList.remove('hof-has-stagecards','hof-inline-tst','hof-inline-tsl','hof-inline-tpl','hof-inline-msl','hof-inline-tcl');
       // Remove any previously appended stage-card containers
       const wrap=document.querySelector('#hofInline .hof-stage-cards');
       if(wrap) wrap.remove();
@@ -5934,21 +6056,21 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
         box.classList.remove('hof-inline-pro','hof-inline-tst','hof-inline-tsl');
         box.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl');
         
-        box.classList.add(key==='pro'?'hof-inline-pro':key==='tst'?'hof-inline-tst':key==='tsl'?'hof-inline-tsl':key==='msl'?'hof-inline-msl':key==='tcl'?'hof-inline-tcl':'hof-inline-race');
-        box.classList.add(key==='pro'?'hof-league-pro':key==='tst'?'hof-league-tst':key==='tsl'?'hof-league-tsl':key==='msl'?'hof-league-msl':key==='tcl'?'hof-league-tcl':'hof-league-race');
+        box.classList.add(key==='pro'?'hof-inline-pro':key==='tsl'?'hof-inline-tsl':key==='tst'?'hof-inline-tst':key==='tpl'?'hof-inline-tpl':key==='msl'?'hof-inline-msl':'hof-inline-tcl');
+        box.classList.add(key==='pro'?'hof-league-pro':key==='tsl'?'hof-league-tsl':key==='tst'?'hof-league-tst':key==='tpl'?'hof-league-tpl':key==='msl'?'hof-league-msl':'hof-league-tcl');
       }
     }catch(_){ }
 
     // Tag table with current league for CSS tweaks
     if(tableEl){
-      tableEl.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl');
+      tableEl.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl','hof-league-tpl','hof-league-msl','hof-league-tcl');
       tableEl.classList.add(key==='pro'?'hof-league-pro':key==='tst'?'hof-league-tst':key==='tsl'?'hof-league-tsl':key==='msl'?'hof-league-msl':key==='tcl'?'hof-league-tcl':'hof-league-race');
     }
 
     if(titleEl) titleEl.textContent = c.title;
     // Prevent 0.1s table flash for TST/TSL: hide table while building cards
     try{
-      if(tableEl && (key==='tst' || key==='tsl')){
+      if(tableEl && isHofCardLeague(key)){
         tableEl.style.visibility = 'hidden';
         // ensure it's not display:none so we can build cards off DOM if needed
         if(tableEl.style.display==='none') tableEl.style.display='';
@@ -5958,10 +6080,10 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
       }
     }catch(_){ }
     // menu active
-    const proBtn = $('hofPro'); const tstBtn = $('hofTST'); const tslBtn = $('hofTSL');
-    const mslBtn = $('hofMSL'); const tclBtn = $('hofTCL'); const raceBtn = $('hofRACE');
-    [proBtn,tstBtn,tslBtn,mslBtn,tclBtn,raceBtn].forEach(b=>{ if(!b) return; b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
-    const pickBtn = (key==='pro')?proBtn:(key==='tst')?tstBtn:(key==='tsl')?tslBtn:(key==='msl')?mslBtn:(key==='tcl')?tclBtn:raceBtn;
+    const proBtn = $('hofPro'); const tslBtn = $('hofTSL'); const tstBtn = $('hofTST');
+    const tplBtn = $('hofTPL'); const mslBtn = $('hofMSL'); const tclBtn = $('hofTCL');
+    [proBtn,tslBtn,tstBtn,tplBtn,mslBtn,tclBtn].forEach(b=>{ if(!b) return; b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
+    const pickBtn = (key==='pro')?proBtn:(key==='tsl')?tslBtn:(key==='tst')?tstBtn:(key==='tpl')?tplBtn:(key==='msl')?mslBtn:tclBtn;
     if(pickBtn){ pickBtn.classList.add('active'); pickBtn.setAttribute('aria-selected','true'); }
     if(statusEl){ statusEl.style.display='block'; statusEl.textContent = '시트에서 데이터를 불러오는 중…'; }
     const inlineBox = $('hofInline');
@@ -6015,7 +6137,7 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
       try{ markHofTitleCells(tableEl); }catch(_){}
       try{ convertImageUrlCells(tableEl); }catch(_){}
       try{ applyTableDataLabels(tableEl); }catch(_){}
-      try{ decorateHofPlacements(tableEl); }catch(_){}
+      try{ decorateHofPlacements(tableEl, key); }catch(_){}
 
       let seasonsSorted = [];
       let active = '';
@@ -6072,13 +6194,12 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
     });
 
     const proBtn = $("hofPro");
-    const tstBtn = $("hofTST");
     const tslBtn = $("hofTSL");
+    const tstBtn = $("hofTST");
+    const tplBtn = $("hofTPL");
     const mslBtn = $("hofMSL");
     const tclBtn = $("hofTCL");
-    const raceBtn = $("hofRACE");
-
-    // Stop bubbling so any legacy parent click h&&lers (that used to open Google Sheets) won't fire.
+// Stop bubbling so any legacy parent click h&&lers (that used to open Google Sheets) won't fire.
     const guard = (e)=>{ try{ e.preventDefault(); }catch(_){} try{ e.stopPropagation(); }catch(_){} try{ e.stopImmediatePropagation(); }catch(_){} };
 
     if(proBtn && !proBtn.dataset.bound){
@@ -6102,11 +6223,10 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
       tclBtn.dataset.bound='1';
       tclBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tcl'); });
     }
-    if(raceBtn && !raceBtn.dataset.bound){
-      raceBtn.dataset.bound='1';
-      raceBtn.addEventListener('click', (e)=>{ guard(e); openHOF('race'); });
+    if(tplBtn && !tplBtn.dataset.bound){
+      tplBtn.dataset.bound='1';
+      tplBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tpl'); });
     }
-
     // Auto render default (latest) when section exists
     try{
       if(!window.__HOF_INLINE_BOOTED && document.getElementById('hofInlineTable')){
@@ -6135,7 +6255,7 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
           inline.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove());
           return;
         }
-        if(k!=='tst' && k!=='tsl') return;
+        if(k!=='tst' && k!=='tsl' && k!=='tpl' && k!=='msl' && k!=='tcl') return;
         // Rebuild cards from last rendered block data (block mode)
         const last = (window.__HOF_LAST_BLOCK && window.__HOF_LAST_BLOCK[k]) ? window.__HOF_LAST_BLOCK[k] : null;
         if(last && Array.isArray(last.data) && last.data.length){
@@ -6151,6 +6271,140 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
 
   document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeMobile(); });
 })();
+
+
+
+
+function mountSimpleKeyValueHofCardFromRenderedTable(tableEl, leagueKey){
+  const k = String(leagueKey||'').toLowerCase();
+  if(!tableEl || (k!=='tpl' && k!=='tcl')) return false;
+
+  const norm = (s)=> String(s||'')
+    .replace(/[\u200B-\u200D\uFEFF]/g,'')
+    .replace(/\u00A0/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+
+  // Extract a reasonable "stage/season" label.
+  let stageLabel = '';
+  try{
+    const head = tableEl.querySelector('thead tr');
+    if(head){
+      const t = norm(head.textContent);
+      if(t) stageLabel = t;
+    }
+  }catch(_){}
+  if(!stageLabel){
+    try{
+      const firstRow = tableEl.querySelector('tbody tr');
+      if(firstRow){
+        const t = norm(firstRow.textContent);
+        if(t && /(시즌|스테이지|리그|TPL|TCL)/.test(t)) stageLabel = t;
+      }
+    }catch(_){}
+  }
+  // If still empty, fall back to league title in the card header.
+  if(!stageLabel){
+    stageLabel = (k==='tpl') ? 'TPL' : 'TCL';
+  }
+
+  // Parse key/value rows (label in first cell, value in last non-empty cell)
+  let winner='', runner='', third='', organizer='';
+  try{
+    const rows = Array.from(tableEl.querySelectorAll('tbody tr'));
+    for(const tr of rows){
+      const cells = Array.from(tr.querySelectorAll('th,td'));
+      if(!cells.length) continue;
+      const label = norm(cells[0].textContent);
+      let value = '';
+      for(let i=cells.length-1;i>=1;i--){
+        const v = norm(cells[i].textContent);
+        if(v){ value = v; break; }
+      }
+      if(!label) continue;
+
+      if(/(^|\s)3\s*위($|\s)/.test(label) || /삼\s*위/.test(label)) third = value || third;
+      else if(/준\s*우\s*승/.test(label)) runner = value || runner;
+      else if(/(^|\s)우\s*승($|\s)/.test(label) && !/준\s*우\s*승/.test(label)) winner = value || winner;
+      else if(/대회\s*진행자|대회진행자|진행자/.test(label)) organizer = value || organizer;
+    }
+  }catch(_){}
+
+  // If we can't find winner/runner, don't take over (let the normal renderer show the table).
+  if(!winner && !runner) return false;
+
+  const parent = tableEl.parentElement;
+  if(!parent) return false;
+
+  // Remove any old cards first
+  try{ parent.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove()); }catch(_){}
+
+  const wrap = document.createElement('div');
+  wrap.className = 'hof-stage-cards';
+
+  const card = document.createElement('div');
+  card.className = 'hof-stage-card';
+
+  const titleText = String(stageLabel||'').trim();
+  // Don't show placeholder / auto stage labels
+  if(titleText && titleText!=='-' && titleText!=='–' && titleText!=='—' && titleText!=='－' && !/^스테이지\s*\d+$/.test(titleText) && !/^스테이지\d+$/.test(titleText)){
+    const title = document.createElement('div');
+    title.className = 'hof-stage-title';
+    title.textContent = titleText;
+    card.appendChild(title);
+  }
+
+  const mkLine = (place, value)=>{
+    if(value===undefined || value===null) return;
+    const vv = String(value).trim();
+    if(!vv) return;
+    // hide placeholder dashes
+    if(vv==='-' || vv==='–' || vv==='—' || vv==='－') return;
+    const line = document.createElement('div');
+    line.className = 'hof-stage-line';
+
+    const badge = document.createElement('span');
+    badge.className = 'hof-stage-badge';
+    badge.textContent = (place==='win') ? '🏆' : (place==='third') ? '🥉' : '🥈';
+    line.appendChild(badge);
+
+    const lab = document.createElement('span');
+    lab.className = 'hof-stage-label';
+    lab.textContent = (place==='win') ? '우승' : (place==='third') ? '3위' : '준우승';
+    line.appendChild(lab);
+
+    const val = document.createElement('span');
+    val.className = 'hof-stage-value';
+    val.textContent = vv;
+    line.appendChild(val);
+
+    card.appendChild(line);
+  };
+
+  mkLine('win', winner);
+  mkLine('run', runner);
+  mkLine('third', third);
+
+  if(organizer){
+    const org = document.createElement('div');
+    org.className = 'hof-stage-organizer';
+    org.innerHTML = `<span class="hof-organizer-star">★</span><span class="k">대회진행자</span> : ${organizer}`;
+    card.appendChild(org);
+  }
+
+  wrap.appendChild(card);
+  parent.appendChild(wrap);
+
+  // Hide the original table when we successfully built cards (same as TSL/TST behavior).
+  try{ tableEl.style.display = 'none'; }catch(_){}
+
+  try{
+    const inline = document.getElementById('hofInline');
+    if(inline) inline.classList.add('hof-has-stagecards');
+  }catch(_){}
+
+  return true;
+}
 
 
 
