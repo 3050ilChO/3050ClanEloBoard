@@ -31,33 +31,11 @@ try{
 const TIER_TO_NUM = {'갓':1,'킹':2,'퀸':3,'잭':4,'스페이드':5,'조커':6,'히든':7};
 const NUM_TO_TIER = {1:'갓',2:'킹',3:'퀸',4:'잭',5:'스페이드',6:'조커',7:'히든'};
 
-// === Global ID normalizer (whitespace/NBSP/zero-width/case-insensitive) ===
-// NOTE: Must be in global scope because openPlayer/search/h2h/etc. run outside IIFEs.
-if (typeof window !== 'undefined' && typeof window.normalizeId !== 'function') {
-  window.normalizeId = function normalizeId(v){
-    return String(v ?? '')
-      .replace(/\u00A0/g,' ')              // NBSP
-      .replace(/[\u200B-\u200D\uFEFF]/g,'') // zero-width
-      .replace(/\s+/g,'')                 // all whitespace
-      .toLowerCase();
-  };
-}
-
-// Local alias (keeps existing calls like normalizeId(x) working)
-const normalizeId = (typeof window !== 'undefined' && window.normalizeId) ? window.normalizeId : (v)=>String(v??'').toLowerCase();
-
-
 // === Hall of Fame popup links (configurable) ===
 const HOF_LINKS = {
   pro: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=1658280214#gid=1658280214",
   tst: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=381201435#gid=381201435",
-  tsl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=2130451924#gid=2130451924",
-  // New HOF menus
-  tpl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=TPL",
-  // New HOF menus (sheet-name based; works even if gid changes)
-  msl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=MSL",
-  tcl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=TCL",
-  race: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=종족최강전"
+  tsl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=2130451924#gid=2130451924"
 };
 
 function initHOFButtons(){
@@ -393,7 +371,7 @@ async function openPlayer(bCellValue){
   const body=$('playerBody'); const title=$('playerTitle'); if(title) title.textContent=id; if(body) body.innerHTML='';
   if(!RANK_SRC.length) await loadRanking();
   const header = RANK_SRC[0]||[]; const rows = RANK_SRC.slice(1);
-  const row = rows.find(r=> normalizeId(String(r[1]||'').split('/')[0].trim())===normalizeId(id));
+  const row = rows.find(r=> lc(String(r[1]||'').split('/')[0].trim())===lc(id));
   if(!row){ if(body) body.innerHTML='<div class="err">선수를 찾을 수 없습니다.</div>'; activate('player'); return; }
 
   const COL = { B:1, C:2, D:3, J:9, L:11 };
@@ -405,10 +383,10 @@ async function openPlayer(bCellValue){
 
   const data = MATCH_SRC.length? MATCH_SRC : await fetchGVIZ(SHEETS.matches);
   const MH = data[0]||[]; const M = data.slice(1);
-  const you = normalizeId(playerName);
+  const you = lc(playerName);
   const yourRows = M.filter(r=>{
-    const w = normalizeId(r[ findIdx(MH, /승자\s*선수|winner/i) ]||'');
-    const l = normalizeId(r[ findIdx(MH, /패자\s*선수|loser/i) ]||'');
+    const w = lc(r[ findIdx(MH, /승자\s*선수|winner/i) ]||'');
+    const l = lc(r[ findIdx(MH, /패자\s*선수|loser/i) ]||'');
     return (w===you || l===you);
   });
 
@@ -481,81 +459,7 @@ async function openPlayer(bCellValue){
     .map(([name, v]) => ({ name, total: v.w + v.l, w: v.w, l: v.l, pct: (v.w+v.l) ? Math.round(v.w*1000/(v.w+v.l))/10 : 0 }))
     .sort((a, b) => b.total - a.total);
 
-
-// === 상대전(H2H) 집계: "가장 승을 많이 올린 상대" + "최다 매치 TOP5" ===
-// ✅ 요청사항 반영: (개인전)경기기록데이터 탭에서
-//  - 본인 승리 시 L열 점수 합산
-//  - 본인 패배 시 O열 점수 합산
-//  → 상대별 합산값을 "상대 ELO포인트"로 표시 (+면 ▲, -면 ▼)
-
-// (개인전)경기기록데이터는 별도 스프레드시트(URLS_V12.matches)에서 읽습니다.
-let matchLog = [];
-try{
-  // sheet 이름은 사용자가 제공한 그대로
-  matchLog = await fetchGVIZ({ id: "1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet: "(개인전)경기기록데이터", range: "A:O" });
-}catch(e){ matchLog = []; }
-
-const oppAgg = {}; // {상대ID: {w,l, elo}}
-const toNum = (v)=>{
-  const s = String(v??'').replace(/,/g,'').trim();
-  if(!s) return 0;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : 0;
-};
-
-if(matchLog && matchLog.length>1){
-  const H2 = matchLog[0]||[];
-  const R2 = matchLog.slice(1);
-  const iW2 = findIdx(H2, /승자\s*선수|winner/i);
-  const iL2 = findIdx(H2, /패자\s*선수|loser/i);
-
-  // L열(12번째) / O열(15번째) — 0-indexed
-  const idxWinDelta = 11;  // L
-  const idxLoseDelta = 14; // O
-
-  R2.forEach(rr=>{
-    const winRaw = (iW2>=0? rr[iW2] : '') || '';
-    const loseRaw= (iL2>=0? rr[iL2] : '') || '';
-    const winName = normalizeId(winRaw);
-    const loseName= normalizeId(loseRaw);
-
-    const isWin = (winName === you);
-    const isLose= (loseName === you);
-    if(!isWin && !isLose) return;
-
-    const oppRaw = String(isWin ? loseRaw : winRaw).split('/')[0].trim();
-    const oppKey = normalizeId(oppRaw);
-    if(!oppKey) return;
-
-    oppAgg[oppKey] = oppAgg[oppKey] || { disp: oppRaw, w:0, l:0, elo:0 };
-    if (oppRaw && (!oppAgg[oppKey].disp || oppRaw.length > oppAgg[oppKey].disp.length)) oppAgg[oppKey].disp = oppRaw;
-
-    if(isWin) oppAgg[oppKey].w++;
-    if(isLose) oppAgg[oppKey].l++;
-
-    // 요청 기준: 승리=L, 패배=O
-    const delta = isWin ? toNum(rr[idxWinDelta]) : toNum(rr[idxLoseDelta]);
-    oppAgg[oppKey].elo += delta;
-  });
-}
-
-const oppRows = Object.entries(oppAgg).map(([key,v])=>{ const name = v.disp || key; 
-  const total = (v.w||0) + (v.l||0);
-  const pct = total ? Math.round((v.w||0)*1000/total)/10 : 0;
-  const elo = Math.round((v.elo||0)*10)/10;
-  return { name, total, w:v.w||0, l:v.l||0, pct, elo };
-});
-
-const mostWinOpp = oppRows
-  .slice()
-  .sort((a,b)=> (b.w-a.w) || (b.total-a.total) || (a.name>b.name?1:-1))[0] || null;
-
-const topMatch5 = oppRows
-  .slice()
-  .sort((a,b)=> (b.total-a.total) || (b.w-a.w) || (a.name>b.name?1:-1))
-  .slice(0,5);
-
-const leagueHtml = `
+  const leagueHtml = `
     <h3>공식 및 이벤트대회 성적 (리그명 기준)</h3>
     <div class="table-wrap">
       <table class="detail">
@@ -574,89 +478,6 @@ const leagueHtml = `
       </table>
     </div>
   `;
-
-  const h2hHtml = (()=> {
-    const fmtDelta = (n)=>{
-      const v = Math.round((Number(n||0))*10)/10;
-      const sign = v>0 ? "+" : "";
-      return sign + v.toFixed(1);
-    };
-    const arrow = (v)=>{
-      const n = Number(v||0);
-      if(n>0) return `<span class="h2h-arrow up">▲</span>`;
-      if(n<0) return `<span class="h2h-arrow down">▼</span>`;
-      return `<span class="h2h-arrow flat">–</span>`;
-    };
-    const normId = (s)=> String(s||'').split('/')[0].trim();
-    const getEloOf = (pid)=>{
-      const target = lc(normId(pid));
-      const rr = rows.find(r=> lc(normId(r[COL.B])) === target);
-      return rr ? String(rr[COL.J] ?? '').trim() : '-';
-    };
-
-    if(!mostWinOpp){
-      return `
-        <hr class="gold"/>
-        <h3>가장 승을 많이 올린 상대</h3>
-        <div class="muted" style="margin-top:8px">데이터 없음</div>
-      `;
-    }
-
-    const oppId = mostWinOpp.name;
-    const leftWins = mostWinOpp.w || 0;
-    const rightWins = mostWinOpp.l || 0;
-    const total = leftWins + rightWins;
-    const leftRate = total ? (Math.round(leftWins*1000/total)/10).toFixed(1) : "0.0";
-    const rightRate = total ? (Math.round(rightWins*1000/total)/10).toFixed(1) : "0.0";
-
-    const myEloNow = String(eloText||'-');
-    const oppEloNow = getEloOf(oppId);
-
-    const delta = mostWinOpp.elo || 0;
-
-    const top5 = (topMatch5 && topMatch5.length) ? `
-      <div class="h2h-top5">
-        ${topMatch5.map(r=>{
-          const d = r.elo || 0;
-          return `
-            <div class="h2h-top5-item">
-              <div class="h2h-top5-name blue"><a href="#" class="h2h-player-link" data-player="${r.name}">${r.name}</a></div>
-              <div class="h2h-top5-rec">${r.total}전 (${r.w}승 ${r.l}패) · ${r.pct}%</div>
-              <div class="h2h-top5-elo">ELO포인트: ${fmtDelta(d)} ${arrow(d)}</div>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    ` : `<div class="muted" style="margin-top:8px">데이터 없음</div>`;
-
-    return `
-      <hr class="gold"/>
-      <h3>가장 승을 많이 올린 상대</h3>
-      <div class="h2h-matchup">
-        <div class="h2h-side">
-          <div class="h2h-id red">${playerName}</div>
-          <div class="h2h-elo-now">현재 ELO : <strong>${myEloNow}</strong></div>
-          <div class="h2h-wins">${leftWins}</div>
-          <div class="h2h-winrate">${leftRate}% WINS</div>
-        </div>
-
-        <div class="h2h-center">
-          <div class="h2h-vs">VS</div>
-          <div class="h2h-delta">${oppId} 상대 ELO포인트 : <strong>${fmtDelta(delta)}</strong> ${arrow(delta)}</div>
-        </div>
-
-        <div class="h2h-side">
-          <div class="h2h-id blue"><a href="#" class="h2h-player-link" data-player="${oppId}">${oppId}</a></div>
-          <div class="h2h-elo-now">현재 ELO : <strong>${oppEloNow}</strong></div>
-          <div class="h2h-wins">${rightWins}</div>
-          <div class="h2h-winrate">${rightRate}% WINS</div>
-        </div>
-      </div>
-
-      <h3 style="margin-top:14px">최다 매치 TOP 5</h3>
-      ${top5}
-    `;
-  })();
 
   if(body){
     const cz=curStats.counts.Z, cp=curStats.counts.P, ct=curStats.counts.T, ctot=curStats.total;
@@ -689,22 +510,8 @@ const leagueHtml = `
       <script>/* placeholder to keep HTML validators happy */</script>
       <hr class="gold"/>
       ${leagueHtml}
-      ${h2hHtml}
 
     `;
-
-
-      // ✅ H2H/Top5 아이디 클릭 → 해당 선수 상세로 이동
-      try{
-        body.querySelectorAll('.h2h-player-link').forEach(a=>{
-          a.addEventListener('click', ev=>{
-            ev.preventDefault();
-            ev.stopPropagation();
-            const pid = (a.getAttribute('data-player') || a.textContent || '').trim();
-            if(pid && typeof openPlayer==='function') openPlayer(pid);
-          });
-        });
-      }catch(_e){}
   }
 
   
@@ -798,67 +605,67 @@ try {
   }
 } catch(e){ console.warn('tier trend error', e); }
 
-// === ELO 변동추이 (전원 공통: '(개인전)경기기록데이터' / 승자 C→M, 패자 F→P, 날짜별 최종값) ===
+// === ELO 변동추이 (정밀 v4: 전용 시트 '(개인전)경기기록데이터'에서 계산, 전체 기간) ===
   try{
+    // 1) 전용 소스에서 원본 데이터 로드
     const eloSrc = { id:"1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet:"(개인전)경기기록데이터", range:"A:Z" };
     const E = await fetchGVIZ(eloSrc);
     if (!E.length) throw new Error("개인전 시트 비어있음");
-    const ER = E.slice(1);
+    const EH = E[0]||[]; const ER = E.slice(1);
+    const idxDate = EH.findIndex(h=>/날짜|경기일자|date/i.test(h));
+    const idxWinN = EH.findIndex(h=>/승자\s*선수|winner/i.test(h)); // C
+    const idxLoseN = EH.findIndex(h=>/패자\s*선수|loser/i.test(h)); // F
+    // 고정 인덱스: A:0 ... J:9, K:10, L:11, M:12, N:13, O:14, P:15
+    const K_PRE_WIN = 10, M_POST_WIN = 12, N_PRE_LOSE = 13, P_POST_LOSE = 15;
 
-    // 고정 컬럼 (0-based): A=0(날짜), C=2(승자ID), F=5(패자ID), M=12(경기후 승자ELO), P=15(경기후 패자ELO)
-    const COL_DATE=0, COL_WIN=2, COL_LOSE=5, COL_POST_WIN=12, COL_POST_LOSE=15;
-
-    const cleanNum = (x)=>{
-      const s = String(x ?? '').replace(/[^0-9.\-]/g,'').trim();
-      if(!s) return NaN;
+    const cleanNum = x => {
+      const s = String(x??'').replace(/[^0-9.\-]/g,'').trim();
+      if (!s) return NaN;
       const n = Number(s);
       return Number.isFinite(n) ? n : NaN;
     };
-    const dateKey = (x)=>{
-      const s = String(x ?? '').trim();
-      if(!s) return null;
-      const t = s.replace(/\./g,'-').replace(/\//g,'-');
-      const m = t.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
-      if(!m) return null;
-      const yy=m[1], mm=String(m[2]).padStart(2,'0'), dd=String(m[3]).padStart(2,'0');
-      return `${yy}-${mm}-${dd}`;
+    const toDate = s => {
+      const t = String(s||'').replace(/\./g,'-').replace(/\.$/,'').trim();
+      const d = new Date(t);
+      return Number.isNaN(d.getTime()) ? null : d;
     };
 
-    const me = normalizeId(playerName);
+    // 2) 본인 경기만 필터 + 날짜/전후ELO 추출
+    const rowsMine = ER.map(r=>{
+      const dStr = String(idxDate>=0 ? r[idxDate] : "");
+      const d = toDate(dStr);
+      const isWin  = lc(r[idxWinN]||"")  === you;
+      const isLose = lc(r[idxLoseN]||"") === you;
+      let pre = NaN, post = NaN;
+      if (isWin)  { pre = cleanNum(r[K_PRE_WIN]); post = cleanNum(r[M_POST_WIN]); }
+      if (isLose) { pre = cleanNum(r[N_PRE_LOSE]); post = cleanNum(r[P_POST_LOSE]); }
+      return { dStr, d, pre, post, isMine: (isWin||isLose) };
+    }).filter(x=> x.isMine && x.d).sort((a,b)=> (a.d>b.d?1:-1));
 
-    // 날짜별 최종(시트상 마지막 행) 경기후 ELO를 모음
-    const byDay = new Map(); // key -> {key, post}
-    for (let i=0;i<ER.length;i++){
-      const r = ER[i]||[];
-      const w = normalizeId(r[COL_WIN]);
-      const l = normalizeId(r[COL_LOSE]);
-      if (w!==me && l!==me) continue;
+    // 3) 날짜별 최종 경기후 ELO만 사용
+    const byDay = new Map();
+    rowsMine.forEach(m => byDay.set(m.dStr, m)); // 같은 날 마지막 경기로 덮어쓰기
+    const daily = Array.from(byDay.entries())
+                  .sort((a,b)=> (new Date(a[0]) > new Date(b[0]) ? 1 : -1))
+                  .map(([dStr, m])=> ({ dStr, pre: m.pre, post: m.post }));
 
-      const k = dateKey(r[COL_DATE]);
-      if (!k) continue;
-
-      const post = (w===me) ? cleanNum(r[COL_POST_WIN]) : cleanNum(r[COL_POST_LOSE]);
-      if (!Number.isFinite(post)) continue;
-
-      byDay.set(k, { key:k, post });
-    }
-
-    const daily = Array.from(byDay.values()).sort((a,b)=> a.key.localeCompare(b.key));
-    if (body){
+    if (body && daily.length){
       body.insertAdjacentHTML('beforeend', `
         <hr class="gold"/>
         <h3>ELO 변동추이</h3>
         <div class="chart-wrap"><canvas id="eloChart" height="170"></canvas></div>
       `);
 
-      const labels = daily.map(x=>x.key);
-      const series = daily.map(x=> Math.round(x.post*10)/10);
-
-      // 마지막 점을 현재 표시 ELO와 동기화(표시 불일치 방지)
-      const cur = Number(String(eloText).replace(/[^0-9.\-]/g,''));
-      if (Number.isFinite(cur) && series.length){
-        series[series.length-1] = Math.round(cur*10)/10;
-      }
+      const labels = daily.map(x=>x.dStr);
+      const series = [];
+      let carry = Number(String(eloText).replace(/[^0-9.]/g,''));
+      if (!Number.isFinite(carry) || carry<300) carry = 1500;
+      daily.forEach(x=>{
+        let v = Number.isFinite(x.post) ? x.post : (Number.isFinite(x.pre) ? x.pre : carry);
+        if (!Number.isFinite(v)) v = carry;
+        series.push(Math.round(v*10)/10);
+        carry = v;
+      });
 
       const ctx = document.getElementById('eloChart')?.getContext('2d');
       if (ctx){
@@ -870,15 +677,15 @@ try {
             responsive:true,
             plugins:{
               legend:{ display:true },
-              title:{ display:true, text:'ELO 변동 추이 (개인전 경기기록데이터 기준, 날짜별 최종값)' },
+              title:{ display:true, text:'ELO 변동 추이 (전체 기간, 날짜별 최종값)' },
               datalabels:{ display:false }
             },
-            scales:{ y:{ title:{ display:true, text:'ELO' } } }
+            scales:{ y:{ title:{display:true,text:'ELO'} } }
           }
         });
       }
     }
-  }catch(e){ console.warn('elo v5 error', e); }
+  }catch(e){ console.warn('elo v4 error', e); }
 // --- 최근 10경기 승패 그래프 및 테이블 (중복 제거 버전) ---
 try {
   const iDate = findIdx(MH, /경기일자|date/i);
@@ -909,7 +716,7 @@ try {
       l:String(iLoseN>=0? r[iLoseN]:""),
       m:String(iMap>=0? r[iMap]:""),
       lg:String(iLeague>=0? r[iLeague]:"")
-    })).sort((a,b)=> (a.d > b.d ? 1 : -1))).slice(-10).reverse();
+    })).sort((a,b)=> (a.d > b.d ? 1 : -1))).slice(-10);
 
     const rowHtml = rows10.map(r=>{
       const opp = (lc(r.w)===you) ? r.l : r.w;
@@ -1436,15 +1243,6 @@ if (hamburger && mainMenu) {
 /* === v9_97_FinalDualColor_MapCompareFix === */
 (function(){
   function lc(s){ return String(s ?? '').toLowerCase(); }
-
-function normalizeId(v){
-  // remove normal/nbps/zero-width spaces and lower-case for stable matching
-  return String(v ?? '')
-    .replace(/\u00A0/g,' ')
-    .replace(/[\u200B-\u200D\uFEFF]/g,'')
-    .replace(/\s+/g,'')
-    .toLowerCase();
-}
   function $(id){
   const el = document.getElementById(id);
   if (el) return el;
@@ -1742,7 +1540,7 @@ function normalizeId(v){
     const freshReset = resetBtn ? resetBtn.cloneNode ? cloneNode(true) : (el => el) : null;
     if (resetBtn) resetBtn.parentNode.replaceChild(freshReset, resetBtn);
 
-    // 2.2 Attach fresh click h&&ler
+    // 2.2 Attach fresh click handler
     freshRun.addEventListener("click", async ()=>{
       const p1Label = ($("#h2hP1")?.value || "플레이어1").trim();
       const p2Label = ($("#h2hP2")?.value || "플레이어2").trim();
@@ -1838,7 +1636,7 @@ function normalizeId(v){
       }
     });
 
-    // 2.3 Reset h&&ler
+    // 2.3 Reset handler
     if (freshReset){
       freshReset.addEventListener("click", ()=>{
         ["h2hP1","h2hP2","h2hMap"].forEach(id => { const el = $("#"+id); if(el) el.value=""; });
@@ -1859,7 +1657,7 @@ function normalizeId(v){
 
 
 /* === v9_106_VerifiedLiveFix ===
-   Ensures Chart.js && canvases load correctly after full page render.
+   Ensures Chart.js and canvases load correctly after full page render.
    Fixes map chart not showing.
 */
 window.addEventListener('load', () => {
@@ -2080,7 +1878,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 })();
 
-// === v9_65 Final Fix: Global Button H&&lers Restored ===
+// === v9_65 Final Fix: Global Button Handlers Restored ===
 function reset() {
   try {
     document.getElementById("h2hPlayer1").value = "";
@@ -2179,36 +1977,62 @@ function formatDateSafe(value){
 
 /* === v12 Full Data Connect Patch === */
 /* GViz helper: accept full Google Sheets URL with edit?gid=... */
+
+async function fetchGVIZHTMLbyUrl_v1(fullUrl){
+  try{
+    const m = String(fullUrl).match(/spreadsheets\/d\/([^/]+)\/edit.*?[?&#]gid=(\d+)/);
+    if(!m) throw new Error("Invalid sheet URL: "+fullUrl);
+    const id=m[1], gid=m[2];
+    const htmlBase = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?gid=${gid}&tqx=out:html`;
+    const url = (window.USE_PROXY ? window.PROXY_URL : '') + htmlBase;
+    const res = await fetch(url, {cache:'no-store'});
+    const text = await res.text();
+
+    // Parse first HTML table
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'text/html');
+    const table = doc.querySelector('table');
+    if(!table) return [];
+
+    const rows = Array.from(table.querySelectorAll('tr')).map(tr=>{
+      const cells = Array.from(tr.querySelectorAll('th,td')).map(td=>{
+        // Prefer images if present (Google Sheet IMAGE() often renders as <img>)
+        const img = td.querySelector('img');
+        if(img){
+          const src = img.getAttribute('src') || img.src || '';
+          return src || '';
+        }
+        // Otherwise plain text
+        return String(td.textContent || '').replace(/\u00A0/g,' ').trim();
+      });
+      return cells;
+    });
+    return rows;
+  }catch(e){
+    console.warn("fetchGVIZHTMLbyUrl_v1 failed:", e);
+    return [];
+  }
+}
+
+
 async function fetchGVIZbyUrl_v12b(fullUrl){
   try{
-    const s = String(fullUrl||'').trim();
-    const u = new URL(s);
-    const parts = u.pathname.split('/').filter(Boolean);
-    const dIdx = parts.indexOf('d');
-    const id = (dIdx>=0 && parts[dIdx+1]) ? parts[dIdx+1] : null;
-    const gid = u.searchParams.get('gid') || (u.hash.match(/gid=(\d+)/)?.[1]) || null;
-    const sheet = u.searchParams.get('sheet') || null;
-    if(!id || (!gid && !sheet)) throw new Error("Invalid sheet URL: "+fullUrl);
-
-    let gvizBase = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json`;
-    if(gid) gvizBase += `&gid=${gid}`;
-    if(sheet) gvizBase += `&sheet=${encodeURIComponent(sheet)}`;
+    const m = String(fullUrl).match(/spreadsheets\/d\/([^/]+)\/edit.*?[?&#]gid=(\d+)/);
+    if(!m) throw new Error("Invalid sheet URL: "+fullUrl);
+    const id=m[1], gid=m[2];
+    const gvizBase = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&gid=${gid}`;
     const gviz = (window.USE_PROXY ? window.PROXY_URL : '') + gvizBase;
-
     const res = await fetch(gviz, {cache:'no-store'});
     const text = await res.text();
     let payload = text;
-
-    // Handle GVIZ wrapper: google.visualization.Query.setResponse(...)
-    const mWrap = payload.match(/setResponse\((.*)\)\s*;?\s*$/s);
-    if(mWrap && mWrap[1]) payload = mWrap[1];
-
-    // Trim to JSON object
-    const first = payload.indexOf('{');
-    const last = payload.lastIndexOf('}');
-    if(first >= 0 && last >= 0) payload = payload.slice(first, last+1);
-
-    const json = JSON.parse(payload);
+// Handle both raw JSON and the common GVIZ wrapper: google.visualization.Query.setResponse(...)
+const mWrap = payload.match(/setResponse\((.*)\)\s*;?\s*$/s);
+if(mWrap && mWrap[1]) payload = mWrap[1];
+// Otherwise, trim to the first '{' and the last '}'
+const first = payload.indexOf('{');
+const last = payload.lastIndexOf('}');
+if(first >= 0 && last >= 0) payload = payload.slice(first, last+1);
+const json = JSON.parse(payload);
     const table = json.table || {};
     const rows = (table.rows||[]).map(r => (r.c||[]).map(c => (c && (c.f ?? c.v)) ?? ''));
     return rows;
@@ -2261,7 +2085,7 @@ async function v12_loadCounts(){
         const raw = String((r||[])[0]||'').trim();
         if(!raw) continue;
         let d = null;
-        // h&&le yyyy-mm-dd or yyyy/mm/dd or Date object-ish
+        // handle yyyy-mm-dd or yyyy/mm/dd or Date object-ish
         const m = raw.match(/(\d{4})[\-\/.](\d{1,2})[\-\/.](\d{1,2})/);
         if(m){
           const y=parseInt(m[1],10), mo=parseInt(m[2],10), da=parseInt(m[3],10);
@@ -2293,7 +2117,7 @@ async function v12_loadCounts(){
 }
 
 
-/* v12f normalize race tags: map 저그/프로토스/테란 && variants to Z/P/T */
+/* v12f normalize race tags: map 저그/프로토스/테란 and variants to Z/P/T */
 function normalizeRaceTag(v){
   const s = String(v||'').trim().toLowerCase();
   if(!s) return '';
@@ -2415,44 +2239,18 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 /* robust GViz parser (v12b) */
 async function fetchGVIZbyUrl_v12b(fullUrl){
   try{
-    const s = String(fullUrl||'').trim();
-    const u = new URL(s);
-    const parts = u.pathname.split('/').filter(Boolean);
-    const dIdx = parts.indexOf('d');
-    const id = (dIdx>=0 && parts[dIdx+1]) ? parts[dIdx+1] : null;
-
-    const gid = u.searchParams.get('gid') || (u.hash.match(/gid=(\d+)/)?.[1]) || null;
-    const sheet = u.searchParams.get('sheet') || null;
-
-    // allow plain /edit URL too (default to gid=0 when nothing specified)
-    const gidFinal = (gid || (!sheet ? '0' : null));
-
-    if(!id) throw new Error("Invalid sheet URL: " + fullUrl);
-
-    let gvizBase = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json`;
-    if(gidFinal != null) gvizBase += `&gid=${gidFinal}`;
-    if(sheet) gvizBase += `&sheet=${encodeURIComponent(sheet)}`;
-
-    const gviz = (window.USE_PROXY ? window.PROXY_URL : '') + gvizBase;
-    const res = await fetch(gviz, {cache:'no-store'});
+    const m = String(fullUrl).match(/spreadsheets\/d\/([^/]+)\/edit.*?[?&#]gid=(\d+)/);
+    if(!m) throw new Error("Invalid sheet URL: "+fullUrl);
+    const id=m[1], gid=m[2];
+    const gviz = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&gid=${gid}`;
+    const res = await fetch(gviz,{cache:'no-store'});
     const text = await res.text();
-    let payload = text;
-
-    const mWrap = payload.match(/setResponse\((.*)\)\s*;?\s*$/s);
-    if(mWrap && mWrap[1]) payload = mWrap[1];
-
-    const first = payload.indexOf('{');
-    const last  = payload.lastIndexOf('}');
-    if(first >= 0 && last >= 0) payload = payload.slice(first, last+1);
-
-    const json = JSON.parse(payload);
-    const table = json.table || {};
-    const rows = (table.rows||[]).map(r => (r.c||[]).map(c => (c && (c.f ?? c.v)) ?? ''));
+    const body = (text.match(/setResponse\((.*)\);?\s*$/s)||[])[1];
+    const json = JSON.parse(body);
+    const table=json.table||{};
+    const rows=(table.rows||[]).map(r=>(r.c||[]).map(c=>(c&&(c.f??c.v))??''));
     return rows;
-  }catch(e){
-    console.error('fetchGVIZbyUrl_v12b error', e);
-    return [];
-  }
+  }catch(e){ console.error('fetchGVIZbyUrl_v12b error', e); return []; }
 }
 
 /* v12e rank row click strong */
@@ -2625,43 +2423,14 @@ function getTierRankForPlayer(playerRow, allRows, H){
     const IDX_TIER = 3; // D
     const IDX_ELO  = 9; // J
     const IDX_NAME = 1; // B
-
     const myName = String(playerRow[IDX_NAME]||'').split('/')[0].trim().toLowerCase();
     const myTier = String(playerRow[IDX_TIER]||'').trim();
-    if(!myName || !myTier) return {tierRank:null, totalInTier:0, tierName: myTier};
-
-    // --- 동일한 기준(5경기 이상)으로 티어 순위 계산 ---
-    const rows = Array.isArray(allRows) ? allRows : [];
-    const sameTier = rows.filter(r => String(r[IDX_TIER]||'').trim() === myTier);
-
-    // 경기수 계산 (MATCH_SRC가 없으면 fallback: 기존 전체 인원 기준)
-    let qualified = sameTier;
-    try{
-      const MH = (MATCH_SRC && MATCH_SRC[0]) ? MATCH_SRC[0] : [];
-      const MR = (MATCH_SRC && MATCH_SRC.length>1) ? MATCH_SRC.slice(1) : [];
-      const iW = findIdx(MH, /승자\s*선수|winner/i);
-      const iL = findIdx(MH, /패자\s*선수|loser/i);
-
-      function gamesOf(rawName){
-        const name = String(rawName||'').split('/')[0].trim().toLowerCase();
-        if(!name) return 0;
-        let c=0;
-        for(const r of MR){
-          const w = lc(r[iW]||''); const l = lc(r[iL]||'');
-          if(w===name || l===name) c++;
-        }
-        return c;
-      }
-
-      qualified = sameTier.filter(r => gamesOf(r[IDX_NAME]) >= 5);
-    }catch(e){ /* ignore, fallback */ }
-
+    // same-tier rows
+    const same = allRows.filter(r => String(r[IDX_TIER]||'').trim() === myTier);
     // sort by ELO desc
-    qualified.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
-
-    const rank = qualified.findIndex(r => String(r[IDX_NAME]||'').split('/')[0].trim().toLowerCase() === myName) + 1;
-
-    return {tierRank: rank>0?rank:null, totalInTier: qualified.length, tierName: myTier};
+    same.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
+    const rank = same.findIndex(r => String(r[IDX_NAME]||'').split('/')[0].trim().toLowerCase() === myName) + 1;
+    return {tierRank: rank>0?rank:null, totalInTier: same.length, tierName: myTier};
   }catch(e){ console.warn('getTierRankForPlayer error', e); return {tierRank:null, totalInTier:0, tierName:''}; }
 }
 
@@ -2844,7 +2613,7 @@ function clearExistingCrown(containerEl){
   containerEl.querySelectorAll('img.crown').forEach(n=>n.remove());
 }
 
-// Format "(전체:n위) (티어:n위)" && avoid duplication
+// Format "(전체:n위) (티어:n위)" and avoid duplication
 
 function appendRankBadges(eloRowEl, infoOverall, infoTier){
   if(!eloRowEl) return;
@@ -2906,7 +2675,7 @@ function cleanOldRankPattern(eloRowEl){
   eloRowEl.innerHTML = eloRowEl.innerHTML.replace(/\(\d+위\)/g,'');
 }
 
-// Override openPlayer once more to add overall + tier ranks && single crown
+// Override openPlayer once more to add overall + tier ranks and single crown
 const __prev_openPlayer_v979 = window.openPlayer;
 window.openPlayer = async function(bCellValue){
   if(!RANK_SRC.length) await loadRanking();
@@ -3154,7 +2923,7 @@ window.openPlayer = async function(bCellValue){
       if(!key || seen[key]) return;
       seen[key]=1;
       var opt = document.createElement('option');
-      opt.value = id;    // browser h&&les case-insensitive suggestion visually
+      opt.value = id;    // browser handles case-insensitive suggestion visually
       list.appendChild(opt);
     });
   }
@@ -3194,13 +2963,8 @@ window.openPlayer = async function(bCellValue){
   const cfg={
     pro:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.pro : ''), title:"프로리그 PROLEAGUE" },
     tst:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tst : ''), title:"TST 3050토너먼트" },
-    tpl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tpl : ''), title:"TPL 갓/킹리그" },
-    tsl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tsl : ''), title:"TSL 3050스타리그" },
-    msl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.msl : ''), title:"MSL 퀸.잭 리그" },
-    tcl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tcl : ''), title:"TCL(스페/조커/히든)" },
-};
-
-  const isHofCardLeague = (k)=> (k==='tst' || k==='tsl' || k==='tpl' || k==='msl' || k==='tcl');
+    tsl:{ url: (typeof HOF_LINKS!=='undefined'? HOF_LINKS.tsl : ''), title:"TSL 3050스타리그" }
+  };
 
   const $ = (id)=>document.getElementById(id);
 
@@ -3209,44 +2973,21 @@ window.openPlayer = async function(bCellValue){
 
   function normData(data){
     if(!Array.isArray(data) || !data.length) return [];
-    const clean = (v)=> String(v??'')
-      .replace(/[\u200B-\u200D\uFEFF]/g,'')
-      .replace(/\u00A0/g,' ')
-      .trim();
-    const isBlank = (v)=> {
-      const s = clean(v);
-      // Treat common "invisible" placeholders as empty
-      return s==='' || s==='-' || s==='—' || s==='–';
-    };
-
-    let maxCols = 0;
+    let maxCols = 0
     for(const r of data){ maxCols = Math.max(maxCols, (r||[]).length); }
-
-    // detect last useful col (ignore trailing empty/nbsp/zero-width cells)
+    // detect last useful col
     let last = maxCols - 1;
     while(last>=0){
       let allEmpty = true;
       for(const r of data){
         const v = (r||[])[last];
-        if(!isBlank(v)){ allEmpty=false; break; }
+        if(v!=null && String(v).trim()!==''){ allEmpty=false; break; }
       }
       if(!allEmpty) break;
       last -= 1;
     }
     if(last < 0) return [];
-
-    // also trim leading fully-empty columns (some sheets have padding columns)
-    let first = 0;
-    while(first<=last){
-      let allEmpty = true;
-      for(const r of data){
-        const v = (r||[])[first];
-        if(!isBlank(v)){ allEmpty=false; break; }
-      }
-      if(!allEmpty) break;
-      first += 1;
-    }
-    return data.map(r => (r||[]).slice(first, last+1));
+    return data.map(r => (r||[]).slice(0, last+1));
   }
 
 
@@ -3285,7 +3026,7 @@ window.openPlayer = async function(bCellValue){
       const cells = Array.from(tr.children || []);
       const txt = (tr.textContent||'').replace(/\s+/g,' ').trim();
       if(!txt) return;
-      if(/명예의전당/.test(txt)){
+      if(/명예\s*의전당/.test(txt)){
         // Mark all non-empty cells in this row as title cells
         cells.forEach(td=>{
           const t = (td.textContent||'').trim();
@@ -3307,71 +3048,19 @@ window.openPlayer = async function(bCellValue){
     if(!tbody) return;
     const rows = Array.from(tbody.querySelectorAll('tr'));
     const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
-    // league key (needed for TPL/TCL special parsing)
-    let k = String(leagueKey||'').toLowerCase();
-    if(!k){
-      try{
-        if(tableEl.classList.contains('hof-league-tpl')) k='tpl';
-        else if(tableEl.classList.contains('hof-league-tcl')) k='tcl';
-        else if(tableEl.classList.contains('hof-league-msl')) k='msl';
-        else if(tableEl.classList.contains('hof-league-tsl')) k='tsl';
-        else if(tableEl.classList.contains('hof-league-tst')) k='tst';
-      }catch(_){ }
-    }
-    if(!k){
-      try{ k = String(window.HOF_INLINE_CURRENT||'').toLowerCase(); }catch(_){ }
-    }
-
-    // Simple key/value HOF tables (TPL/TCL): build a single stage card from the rendered table
-    // Some sheets are 2-column (label/value) and don't include stage labels in the matrix, so matrix parsing fails.
-    if((k==='tpl' || k==='tcl') && typeof mountSimpleKeyValueHofCardFromRenderedTable === 'function'){
-      try{ if(mountSimpleKeyValueHofCardFromRenderedTable(tableEl, k)) return; }catch(_){}
-    }
-
-
-
-    // If there is a separate season row under the title, fold it into the title and remove the season row.
-    try{
-      let titleIdx=-1, seasonIdx=-1;
-      for(let i=0;i<Math.min(6, rows.length); i++){
-        const t = norm(rows[i].textContent);
-        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
-        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
-      }
-      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
-        const titleRow = rows[titleIdx];
-        const seasonRow = rows[seasonIdx];
-        const seasonTxt = norm(seasonRow.textContent);
-        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
-        if(titleCell && seasonTxt){
-          // Append season to the title (left aligned)
-          const base = norm(titleCell.textContent);
-          if(base && base.indexOf(seasonTxt)===-1){
-            titleCell.textContent = base + '  ' + seasonTxt;
-          }
-        }
-        // remove season row entirely
-        seasonRow.remove();
-        // refresh rows array (used later)
-        // eslint-disable-next-line no-unused-vars
-        rows.splice(seasonIdx,1);
-      }
-    }catch(_){}
-
 
     const makeBadge = (type)=>{
       const wrap = document.createElement('div');
-      const t = (type==='win' || type==='runner' || type==='third') ? type : 'runner';
-      wrap.className = 'hof-place-badge ' + t;
+      wrap.className = 'hof-place-badge ' + (type==='win' ? 'win' : 'runner');
 
       const img = document.createElement('img');
       img.className = 'hof-place-crown';
-      img.alt = (t==='win') ? '우승' : (t==='runner') ? '준우승' : '3위';
-      img.src = (t==='win') ? './crown_gold.png' : (t==='runner') ? './crown_silver.png' : './crown_bronze.png';
+      img.alt = type==='win' ? '우승' : '준우승';
+      img.src = type==='win' ? './crown_gold.png' : './crown_silver.png';
 
       const label = document.createElement('div');
       label.className = 'hof-place-label';
-      label.textContent = (t==='win') ? '우승' : (t==='runner') ? '준우승' : '3위';
+      label.textContent = type==='win' ? '우승' : '준우승';
 
       wrap.appendChild(img);
       wrap.appendChild(label);
@@ -3411,14 +3100,13 @@ window.openPlayer = async function(bCellValue){
       chip.appendChild(icon);
       chip.appendChild(tbox);
 
-      // Clear && re-add
+      // Clear and re-add
       td.innerHTML = '';
       td.appendChild(chip);
     };
 
 
-    // Ensure league key is resolved (avoid redeclaring `k` in this scope)
-    k = k || String(leagueKey || HOF_INLINE_CURRENT || 'pro').toLowerCase();
+    const k = String(leagueKey || HOF_INLINE_CURRENT || 'pro').toLowerCase();
     const wantChip = (k === 'pro');
 
 rows.forEach(tr=>{
@@ -3430,14 +3118,13 @@ rows.forEach(tr=>{
       let placeType = '';
       for(let i=0;i<tds.length;i++){
         const txt = norm(tds[i].textContent);
-        if(/(^|\s)3\s*위($|\s)/.test(txt) || /(^|\s)삼\s*위($|\s)/.test(txt) || /(^|\s)3rd($|\s)/i.test(txt)){ placeIdx = i; placeType='third'; break; }
         if(/준\s*우\s*승/.test(txt)){ placeIdx = i; placeType='runner'; break; }
         if(/(^|\s)우\s*승($|\s)/.test(txt) && !/준\s*우\s*승/.test(txt)){ placeIdx = i; placeType='win'; break; }
       }
       if(placeIdx < 0) return;
 
       tr.classList.add('hof-place-row');
-      tr.classList.add(placeType==='win' ? 'win' : (placeType==='third' ? 'third' : 'runner'));
+      tr.classList.add(placeType==='win' ? 'win' : 'runner');
 
       // Replace the placement cell with crown badge
       tds[placeIdx].innerHTML = '';
@@ -3457,483 +3144,228 @@ rows.forEach(tr=>{
 
   
   // PRO: transform the raw table into a 2-column podium layout (match desired roster-style card)
-  function renderProPodiumFromBlock(tableEl, blockData){
-    // Render PROLEAGUE as 2-column podium cards (우승/준우승) like the screenshot.
-    // We render into the existing <table> by placing a single <td colspan="N"> cell.
-    if(!tableEl) return;
-    const thead = tableEl.querySelector('thead');
-    const tbody = tableEl.querySelector('tbody');
-    if(!thead || !tbody) return;
-    thead.innerHTML = '';
-    tbody.innerHTML = '';
+  
+function transformProHofToPodium(tableEl){
+  // PROLEAGUE: render as vertical (winner top / runner bottom) cards.
+  if(!tableEl) return;
 
-    const norm = (s)=> String(s||'').replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').trim();
-    const isUrl = (v)=> /^https?:\/\//i.test(String(v||'').trim());
-    const isImgish = (v)=> isUrl(v) || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(String(v||'').trim());
-    const cleanVal = (v)=>{
-      const s = norm(v);
-      if(!s) return '';
-      if(s==='-' || s==='—' || s==='–') return '-';
-      return s;
-    };
+  // tableEl can be the wrapper div or the <table> itself.
+  const innerTable = (tableEl.tagName && tableEl.tagName.toLowerCase()==='table')
+    ? tableEl
+    : tableEl.querySelector('table');
+  if(!innerTable) return;
 
-    // Find header row that contains 우승 and 준우승 (2-column matrix style)
-// or detect the legacy "vertical" layout where 우승/준우승 are in the first column.
-    let headerR=-1, cWin=-1, cRun=-1;
-    for(let r=0;r<(blockData||[]).length;r++){
-      const row = blockData[r] || [];
-      for(let c=0;c<row.length;c++){
-        const t = norm(row[c]);
-        if(/^우\s*승$/.test(t)) cWin=c;
-        if(/^준\s*우\s*승$/.test(t)) cRun=c;
-      }
-      if(cWin>=0 && cRun>=0){ headerR=r; break; }
-      cWin=-1; cRun=-1;
-    }
+  const thead = innerTable.tHead ? Array.from(innerTable.tHead.rows||[]) : [];
+  const tbody = innerTable.tBodies && innerTable.tBodies.length ? innerTable.tBodies[0] : null;
+  const bodyRows = tbody ? Array.from(tbody.rows||[]) : [];
+  const allRows = thead.concat(bodyRows);
+  if(!allRows.length) return;
 
-    // --- Legacy vertical layout fallback (most common old proleague sheets) ---
-    // Example rows:
-    // 우승 | (logo) | 팀명 | 감독 | ... | 부감독 | ...
-    // 준우승 | (logo) | 팀명 | 감독 | ... | 부감독 | ...
-    if(headerR < 0){
-      // Legacy vertical layouts vary a lot across early seasons (S1~S4 especially).
-      // Some sheets don't keep 우승/준우승 in the first column, so we scan the whole row.
-      const findRowByAnyCell = (re)=>{
-        for(let r=0;r<(blockData||[]).length;r++){
-          const row = blockData[r] || [];
-          for(let c=0;c<row.length;c++){
-            const t = norm(row[c]);
-            if(re.test(t)) return r;
-          }
-        }
-        return -1;
-      };
-      const rWinV = findRowByAnyCell(/(^|\s)우\s*승($|\s)/);
-      const rRunV = findRowByAnyCell(/준\s*우\s*승/);
+  const norm = (s)=> String(s||'').replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').trim();
 
-      if(rWinV >= 0){
-        const colCount = Math.max(...(blockData||[]).map(r=> (r||[]).length), 1);
+  // Build matrix of cell objects (text + imgSrc)
+  const matrix = allRows.map(tr=>{
+    const cells = Array.from(tr.cells||[]).map(td=>{
+      const img = td.querySelector('img');
+      const imgSrc = img ? (img.getAttribute('src') || img.src || '') : '';
+      const txt = norm(td.textContent);
+      return {td, txt, imgSrc};
+    });
+    return {tr, cells};
+  });
 
-        const pickValue = (row, labels)=>{
-          // labels: array of regex to match within the row
-          const cells = (row||[]).map(norm);
-          // If the row is like: [우승, logo, team, 감독, name, 부감독, name]
-          // Use heuristics: team name is first non-url, non-empty after logo.
-          const isUrl = (v)=> /^https?:\/\//i.test(String(v||'').trim());
-          const isImgish = (v)=> isUrl(v) || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(String(v||'').trim());
-          const cleanVal = (v)=>{
-            const s = norm(v);
-            if(!s) return '';
-            if(s==='-' || s==='—' || s==='–') return '-';
-            return s;
-          };
-
-          // Try explicit labels first (e.g. "팀명", "감독", "부감독")
-          for(let i=0;i<cells.length;i++){
-            const t = cells[i];
-            if(!t) continue;
-            if(labels.some(rx=>rx.test(t))){
-              // take the next meaningful cell(s)
-              for(let j=i+1;j<cells.length;j++){
-                const v = cleanVal(cells[j]);
-                if(v && !isUrl(v) && !isImgish(v)) return v;
-              }
-            }
-          }
-
-          // Heuristic fallback:
-          // logo is usually at index 1; team name around index 2.
-          for(let j=1;j<cells.length;j++){
-            const v = cleanVal(cells[j]);
-            if(!v) continue;
-            if(isImgish(v)) continue;
-            if(isUrl(v)) continue;
-            return v;
-          }
-          const __isVice = Array.isArray(labels) && labels.some(rx=>{ try{return /부감독/.test(rx.source||'') || /부감독/.test(String(rx));}catch(_){return false;} });
-            return __isVice ? '-' : '';
-          };
-
-        const pickLogo = (row)=>{
-          const cells = (row||[]).map(norm);
-          const isUrl = (v)=> /^https?:\/\//i.test(String(v||'').trim());
-          const isImgish = (v)=> isUrl(v) || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(String(v||'').trim());
-          for(let j=1;j<cells.length;j++){
-            const v=cells[j];
-            if(v && isImgish(v)) return v;
-          }
-          return '';
-        };
-
-        const winLogo = pickLogo(blockData[rWinV]||[]);
-        const runLogo = pickLogo(blockData[rRunV]||[]);
-
-        // Team name / coach / subcoach
-        const winName  = pickValue(blockData[rWinV]||[], [/^팀\s*명$/]);
-        const runName  = pickValue(blockData[rRunV]||[], [/^팀\s*명$/]);
-
-        const winCoach = pickValue(blockData[rWinV]||[], [/^감\s*독$/]);
-        const runCoach = pickValue(blockData[rRunV]||[], [/^감\s*독$/]);
-
-        const winSub   = pickValue(blockData[rWinV]||[], [/^부\s*감\s*독$/]);
-        const runSub   = pickValue(blockData[rRunV]||[], [/^부\s*감\s*독$/]);
-
-        // Organizer row (if present)
-        let organizer = '';
-        for(let r=0;r<(blockData||[]).length;r++){
-          const row = blockData[r] || [];
-          let labelIdx = -1;
-          for(let c=0;c<row.length;c++){
-            const t = norm(row[c]);
-            if(/^(대회\s*진행자|대회진행자|진행자|운영진|운영팀)$/.test(t)) { labelIdx = c; break; }
-          }
-          if(labelIdx >= 0){
-            organizer = row.slice(labelIdx+1).map(norm).filter(x=>x && !/^https?:\/\//i.test(x)).join(' ').trim();
-            break;
-          }
-        }
-
-        const makeCard = (place, logo, name, coach, sub)=>{
-          const isWin = (place==='우승');
-          const card = document.createElement('div');
-          card.className = 'hof-pro-card ' + (isWin?'win':'runner');
-
-          const badge = document.createElement('div');
-          badge.className = 'hof-pro-badge';
-          const crownImg = document.createElement('img');
-          crownImg.className = 'hof-pro-crown';
-          crownImg.alt = place;
-          crownImg.src = isWin ? './crown_gold.png' : './crown_silver.png';
-          const lbl = document.createElement('div');
-          lbl.className = 'hof-pro-place';
-          lbl.textContent = place;
-          badge.appendChild(crownImg);
-          badge.appendChild(lbl);
-
-          const body = document.createElement('div');
-          body.className = 'hof-pro-body';
-
-          const iconWrap = document.createElement('div');
-          iconWrap.className = 'hof-pro-iconwrap';
-
-          const icon = document.createElement('div');
-          icon.className = 'hof-pro-icon';
-          if(logo){
-            const img = document.createElement('img');
-            img.src = logo;
-            img.alt = '';
-            img.loading = 'lazy';
-            img.decoding = 'async';
-            img.referrerPolicy = 'no-referrer';
-            icon.appendChild(img);
-          }
-          iconWrap.appendChild(badge);
-          iconWrap.appendChild(icon);
-
-          const txt = document.createElement('div');
-          txt.className = 'hof-pro-text';
-          const nm = document.createElement('div');
-          nm.className = 'hof-pro-name';
-          nm.textContent = name || '';
-          txt.appendChild(nm);
-
-          const subline = [];
-          if(coach) subline.push('감독 : ' + coach);
-          if(sub) subline.push('부감독 : ' + sub);
-          if(subline.length){
-            const st = document.createElement('div');
-            st.className = 'hof-pro-sub';
-            st.textContent = subline.join(' / ');
-            txt.appendChild(st);
-          }
-
-          body.appendChild(iconWrap);
-          body.appendChild(txt);
-
-          card.appendChild(body);
-          return card;
-        };
-
-        const podium = document.createElement('div');
-        podium.className = 'hof-pro-podium';
-        podium.appendChild(makeCard('우승', winLogo, winName, winCoach, winSub));
-        if(rRunV >= 0){ podium.appendChild(makeCard('준우승', runLogo, runName, runCoach, runSub)); }
-
-        const wrap = document.createElement('div');
-        wrap.className = 'hof-pro-wrap';
-        wrap.appendChild(podium);
-
-        if(organizer){
-          const org = document.createElement('div');
-          org.className = 'hof-pro-organizer';
-          org.textContent = '대회진행자 : ' + organizer;
-          wrap.appendChild(org);
-        }
-
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan = colCount;
-        td.className = 'hof-pro-podium-cell';
-        td.appendChild(wrap);
-        tr.appendChild(td);
-        tbody.appendChild(tr);
-        return;
-      }
-
-      // If even vertical fallback fails, keep default table render
-      renderTable(tableEl, blockData||[]);
-      try{convertImageUrlCells(tableEl);}catch(_){}
-      return;
-    }
-
-    const colCount = Math.max(...(blockData||[]).map(r=> (r||[]).length), 1);
-
-    // try to find logo row shortly after header
-    let logoR=-1;
-    for(let r=headerR+1; r<Math.min(headerR+6, blockData.length); r++){
-      const row = blockData[r]||[];
-      if(isImgish(row[cWin]) || isImgish(row[cRun])) { logoR=r; break; }
-    }
-    const winLogo = (logoR>=0 && cleanVal((blockData[logoR]||[])[cWin]) && isImgish((blockData[logoR]||[])[cWin])) ? norm((blockData[logoR]||[])[cWin]) : '';
-    const runLogo = (logoR>=0 && cleanVal((blockData[logoR]||[])[cRun]) && isImgish((blockData[logoR]||[])[cRun])) ? norm((blockData[logoR]||[])[cRun]) : '';
-
-    // Extract key/value rows
-    const details = { win:{}, runner:{} };
-    let organizer = '';
-    const wanted = ['팀명','감독','부감독'];
-    for(let r=headerR+1; r<(blockData||[]).length; r++){
-      const row = blockData[r] || [];
-      const rowTxt = norm(row.join(' '));
-      // organizer row: label anywhere in row
-      const first = norm(row[0]);
-      if(!organizer && /^(대회\s*진행자|대회진행자|진행자|운영진|운영팀)$/.test(first)){
-        // join remaining cells (skip urls and dashes)
-        const rest = row.slice(1).map(cleanVal).filter(x=> x && !isUrl(x)).join(' ').trim();
-        if(rest) organizer = rest;
-        continue;
-      }
-      // Find label cell
-      let label='';
-      for(let c=0;c<row.length;c++){
-        const t = norm(row[c]);
-        if(wanted.includes(t)) { label=t; break; }
-      }
-      if(!label) continue;
-      const wv = cleanVal(row[cWin]);
-      const rv = cleanVal(row[cRun]);
-      if(wv && !isUrl(wv)) details.win[label]=wv;
-      if(rv && !isUrl(rv)) details.runner[label]=rv;
-    }
-
-    const winName = cleanVal(details.win['팀명']);
-    const runName = cleanVal(details.runner['팀명']);
-    const winCoach = cleanVal(details.win['감독']);
-    const winSub = cleanVal(details.win['부감독']);
-    const runCoach = cleanVal(details.runner['감독']);
-    const runSub = cleanVal(details.runner['부감독']);
-
-    const makeCard = (place, logo, name, coach, sub)=>{
-      const isWin = (place==='우승');
-      const card = document.createElement('div');
-      card.className = 'hof-pro-card ' + (isWin?'win':'runner');
-
-      // Badge (우승/준우승 + 왕관) sits *above* the team logo.
-      const badge = document.createElement('div');
-      badge.className = 'hof-pro-badge';
-      const crownImg = document.createElement('img');
-      crownImg.className = 'hof-pro-crown';
-      crownImg.alt = place;
-      crownImg.src = isWin ? './crown_gold.png' : './crown_silver.png';
-      const lbl = document.createElement('div');
-      lbl.className = 'hof-pro-place';
-      lbl.textContent = place;
-      badge.appendChild(crownImg);
-      badge.appendChild(lbl);
-
-      const body = document.createElement('div');
-      body.className = 'hof-pro-body';
-
-      // Logo box (bigger) with the badge pinned above it.
-      const iconWrap = document.createElement('div');
-      iconWrap.className = 'hof-pro-iconwrap';
-
-      const icon = document.createElement('div');
-      icon.className = 'hof-pro-icon';
-      if(logo){
-        const img = document.createElement('img');
-        img.src = logo;
-        img.alt = '';
-        img.loading = 'lazy';
-        img.decoding = 'async';
-        img.referrerPolicy = 'no-referrer';
-        icon.appendChild(img);
-      }
-      iconWrap.appendChild(badge);
-      iconWrap.appendChild(icon);
-
-      const txt = document.createElement('div');
-      txt.className = 'hof-pro-text';
-      const nm = document.createElement('div');
-      nm.className = 'hof-pro-name';
-      nm.textContent = name || '';
-      txt.appendChild(nm);
-
-      const subline = [];
-      if(coach) subline.push('감독 ' + coach);
-      if(sub) subline.push('부감독 ' + sub);
-      if(subline.length){
-        const st = document.createElement('div');
-        st.className = 'hof-pro-sub';
-        st.textContent = subline.join('   ');
-        txt.appendChild(st);
-      }
-
-      body.appendChild(iconWrap);
-      body.appendChild(txt);
-
-      card.appendChild(body);
-      return card;
-    };
-
-    const podium = document.createElement('div');
-    podium.className = 'hof-pro-podium';
-    podium.appendChild(makeCard('우승', winLogo, winName, winCoach, winSub));
-    if(rRunV >= 0){ podium.appendChild(makeCard('준우승', runLogo, runName, runCoach, runSub)); }
-
-    const wrap = document.createElement('div');
-    wrap.className = 'hof-pro-wrap';
-    wrap.appendChild(podium);
-
-    if(organizer){
-      const org = document.createElement('div');
-      org.className = 'hof-pro-organizer';
-      org.textContent = '대회진행 : ' + organizer;
-      wrap.appendChild(org);
-    }
-
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.colSpan = colCount;
-    td.className = 'hof-pro-podium-cell';
-    td.appendChild(wrap);
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-  }
-
-
-  // TST/TSL: merge title/season/organizer rows to match the intended "single merged left-aligned cell" style.
-  function mergeTstTslHeaderRows(tableEl, leagueKey){
-    const k = String(leagueKey||'').toLowerCase();
-    if(!tableEl || (k!=='tst' && k!=='tsl')) return;
-    const tbody = (tableEl.tBodies && tableEl.tBodies.length) ? tableEl.tBodies[0] : null;
-    if(!tbody) return;
-
-    const rows = Array.from(tbody.querySelectorAll('tr'));
-    const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
-
-    // If there is a separate season row under the title, fold it into the title and remove the season row.
-    try{
-      let titleIdx=-1, seasonIdx=-1;
-      for(let i=0;i<Math.min(6, rows.length); i++){
-        const t = norm(rows[i].textContent);
-        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
-        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
-      }
-      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
-        const titleRow = rows[titleIdx];
-        const seasonRow = rows[seasonIdx];
-        const seasonTxt = norm(seasonRow.textContent);
-        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
-        if(titleCell && seasonTxt){
-          // Append season to the title (left aligned)
-          const base = norm(titleCell.textContent);
-          if(base && base.indexOf(seasonTxt)===-1){
-            titleCell.textContent = base + '  ' + seasonTxt;
-          }
-        }
-        // remove season row entirely
-        seasonRow.remove();
-        // refresh rows array (used later)
-        // eslint-disable-next-line no-unused-vars
-        rows.splice(seasonIdx,1);
-      }
-    }catch(_){}
-
-
-    const mergeRowAll = (tr, cls)=>{
-      const tds = Array.from(tr.children||[]);
-      if(tds.length<=1) { if(cls) tr.classList.add(cls); return; }
-      const first = tds[0];
-      first.colSpan = tds.length;
-      for(let i=tds.length-1;i>=1;i--) tds[i].remove();
-      first.classList.add('hof-merged-cell');
-      if(cls) first.classList.add(cls);
-      first.style.textAlign = 'left';
-      first.style.paddingLeft = '14px';
-      tr.classList.add('hof-merged-row');
-    };
-
-    // 1) Title row containing "명예의전당" or league title
-    for(const tr of rows){
-      const txt = norm(tr.textContent);
-      if(/명예의전당/.test(txt)){
-        mergeRowAll(tr, 'hof-title-merged');
-        break;
-      }
-    }
-
-    // 2) Season name row (contains 시즌#)
-    for(const tr of rows){
-      const txt = norm(tr.textContent);
-      if(/시즌\s*\d+/.test(txt) || /(S|시즌)\s*\d+/.test(txt)){
-        mergeRowAll(tr, 'hof-season-merged');
-        break;
-      }
-    }
-
-    // 3) Organizer row: merge cells to the right of label and add green star right before names
-    for(const tr of rows){
-      const tds = Array.from(tr.children||[]);
-      if(tds.length<2) continue;
-      const label = norm(tds[0].textContent);
-      if(!/^(대회\s*진행자|대회\s*진행|진행자|운영팀)$/.test(label)) continue;
-
-      // Merge all remaining cells into the 2nd cell
-      const second = tds[1];
-      if(tds.length>2){
-        let extra = '';
-        for(let i=2;i<tds.length;i++){
-          const t = norm(tds[i].textContent);
-          if(t) extra += (extra? ' ' : '') + t;
-          tds[i].remove();
-        }
-        if(extra){
-          second.textContent = norm(second.textContent) + (norm(second.textContent)? ' ' : '') + extra;
-        }
-        second.colSpan = 999; // enough to take remaining columns visually
-      }
-
-      // add star at the very beginning (left side)
-      if(!second.querySelector('.hof-organizer-star')){
-        const star = document.createElement('span');
-        star.className = 'hof-organizer-star';
-        star.textContent = '*';
-        // keep existing text
-        const old = second.textContent;
-        second.textContent = '';
-        second.appendChild(star);
-        second.appendChild(document.createTextNode(' ' + old));
-      }
-
-      second.classList.add('hof-organizers-merged');
-      second.style.textAlign = 'left';
-      second.style.paddingLeft = '12px';
+  // Find a row that contains both "우승" and "준우승" (could be in THEAD or TBODY).
+  // Some sheets include emojis or extra text, so match by regex rather than exact equality.
+  let placeRow = null, winCol=-1, runCol=-1;
+  const winRe = /(^|\s)우\s*승(\s|$)/;
+  const runRe = /준\s*우\s*승/;
+  for(const row of matrix){
+    const w = row.cells.findIndex(c=> winRe.test(c.txt) && !runRe.test(c.txt));
+    const r = row.cells.findIndex(c=> runRe.test(c.txt));
+    if(w>=0 && r>=0){
+      placeRow = row;
+      winCol = w;
+      runCol = r;
       break;
     }
   }
 
+  // Some Proleague sheets omit the literal '준우승' header (it can appear as '-' or be blank).
+  // In that case, fall back to the first column to the right of '우승' as the runner-up column.
+  if(!placeRow){
+    for(const row of matrix){
+      const w = row.cells.findIndex(c=> winRe.test(c.txt) && !runRe.test(c.txt));
+      if(w>=0){
+        placeRow = row;
+        winCol = w;
+        runCol = Math.min(w+1, row.cells.length-1);
+        if(runCol===winCol) runCol = -1;
+        break;
+      }
+    }
+  }
 
-// TST/TSL: merge tier label (갓/킹/...) into winner/runner name cells for mobile "갓 DayDream" style." label (갓/킹/...) into winner/runner name cells for mobile "갓 DayDream" style.
+  if(!placeRow || winCol<0) return;
+  if(runCol<0) runCol = Math.min(winCol+1, (placeRow.cells||[]).length-1);
+
+  // Helper: read a value from a specific col in subsequent rows (by index)
+  const getCell = (row, idx)=> (row && row.cells && row.cells[idx]) ? row.cells[idx] : null;
+
+  // Find logo row: first row AFTER placement row that has image/url in winner column
+  const placeIndex = matrix.indexOf(placeRow);
+  let winLogo='', runLogo='';
+  for(let i=placeIndex+1; i<matrix.length; i++){
+    const cw = getCell(matrix[i], winCol);
+    const cr = getCell(matrix[i], runCol);
+    const looksLikeLogo = (c)=> {
+      if(!c) return false;
+      if(c.imgSrc) return true;
+      if(/^https?:\/\//i.test(c.txt) && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(c.txt)) return true;
+      return false;
+    };
+    if(looksLikeLogo(cw) || looksLikeLogo(cr)){
+      if(cw){ winLogo = cw.imgSrc || cw.txt || ''; }
+      if(cr){ runLogo = cr.imgSrc || cr.txt || ''; }
+      break;
+    }
+  }
+
+  // Collect details from rows: label in col0 (or duplicated label pattern)
+  const labels = ['팀명','감독','부감독','운영팀','운영','진행자','대회 진행자','대회진행자','부단장','단장','코치'];
+  const details = { win:{}, runner:{} };
+
+  function assign(label, a, b){
+    if(a) details.win[label]=a;
+    if(b) details.runner[label]=b;
+  }
+
+  for(const row of matrix){
+    const vals = row.cells.map(c=>c.txt);
+    if(vals.length<2) continue;
+
+    // duplicate-label pattern: [label, a, label, b]
+    const idxs = [];
+    vals.forEach((v,i)=>{ if(labels.includes(v)) idxs.push(i); });
+    if(idxs.length>=2){
+      const i1=idxs[0], i2=idxs[1];
+      assign(vals[i1], vals[i1+1]||'', vals[i2+1]||'');
+      continue;
+    }
+
+    const left = vals[0];
+    if(labels.includes(left)){
+      const a = (getCell(row, winCol) && getCell(row, winCol).txt) || vals[1] || '';
+      const b = (getCell(row, runCol) && getCell(row, runCol).txt) || '';
+      if(left==='운영팀' && !b){
+        if(a) details.win[left]=a;
+      }else{
+        assign(left, a, b);
+      }
+    }
+  }
+
+  const winName = details.win['팀명'] || '';
+  const runName = details.runner['팀명'] || '';
+
+  const hasRunner = !!(runName && runName!=='-' && runName!=='—') ||
+                    !!(runLogo) ||
+                    !!(details.runner['감독'] || details.runner['부감독']);
+
+  // Build cards
+  const wrapper = document.createElement('div');
+  wrapper.className = 'hof-pro-vertical';
+
+  function makeCard(isWin){
+    const d = isWin ? details.win : details.runner;
+    const logo = isWin ? winLogo : runLogo;
+    const name = isWin ? (winName||'-') : (runName||'-');
+
+    const card = document.createElement('div');
+    card.className = 'hof-pro-card ' + (isWin?'win':'runner');
+
+    const badge = document.createElement('div');
+    badge.className = 'hof-place-badge ' + (isWin?'win':'runner');
+    const crown = document.createElement('img');
+    crown.className = 'hof-place-crown';
+    crown.alt = isWin ? '우승' : '준우승';
+    crown.src = isWin ? './crown_gold.png' : './crown_silver.png';
+    const lbl = document.createElement('div');
+    lbl.className = 'hof-place-label';
+    lbl.textContent = isWin ? '우승' : '준우승';
+    badge.appendChild(crown); badge.appendChild(lbl);
+
+    const chip = document.createElement('div');
+    chip.className = 'hof-pro-chip';
+
+    const icon = document.createElement('div');
+    icon.className = 'hof-team-icon';
+    if(logo){
+      const img = document.createElement('img');
+      img.src = logo;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      icon.appendChild(img);
+    }
+    const tbox = document.createElement('div');
+    const nm = document.createElement('div');
+    nm.className = 'hof-team-name';
+    nm.textContent = name;
+    tbox.appendChild(nm);
+
+    const sub = [];
+    if(d['감독']) sub.push('감독 ' + d['감독']);
+    if(d['부감독']) sub.push('부감독 ' + d['부감독']);
+    if(sub.length){
+      const s = document.createElement('div');
+      s.className = 'hof-team-sub';
+      s.textContent = sub.join('   ');
+      tbox.appendChild(s);
+    }
+    chip.appendChild(icon);
+    chip.appendChild(tbox);
+
+    const lines = document.createElement('div');
+    lines.className = 'hof-pro-lines';
+    ['감독','부감독','운영팀'].forEach(key=>{
+      if(!d[key]) return;
+      const line=document.createElement('div');
+      line.className='hof-pro-line';
+      line.innerHTML = `<b>${key}:</b> ${d[key]}`;
+      lines.appendChild(line);
+    });
+    const org = d['대회 진행자'] || d['대회진행자'] || d['진행자'];
+    if(org){
+      const line=document.createElement('div');
+      line.className='hof-pro-line';
+      line.innerHTML = `<b>대회 진행자:</b> <span class="hof-organizer-star">*</span> ${org}`;
+      lines.appendChild(line);
+    }
+
+    card.appendChild(badge);
+    card.appendChild(chip);
+    if(lines.childNodes.length) card.appendChild(lines);
+    return card;
+  }
+
+  wrapper.appendChild(makeCard(true));
+  if(hasRunner) wrapper.appendChild(makeCard(false));
+
+  // Replace table with cards
+  if(tableEl.tagName && tableEl.tagName.toLowerCase()==='table'){
+    const parent = tableEl.parentElement;
+    if(parent){ parent.innerHTML=''; parent.appendChild(wrapper); }
+  }else{
+    tableEl.innerHTML = '';
+    tableEl.appendChild(wrapper);
+  }
+}
+
+
+
+
+// TST/TSL: merge tier label (갓/킹/...) into winner/runner name cells for mobile "갓 DayDream" style.
   function mergeTierIntoNameCells(tableEl, leagueKey){
     const k = String(leagueKey||'').toLowerCase();
     if(!tableEl || (k!=='tst' && k!=='tsl')) return;
@@ -3941,35 +3373,6 @@ rows.forEach(tr=>{
     if(!tbody) return;
     const tierSet = new Set(['갓','킹','퀸','잭','스페이드','조커','히든']);
     const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
-
-    // If there is a separate season row under the title, fold it into the title and remove the season row.
-    try{
-      let titleIdx=-1, seasonIdx=-1;
-      for(let i=0;i<Math.min(6, rows.length); i++){
-        const t = norm(rows[i].textContent);
-        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
-        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
-      }
-      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
-        const titleRow = rows[titleIdx];
-        const seasonRow = rows[seasonIdx];
-        const seasonTxt = norm(seasonRow.textContent);
-        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
-        if(titleCell && seasonTxt){
-          // Append season to the title (left aligned)
-          const base = norm(titleCell.textContent);
-          if(base && base.indexOf(seasonTxt)===-1){
-            titleCell.textContent = base + '  ' + seasonTxt;
-          }
-        }
-        // remove season row entirely
-        seasonRow.remove();
-        // refresh rows array (used later)
-        // eslint-disable-next-line no-unused-vars
-        rows.splice(seasonIdx,1);
-      }
-    }catch(_){}
-
     Array.from(tbody.querySelectorAll('tr')).forEach(tr=>{
       const tds = Array.from(tr.children||[]);
       if(tds.length < 3) return;
@@ -4005,12 +3408,8 @@ rows.forEach(tr=>{
   // seasons: list of season labels
   // meta: per-row season metadata (legacy row-filter mode)
   // blocks: { byLabel: Map<label, {label, num, data:[][]}>, order:[label...] } (grid/block mode)
-  var HOF_INLINE_CACHE = (window.HOF_INLINE_CACHE && typeof window.HOF_INLINE_CACHE==='object') ? window.HOF_INLINE_CACHE : { pro: null, tst: null, tsl: null };
-window.HOF_INLINE_CACHE = HOF_INLINE_CACHE;
-var HOF_INLINE_CURRENT = window.HOF_INLINE_CURRENT || 'pro';
-window.HOF_INLINE_CURRENT = HOF_INLINE_CURRENT;
-var HOF_INLINE_REQ_TOKEN = window.HOF_INLINE_REQ_TOKEN || 0;
-window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
+  const HOF_INLINE_CACHE = { pro: null, tst: null, tsl: null };
+  let HOF_INLINE_CURRENT = 'pro';
 
   // --- HOF season extraction (grid/block style sheets) ---
   const SEASON_CELL_PAT = /(S|시즌)\s*0*\d+\b/i;
@@ -4071,8 +3470,8 @@ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
     // If not grid, we still support vertical blocks, so only bail when we have <2 seasons
     if(seasonCells.length < 2) return null;
 
-    // For each season cell, exp&& a block around it.
-    // We'll exp&& right/down until we hit another season cell "boundary" or empty space.
+    // For each season cell, expand a block around it.
+    // We'll expand right/down until we hit another season cell "boundary" or empty space.
     const maxR = data.length-1;
     const maxC = Math.max(...data.map(r=> (r||[]).length)) - 1;
 
@@ -4100,7 +3499,7 @@ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
       cells.sort((a,b)=> (a.r-b.r) || (a.c-b.c));
       const anchor = cells[0];
 
-      // Exp&& width
+      // Expand width
       let c1 = Math.min(anchor.c + 24, maxC); // cap width (wider to include 준우승 column)
       for(let c=anchor.c+1; c<=Math.min(anchor.c+40, maxC); c++){
         // stop if we meet another season cell on the same header row
@@ -4115,7 +3514,7 @@ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
         c1 = c;
       }
 
-      // Exp&& height
+      // Expand height
       let r1 = Math.min(anchor.r + 70, maxR);
       for(let r=anchor.r+1; r<=Math.min(anchor.r+140, maxR); r++){
         // boundary if we encounter another season cell within the same column range
@@ -4153,251 +3552,22 @@ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
 
   function renderBlockTable(tableEl, block, leagueKey){
     if(!tableEl) return;
-    const k = String(leagueKey||'').toLowerCase();
-
-    // Tag current league on the inline table for responsive CSS hooks
-    try{
-      tableEl.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl','hof-league-tpl','hof-league-msl','hof-league-tcl');
-      if(k==='pro') tableEl.classList.add('hof-league-pro');
-      if(k==='tst') tableEl.classList.add('hof-league-tst');
-      if(k==='tsl') tableEl.classList.add('hof-league-tsl');
-      if(k==='tpl') tableEl.classList.add('hof-league-tpl');
-      if(k==='msl') tableEl.classList.add('hof-league-msl');
-      if(k==='tcl') tableEl.classList.add('hof-league-tcl');
-
-      // Also tag the container so CSS can reliably scope mobile/resize behavior
-      const inline = document.getElementById('hofInline');
-      if(inline){
-        inline.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl','hof-league-tpl','hof-league-msl','hof-league-tcl');
-        if(k==='pro') inline.classList.add('hof-league-pro');
-        if(k==='tst') inline.classList.add('hof-league-tst');
-        if(k==='tsl') inline.classList.add('hof-league-tsl');
-        if(k==='tpl') inline.classList.add('hof-league-tpl');
-        if(k==='msl') inline.classList.add('hof-league-msl');
-        if(k==='tcl') inline.classList.add('hof-league-tcl');
-      }
-}catch(_){}
-
-    let data = (block && block.data) ? block.data : [];
-    // Normalize: some old TST blocks include a standalone title row like "TST명예의전당"
-    // (often split with line breaks: "TST\n명예의전\n당"). Remove it reliably.
-    try{
-      if(String(leagueKey||'').toLowerCase()==='tst' && Array.isArray(data)){
-        const _norm=(s)=>String(s||'')
-          .replace(/[\u200b-\u200d\ufeff]/g,'')
-          .replace(/\xa0/g,' ')
-          .replace(/\s+/g,' ')
-          .trim();
-        const _tight=(s)=>_norm(s).replace(/\s+/g,'');
-        data = data.filter(row=>{
-          const r = Array.isArray(row)? row : [];
-          const joined = _tight(r.join(' '));
-          // kill pure title rows
-          if(joined.includes('TST명예의전당')) return false;
-          // also remove any non-season header row that contains "명예의전당" (even if spaced)
-          if(joined.includes('명예의전당') && !/\(시즌\d+\)/.test(joined) && !/시즌\d+/.test(joined)) return false;
-          return true;
-        });
-      }
-    }catch(_){ }
-
-
-    // Cache last rendered block per league for responsive rebuilds (e.g., stage cards on resize)
-    try{
-      window.__HOF_LAST_BLOCK = window.__HOF_LAST_BLOCK || {};
-      window.__HOF_LAST_BLOCK[k] = { data: Array.isArray(data) ? data : [], ts: Date.now() };
-    }catch(_){ }
-
-    // TST/TSL: prevent flash by keeping the table invisible while we build stage cards.
-    // (We still render into the real table DOM because some parsers rely on it.)
-    let __restoreVis = false;
-    try{
-      if(isHofCardLeague(k) && tableEl){
-        __restoreVis = (tableEl.style.visibility !== 'hidden');
-        tableEl.style.visibility = 'hidden';
-      }
-    }catch(_){ }
-
-    // Always render as a normal table first
+    const data = (block && block.data) ? block.data : [];
     renderTable(tableEl, data);
-
-    // Final guard: remove the first title row 'TST 명예의전당' if it survived (DOM-level cleanup)
-    try{
-      if(k==='tst' && tableEl){
-        const rows = tableEl.querySelectorAll('tr');
-        const tight = (s)=>String(s||'').replace(/[\u200b-\u200d\ufeff]/g,'').replace(/\xa0/g,' ').replace(/\s+/g,'');
-        rows.forEach(tr=>{
-          const t = tight(tr.textContent);
-          if(t.includes('TST명예의전당')) tr.remove();
-        });
-      }
-    }catch(_){ }
-
-
-    // PRO: render as podium cards (우승/준우승) like the Proleague screenshot
-    if(k==='pro'){
-      try{ renderProPodiumFromBlock(tableEl, data); }catch(_){ renderTable(tableEl, data); }
-      return;
-    }
-    try{ if (isHofCardLeague(k)) { trimEmptyTstTslHeaderStub(tableEl); } }catch(_){ }
-
     try{ markHofTitleCells(tableEl); }catch(_){ }
     try{ convertImageUrlCells(tableEl); }catch(_){ }
     try{ applyTableDataLabels(tableEl); }catch(_){ }
-
-    // 공통: "대회진행자/운영팀" 같이 여러 칸으로 퍼지는 행을 1칸으로 병합(모바일/축소에서 빈칸처럼 보이는 현상 방지)
-    try{ mergeOrganizerRowAnyLeague(tableEl, k); }catch(_){ }
-
-    // PROLEAGUE: the sheet is laid out as a 2-column podium (우승/준우승) matrix.
-    // Convert the matrix into the premium podium cards (우승 위 / 준우승 아래).
-    // PROLEAGUE: render as table so 우승/준우승 2열 구조가 그대로 보이도록 유지
-
-    // TST/TSL (table mode)
-    try{ decorateHofPlacements(tableEl, k); }catch(_){ }
-    try{ mergeTierIntoNameCells(tableEl, k); }catch(_){ }
-    try{ normalizeOrganizerCells(tableEl, k); }catch(_){ }
-    try{ mergeTstTslHeaderAndOrganizer(tableEl, k); }catch(_){ }
-    
-
-// Build mobile stage-cards for TST/TSL (TSL-style cards on small screens)
-try{
-  // Ensure any lingering HOF stage cards/flags are cleared before rebuilding (prevents TST->TSL blank on mobile)
-  const inline = document.getElementById('hofInline');
-  if(inline) inline.classList.remove('hof-has-stagecards','hof-inline-tst','hof-inline-tsl','hof-inline-tpl','hof-inline-msl','hof-inline-tcl');
-  // Remove any previously mounted card containers (both inside inline and next to table)
-  if(tableEl && tableEl.parentElement){
-    tableEl.parentElement.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove());
-  }
-  const box = document.querySelector('#hofInline .hof-stage-cards');
-  if(box) box.remove();
-}catch(_){}
-
-try{ removeTstHallOfFameHeaderRows(tableEl, k); }catch(_){}
-
-try{ renderStageCardsForMobile(tableEl, data, k); }catch(_){ }
-
-    // If cards were built, renderStageCardsForMobile hides the table.
-    // If not, restore visibility so the table can be seen.
+    try{ decorateHofPlacements(tableEl, leagueKey); }catch(_){ }
+    try{ mergeTierIntoNameCells(tableEl, leagueKey); }catch(_){ }
+    // TST/TSL: organizer IDs often come with line breaks; keep them on one row.
+    try{ normalizeOrganizerCells(tableEl, leagueKey); }catch(_){ }
+    try{ enforceTstTslLayout(tableEl, leagueKey); }catch(_){ }
+    /* PRO: convert to podium (winner top/runner bottom) */
     try{
-      if(isHofCardLeague(k) && tableEl){
-        const parent = tableEl.parentElement;
-        const built = parent ? parent.querySelectorAll('.hof-stage-card').length : 0;
-        if(built <= 0){
-          tableEl.style.visibility = '';
-        }
-      }
+      const kk = String(leagueKey||"pro").toLowerCase();
+      if(kk==="pro" || kk==="proleague" || kk==="pl" || kk==="prol" || kk==="pro-league") transformProHofToPodium(tableEl);
     }catch(_){ }
-
-    // v1067 HARD FORCE: If stage-cards were mounted but flags/styles didn't flip, force them.
-    try{
-      const inline=document.getElementById('hofInline');
-      const hasCard=(inline && inline.querySelector('.hof-stage-card')) || (tableEl && tableEl.parentElement && tableEl.parentElement.querySelector('.hof-stage-card'));
-      if(isHofCardLeague(k) && hasCard){
-        if(inline) inline.classList.add('hof-has-stagecards');
-        try{ tableEl.style.display='none'; }catch(_){ }
-      }
-    }catch(_){ }
-
-  }
-
-  
-  // TST/TSL: some sheet layouts produce an empty first header cell (stub column) that looks like
-  // a useless blank column when the viewport is narrow. Hide that *header stub only*.
-  function trimEmptyTstTslHeaderStub(tableEl){
-    const norm = (s)=> String(s||'').replace(/[\u200b-\u200d\ufeff]/g,'').replace(/\xa0/g,' ').replace(/\s+/g,' ').trim();
-    const thead = tableEl.tHead;
-    if(!thead) return;
-    Array.from(thead.querySelectorAll('tr')).forEach(tr=>{
-      const cells = Array.from(tr.children||[]);
-      if(!cells.length) return;
-      const first = cells[0];
-      if(first && !norm(first.textContent)){
-        first.style.display='none';
-      }
-    });
-  }
-
-// ALL LEAGUES: merge organizer value cells into a single cell so it never looks like
-  // there's a useless empty column when the viewport is small.
-  function mergeOrganizerRowAnyLeague(tableEl, leagueKey){
-    if(!tableEl) return;
-    const tbody = (tableEl.tBodies && tableEl.tBodies.length) ? tableEl.tBodies[0] : null;
-    if(!tbody) return;
-    const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
-
-    // If there is a separate season row under the title, fold it into the title and remove the season row.
-    try{
-      let titleIdx=-1, seasonIdx=-1;
-      for(let i=0;i<Math.min(6, rows.length); i++){
-        const t = norm(rows[i].textContent);
-        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
-        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
-      }
-      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
-        const titleRow = rows[titleIdx];
-        const seasonRow = rows[seasonIdx];
-        const seasonTxt = norm(seasonRow.textContent);
-        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
-        if(titleCell && seasonTxt){
-          // Append season to the title (left aligned)
-          const base = norm(titleCell.textContent);
-          if(base && base.indexOf(seasonTxt)===-1){
-            titleCell.textContent = base + '  ' + seasonTxt;
-          }
-        }
-        // remove season row entirely
-        seasonRow.remove();
-        // refresh rows array (used later)
-        // eslint-disable-next-line no-unused-vars
-        rows.splice(seasonIdx,1);
-      }
-    }catch(_){}
-
-    const isLabel = (t)=> /^(대회\s*진행자|대회진행자|진행자|운영진|운영팀)$/.test(t);
-
-    Array.from(tbody.querySelectorAll('tr')).forEach(tr=>{
-      const tds = Array.from(tr.children||[]);
-      if(tds.length < 3) return;
-      const label = norm(tds[0].textContent);
-      if(!isLabel(label)) return;
-
-      // Find the first value cell (could be empty due to sheet layout)
-      let firstVal = tds[1];
-      let startIdx = 1;
-      if(!norm(firstVal.textContent)){
-        // if second cell is empty but later cells have content, start merging from the first non-empty
-        for(let i=2;i<tds.length;i++){
-          if(norm(tds[i].textContent)) { firstVal = tds[i]; startIdx = i; break; }
-        }
-      }
-
-      const rest = tds.slice(startIdx+1);
-      const merged = norm([firstVal.innerText||firstVal.textContent||'', ...rest.map(td=> td.innerText||td.textContent||'')].join(' '));
-      firstVal.textContent = merged;
-
-      // Merge into one cell spanning to the end
-      firstVal.colSpan = tds.length - startIdx;
-      firstVal.style.textAlign = 'left';
-      firstVal.classList.add('hof-organizers-merged');
-      rest.forEach(td=> td.remove());
-
-      // If we started at idx>1, remove any empty cells between label and firstVal
-      for(let i=1;i<startIdx;i++){
-        try{ tds[i].remove(); }catch(_){ }
-      }
-
-      // Add green star prefix once
-      if(!firstVal.querySelector('.hof-organizer-star')){
-        const star = document.createElement('span');
-        star.className='hof-organizer-star';
-        star.textContent='*';
-        const txt = document.createTextNode(' ' + merged);
-        firstVal.textContent='';
-        firstVal.appendChild(star);
-        firstVal.appendChild(txt);
-      }
-    });
-  }
+}
 
   // TST/TSL: merge multi-line organizer IDs (ilChO, MARVEL, Arirang, sOnic`, Inter, ...)
   // into a single line to prevent vertical stacking / overlap on small screens.
@@ -4407,35 +3577,6 @@ try{ renderStageCardsForMobile(tableEl, data, k); }catch(_){ }
     const tbody = (tableEl.tBodies && tableEl.tBodies.length) ? tableEl.tBodies[0] : null;
     if(!tbody) return;
     const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
-
-    // If there is a separate season row under the title, fold it into the title and remove the season row.
-    try{
-      let titleIdx=-1, seasonIdx=-1;
-      for(let i=0;i<Math.min(6, rows.length); i++){
-        const t = norm(rows[i].textContent);
-        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
-        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
-      }
-      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
-        const titleRow = rows[titleIdx];
-        const seasonRow = rows[seasonIdx];
-        const seasonTxt = norm(seasonRow.textContent);
-        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
-        if(titleCell && seasonTxt){
-          // Append season to the title (left aligned)
-          const base = norm(titleCell.textContent);
-          if(base && base.indexOf(seasonTxt)===-1){
-            titleCell.textContent = base + '  ' + seasonTxt;
-          }
-        }
-        // remove season row entirely
-        seasonRow.remove();
-        // refresh rows array (used later)
-        // eslint-disable-next-line no-unused-vars
-        rows.splice(seasonIdx,1);
-      }
-    }catch(_){}
-
     const joiner = ' · ';
 
     Array.from(tbody.querySelectorAll('tr')).forEach(tr=>{
@@ -4446,7 +3587,7 @@ try{ renderStageCardsForMobile(tableEl, data, k); }catch(_){ }
 
       for(let i=1;i<tds.length;i++){
         const td = tds[i];
-        // textContent preserves newlines; also h&&le <br>
+        // textContent preserves newlines; also handle <br>
         const raw = (td.innerText != null) ? String(td.innerText) : String(td.textContent||'');
         const parts = raw
           .split(/\r?\n|\s*<br\s*\/?>\s*/i)
@@ -4458,1286 +3599,88 @@ try{ renderStageCardsForMobile(tableEl, data, k); }catch(_){ }
       }
     });
   }
-
-
-  // TST/TSL: visually merge the top title rows into a single left-aligned cell,
-  // and merge the organizer value cells into one cell to avoid multi-column scattering.
-  function mergeTstTslHeaderAndOrganizer(tableEl, leagueKey){
+  // TST/TSL: force-merge title & season rows, left-align table, and merge organizer cells into a single left cell.
+  function enforceTstTslLayout(tableEl, leagueKey){
     const k = String(leagueKey||'').toLowerCase();
     if(!tableEl || (k!=='tst' && k!=='tsl')) return;
-    const tbody = (tableEl.tBodies && tableEl.tBodies.length) ? tableEl.tBodies[0] : null;
-    if(!tbody) return;
-    const rows = Array.from(tbody.querySelectorAll('tr'));
-    if(!rows.length) return;
-
-    const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
-
-    // If there is a separate season row under the title, fold it into the title and remove the season row.
-    try{
-      let titleIdx=-1, seasonIdx=-1;
-      for(let i=0;i<Math.min(6, rows.length); i++){
-        const t = norm(rows[i].textContent);
-        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
-        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
-      }
-      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
-        const titleRow = rows[titleIdx];
-        const seasonRow = rows[seasonIdx];
-        const seasonTxt = norm(seasonRow.textContent);
-        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
-        if(titleCell && seasonTxt){
-          // Append season to the title (left aligned)
-          const base = norm(titleCell.textContent);
-          if(base && base.indexOf(seasonTxt)===-1){
-            titleCell.textContent = base + '  ' + seasonTxt;
-          }
-        }
-        // remove season row entirely
-        seasonRow.remove();
-        // refresh rows array (used later)
-        // eslint-disable-next-line no-unused-vars
-        rows.splice(seasonIdx,1);
-      }
-    }catch(_){}
-
-
-    // Merge first two rows if they contain "명예의전당" and season title.
-    for(let r=0; r<Math.min(3, rows.length); r++){
-      const tr = rows[r];
-      const tds = Array.from(tr.children||[]);
-      if(tds.length<=1) continue;
-      const txt = norm(tr.textContent);
-      if(!txt) continue;
-      if(/명예의전당/.test(txt) || /\(\s*시즌\s*\d+\s*\)/.test(txt) || /S\d+/i.test(txt)){
-        // keep first non-empty cell
-        let keep = tds.find(td=> norm(td.textContent));
-        if(!keep) keep = tds[0];
-        keep.colSpan = tds.length;
-        keep.classList.add('hof-merged-head');
-        keep.style.textAlign = 'left';
-        // remove others
-        tds.forEach(td=>{ if(td!==keep) td.remove(); });
-      }
-    }
-
-    // Merge organizer row: [대회 진행자 | * ids ...]
-    rows.forEach(tr=>{
-      const tds = Array.from(tr.children||[]);
-      if(tds.length<3) return;
-      const label = norm(tds[0].textContent);
-      if(!/^(대회\s*진행자|진행자|운영진|운영팀)$/.test(label)) return;
-      const firstVal = tds[1];
-      // Move any remaining cells into firstVal
-      const rest = tds.slice(2);
-      const restText = rest.map(td=> td.innerText || td.textContent || '').join(' ');
-      const merged = norm((firstVal.innerText||firstVal.textContent||'') + ' ' + restText);
-      firstVal.textContent = merged;
-      firstVal.colSpan = tds.length-1;
-      firstVal.style.textAlign = 'left';
-      firstVal.classList.add('hof-organizers-merged');
-      rest.forEach(td=> td.remove());
-      // Add green star at the very left inside the value cell
-      if(!firstVal.querySelector('.hof-organizer-star')){
-        const star = document.createElement('span');
-        star.className='hof-organizer-star';
-        star.textContent='*';
-        const txt = document.createTextNode(' ' + merged);
-        firstVal.textContent='';
-        firstVal.appendChild(star);
-        firstVal.appendChild(txt);
-      }
-    });
-  }
-
-// TST/TSL: build mobile-friendly stage cards from a season block (matrix-style sheet)
-function renderStageCardsFromBlockData(blockData, leagueKey){
-  const k = String(leagueKey||'').toLowerCase();
-  if(k!=='tst' && k!=='tsl') return null;
-  if(!Array.isArray(blockData) || !blockData.length) return null;
-
-  const norm = (s)=> String(s||'')
-    .replace(/[\u200B-\u200D\uFEFF]/g,'')
-    .replace(/\u00A0/g,' ')
-    .replace(/\s+/g,' ')
-    .trim();
-
-  const rowNorm = (row)=> (row||[]).map(norm);
-
-  // Find organizer row
-  let organizerRow = null;
-  for(const r of blockData){
-    const rr = rowNorm(r);
-    if(rr.some(x=>/대회\s*진행자|대회진행자|진행자|대회\s*진행/.test(x))){
-      organizerRow = rr;
-      break;
-    }
-  }
-  let organizer = '';
-  if(organizerRow){
-    organizer = organizerRow
-      .filter((v,i)=> i!==0 && !!v && !/대회\s*진행자|대회진행자|진행자|대회\s*진행/.test(v))
-      .join(', ')
-      .replace(/\s*,\s*/g, ', ')
-      .trim();
-  }
-
-  // Winner / Runner rows
-  let winRow=null, runRow=null;
-  for(const r of blockData){
-    const rr = rowNorm(r);
-    if(!winRow && rr.some(x=>x==='우승' || (/(^|\s)우\s*승($|\s)/.test(x) && !/준\s*우\s*승/.test(x)))) winRow = rr;
-    if(!runRow && rr.some(x=>/준\s*우\s*승/.test(x))) runRow = rr;
-  }
-
-  // Stage header row: first row with multiple non-empty labels (excluding 우승/준우승/진행자)
-  let headerRow=null;
-  for(const r of blockData){
-    const rr = rowNorm(r);
-    const filled = rr.filter(Boolean);
-    if(filled.length < 3) continue;
-    if(filled.some(x=>/우\s*승|준\s*우\s*승|대회\s*진행자|대회진행자|진행자/.test(x))) continue;
-    const stageLike = filled.filter(x=>/스테이지/.test(x) || /^[A-Z]$/.test(x) || /^[가-힣]{1,4}$/.test(x)).length;
-    if(stageLike >= 2){
-      headerRow = rr;
-      break;
-    }
-  }
-
-  if(!headerRow || !winRow || !runRow) return null;
-
-  // Determine stage columns: take all non-empty header cells except those that look like row labels
-  const cols = [];
-  for(let c=0;c<headerRow.length;c++){
-    const h = headerRow[c];
-    if(!h) continue;
-    if(c===0 && /명예의전당/.test(h)) continue;
-    if(winRow[c] && /우\s*승/.test(winRow[c])) continue;
-    cols.push(c);
-  }
-  if(!cols.length) return null;
-
-  const letters = ['S','A','B','C','D','E','F','G','H','I','J'];
-
-  const cards = cols.map((c, idx)=>{
-    const rawTitle = headerRow[c];
-    let title = rawTitle;
-    if(!/스테이지/.test(title)){
-      const L = letters[idx] || String(idx+1);
-      title = `${L}스테이지(${rawTitle})`;
-    }
-    const win = winRow[c] || '';
-    const run = runRow[c] || '';
-    return { title, win, run, organizer };
-  }).filter(o=> o && (o.win || o.run));
-
-  if(!cards.length) return null;
-  return cards;
-}
-
-function ensureHofStageCardsContainer(){
-  const inline = document.getElementById('hofInline');
-  if(!inline) return null;
-  let box = inline.querySelector('.hof-stage-cards');
-  if(!box){
-    box = document.createElement('div');
-    box.className = 'hof-stage-cards';
-    inline.appendChild(box);
-  }
-  return box;
-}
-
-function clearHofStageCards(){
-  const inline = document.getElementById('hofInline');
-  if(!inline) return;
-  inline.classList.remove('hof-has-stagecards','hof-inline-tst','hof-inline-tsl','hof-inline-pro');
-  const box = inline.querySelector('.hof-stage-cards');
-  if(box) box.innerHTML='';
-}
-
-
-function removeTstHallOfFameHeaderRows(tableEl, leagueKey){
-  const k = String(leagueKey||'').toLowerCase();
-  if(!tableEl || k!=='tst') return;
-  const tight = (s)=>String(s||'')
-    .replace(/[​-‍﻿]/g,'')
-    .replace(/\u00a0/g,' ')
-    .replace(/\s+/g,'')
-    .trim();
-  const isBadRow = (tr)=>{
-    const t = tight(tr ? tr.textContent : '');
-    if(!t) return false;
-    // Remove "TST명예의전당" (including line-break split variants)
-    if(t.includes('TST명예의전당')) return true;
-    // Remove any standalone "명예의전당" row that is not a season label
-    if(t.includes('명예의전당') && !t.includes('시즌')) return true;
-    return false;
-  };
-  try{
-    if(tableEl.tHead){
-      Array.from(tableEl.tHead.querySelectorAll('tr')).forEach(tr=>{ if(isBadRow(tr)) tr.remove(); });
-    }
-  }catch(_){}
-  try{
-    const tbodies = tableEl.tBodies ? Array.from(tableEl.tBodies) : [];
-    tbodies.forEach(tb=>{
-      Array.from(tb.querySelectorAll('tr')).forEach(tr=>{ if(isBadRow(tr)) tr.remove(); });
-    });
-  }catch(_){}
-
-  // Also remove/hide any single cell that contains the header text (sometimes it's a merged stub cell, not a whole row)
-  try{
-    Array.from(tableEl.querySelectorAll('th,td')).forEach(cell=>{
-      const t = tight(cell.textContent||'');
-      if(t.includes('TST명예의전당') || (t.includes('명예의전당') && !t.includes('시즌'))){
-        cell.textContent='';
-        cell.style.display='none';
-      }
-    });
-  }catch(_){}
-}
-
-function removeTstTitleRows(tableEl, leagueKey){
-  const k = String(leagueKey||'').toLowerCase();
-  if(!tableEl || k!=='tst') return;
-  const tbody = tableEl.tBodies && tableEl.tBodies.length ? tableEl.tBodies[0] : null;
-  if(!tbody) return;
-  Array.from(tbody.querySelectorAll('tr')).forEach(tr=>{
-    const txt = (tr.textContent||'').replace(/\s+/g,' ').trim();
-    if(/명예의전당/.test(txt) && !/시즌\s*\d+/i.test(txt)){
-      tr.remove();
-    }
-  });
-}
-
-function mountStageCardsFromBlock(blockData, leagueKey){
-  const k = String(leagueKey||'').toLowerCase();
-  if(k!=='tst' && k!=='tsl') return false;
-  const cards = renderStageCardsFromBlockData(blockData, k);
-  const inline = document.getElementById('hofInline');
-  if(!inline) return false;
-
-  const box = ensureHofStageCardsContainer();
-  if(!box) return false;
-  box.innerHTML = '';
-
-  if(!cards || !cards.length){
-    inline.classList.remove('hof-has-stagecards');
-    return false;
-  }
-
-  inline.classList.add('hof-has-stagecards');
-  inline.classList.add(k==='tst'?'hof-inline-tst':'hof-inline-tsl');
-
-  cards.forEach(card=>{
-    const el = document.createElement('div');
-    el.className = 'hof-stage-card';
-
-    const title = document.createElement('div');
-    title.className = 'hof-stage-title';
-    title.textContent = card.title;
-
-    const win = document.createElement('div');
-    win.className = 'hof-stage-line win';
-    const wLabel = document.createElement('span');
-    wLabel.className = 'hof-stage-label';
-    wLabel.textContent = '우승';
-    const wVal = document.createElement('span');
-    wVal.className = 'hof-stage-value';
-    wVal.textContent = card.win || '-';
-    win.appendChild(document.createTextNode('🏆 '));
-    win.appendChild(wLabel);
-    win.appendChild(document.createTextNode(' '));
-    win.appendChild(wVal);
-
-    const run = document.createElement('div');
-    run.className = 'hof-stage-line runner';
-    const rLabel = document.createElement('span');
-    rLabel.className = 'hof-stage-label';
-    rLabel.textContent = '준우승';
-    const rVal = document.createElement('span');
-    rVal.className = 'hof-stage-value';
-    rVal.textContent = card.run || '-';
-    run.appendChild(document.createTextNode('🥈 '));
-    run.appendChild(rLabel);
-    run.appendChild(document.createTextNode(' '));
-    run.appendChild(rVal);
-
-    el.appendChild(title);
-    el.appendChild(win);
-    el.appendChild(run);
-
-    if(card.organizer){
-      const org = document.createElement('div');
-      org.className = 'hof-stage-org';
-      const star = document.createElement('span');
-      star.className = 'hof-organizer-star';
-      star.textContent = '★';
-      org.appendChild(star);
-      org.appendChild(document.createTextNode(' 대회진행자 : ' + card.organizer));
-      el.appendChild(org);
-    }
-
-    box.appendChild(el);
-  });
-
-  return true;
-}
-
-
-
-
-// Build stage cards directly from the already-rendered HTML table (robust for TST wide sheets)
-function mountStageCardsFromRenderedTable(tableEl, leagueKey){
-  const k = String(leagueKey||'').toLowerCase();
-  if(!tableEl || (k!=='tst' && k!=='tsl')) return false;
-
-  const norm = (s)=> String(s||'')
-    .replace(/[\u200B-\u200D\uFEFF]/g,'')
-    .replace(/\u00A0/g,' ')
-    .replace(/\s+/g,' ')
-    .trim();
-
-  // Find header cells (stage labels).
-  // IMPORTANT: GViz HTML for TST/TSL often inserts a merged "season title" row (e.g., "TST 25 (시즌1)")
-  // as the FIRST tbody row. If we naively use that row as the header, card titles become wrong and the
-  // winner/runner columns shift (e.g., "우승 : 우승").
-  // Strategy:
-  //  1) Prefer thead (if present)
-  //  2) Otherwise scan tbody for the row that contains MULTIPLE stage labels ("...스테이지" etc.)
-  //  3) Fall back to the first tbody row only if we still can't find a stage-header row.
-  let headerCells = [];
-  const hasStageLabel = (t)=>{ const s=norm(t); return s && /(스테이지|16강|32강|64강|8강|4강|준결승|결승)/.test(s); };
-
-  try{
-    const thead = tableEl.tHead;
-    if(thead){
-      const trs = Array.from(thead.querySelectorAll('tr'));
-      // pick the row with the most non-empty THs (usually the stage label row)
-      let best = null, bestCount = 0;
-      trs.forEach(tr=>{
-        const ths = Array.from(tr.querySelectorAll('th'));
-        const filled = ths.map(th=>norm(th.textContent)).filter(Boolean);
-        if(filled.length > bestCount){ bestCount = filled.length; best = ths; }
-      });
-      if(best && bestCount>=2) headerCells = best.map(th=>norm(th.textContent));
-    }
-  }catch(_){}
-
-  // Scan tbody for a real stage header row (preferred for TST wide tables)
-  if(!headerCells.length){
-    try{
-      const trs = Array.from(tableEl.querySelectorAll('tbody tr'));
-      let bestRow = null, bestCnt = 0;
-      for(const tr of trs){
-        const cells = Array.from(tr.children||[]);
-        if(!cells.length) continue;
-        const vals = cells.map(td=>norm(td.textContent));
-        const cnt = vals.filter(hasStageLabel).length;
-        if(cnt >= 2 && cnt > bestCnt){
-          bestCnt = cnt;
-          bestRow = vals;
-        }
-      }
-      if(bestRow) headerCells = bestRow;
-    }catch(_){}
-  }
-
-  // Last resort: first tbody row
-  if(!headerCells.length){
-    try{
-      const tr = tableEl.querySelector('tbody tr');
-      if(tr){
-        const tds = Array.from(tr.children||[]);
-        headerCells = tds.map(td=>norm(td.textContent));
-      }
-    }catch(_){}
-  }
-
-  // Locate winner / runner / organizer rows
-  const rows = Array.from(tableEl.querySelectorAll('tbody tr'));
-  const findRowByLabel = (reLabel)=>{
-    for(const tr of rows){
-      const cells = Array.from(tr.children||[]);
-      if(!cells.length) continue;
-      const first = norm(cells[0].textContent);
-      const all = norm(tr.textContent);
-      if(reLabel.test(first) || reLabel.test(all)) return cells;
-    }
-    return null;
-  };
-
-  const winCells = (()=>{ 
-    for(const tr of rows){
-      const cells = Array.from(tr.children||[]);
-      if(!cells.length) continue;
-      const txt0 = norm(cells[0].textContent);
-      const txtAll = norm(tr.textContent);
-      // Winner row: contains '우승' but not '준우승' (handles emoji prefix like '🏅 우승')
-      if((/우\s*승/.test(txt0) && !/준\s*우\s*승/.test(txt0)) || (/우\s*승/.test(txtAll) && !/준\s*우\s*승/.test(txtAll))) return cells;
-    }
-    return null;
-  })();
-  const runCells = (()=>{ 
-    for(const tr of rows){
-      const cells = Array.from(tr.children||[]);
-      if(!cells.length) continue;
-      const txt0 = norm(cells[0].textContent);
-      const txtAll = norm(tr.textContent);
-      if(/준\s*우\s*승/.test(txt0) || /준\s*우\s*승/.test(txtAll)) return cells;
-    }
-    return null;
-  })();
-  const orgCells = findRowByLabel(/대회\s*진행자|대회진행자|진행자/);
-
-  if(!winCells || !runCells) return false;
-
-  // Determine which columns are stages: if header has stage labels, use those indices.
-  // If header is missing or includes row-label, skip col0.
-  const stageStart = 1;
-  const maxCols = Math.max(winCells.length, runCells.length, headerCells.length);
-  const cards = [];
-  for(let c=stageStart; c<maxCols; c++){
-    const rawTitle = headerCells[c] || '';
-    // Skip empty columns
-    const wv = norm(winCells[c] ? winCells[c].textContent : '');
-    const rv = norm(runCells[c] ? runCells[c].textContent : '');
-    // Guard: sometimes merged/collapsed columns shift so that label text leaks into value cells.
-    // If value is literally the label (e.g., wv === '우승'), treat it as empty.
-    const wvClean = (/^우\s*승$/.test(wv) ? '' : wv);
-    const rvClean = (/^준\s*우\s*승$/.test(rv) ? '' : rv);
-    if(!wvClean && !rvClean) continue;
-
-    let title = rawTitle;
-    if(!title){
-      title = `스테이지 ${c}`;
-    }
-    // Make sure it looks like "X스테이지( ... )" when possible
-    if(!/스테이지/.test(title) && rawTitle){
-      title = rawTitle;
-    }
-    cards.push({ title, win: wvClean || '-', run: rvClean || '-', organizer: '' });
-  }
-
-  // Organizer value (usually on same row, col1+...)
-  let organizer = '';
-  if(orgCells){
-    organizer = orgCells
-      .map((td,i)=> i===0 ? '' : norm(td.textContent))
-      .filter(v=> v && !/(대회\s*진행자|대회진행자|진행자)/.test(v)) // drop label if it leaks into value cells
-      .join(', ')
-      .replace(/\s*,\s*/g, ', ')
-      .trim();
-  }
-  cards.forEach(c=>{ c.organizer = organizer; });
-
-  if(!cards.length) return false;
-
-  // Mount cards
-  const inline = document.getElementById('hofInline');
-  if(!inline) return false;
-  const box = ensureHofStageCardsContainer();
-  if(!box) return false;
-  box.innerHTML = '';
-  inline.classList.add('hof-has-stagecards');
-  inline.classList.add(k==='tst'?'hof-inline-tst':'hof-inline-tsl');
-
-  cards.forEach(card=>{
-    const el = document.createElement('div');
-    el.className = 'hof-stage-card';
-
-    const title = document.createElement('div');
-    title.className = 'hof-stage-title';
-    title.textContent = card.title;
-
-    const win = document.createElement('div');
-    win.className = 'hof-stage-line win';
-    const wLabel = document.createElement('span');
-    wLabel.className = 'hof-stage-label';
-    wLabel.textContent = '우승';
-    const wVal = document.createElement('span');
-    wVal.className = 'hof-stage-value';
-    wVal.textContent = card.win || '-';
-    win.appendChild(document.createTextNode('🏆 '));
-    win.appendChild(wLabel);
-    win.appendChild(document.createTextNode(' '));
-    win.appendChild(wVal);
-
-    const run = document.createElement('div');
-    run.className = 'hof-stage-line runner';
-    const rLabel = document.createElement('span');
-    rLabel.className = 'hof-stage-label';
-    rLabel.textContent = '준우승';
-    const rVal = document.createElement('span');
-    rVal.className = 'hof-stage-value';
-    rVal.textContent = card.run || '-';
-    run.appendChild(document.createTextNode('🥈 '));
-    run.appendChild(rLabel);
-    run.appendChild(document.createTextNode(' '));
-    run.appendChild(rVal);
-
-    el.appendChild(title);
-    el.appendChild(win);
-    el.appendChild(run);
-
-    if(card.organizer){
-      const org = document.createElement('div');
-      org.className = 'hof-stage-org';
-      const star = document.createElement('span');
-      star.className = 'hof-organizer-star';
-      star.textContent = '★';
-      org.appendChild(star);
-      org.appendChild(document.createTextNode(' 대회진행자 : ' + card.organizer));
-      el.appendChild(org);
-    }
-    box.appendChild(el);
-  });
-
-  // Hide original table once cards are mounted
-  try{ tableEl.style.display = 'none'; }catch(_){}
-  return true;
-}
-
-// TST wide-sheet helper: build stage cards from a matrix where stages are columns.
-// Reliable for the current TST tab layout:
-//   - a header row contains multiple "...스테이지" labels across columns
-//   - a row labeled "우승" has winner values per stage column
-//   - a row labeled "준우승" has runner values per stage column
-//   - a row labeled "대회 진행자" (optional) has organizer names across columns
-function mountStageCardsFromTstWideMatrix(tableEl, blockData){
-  if(!tableEl || !Array.isArray(blockData) || !blockData.length) return false;
-
-  const norm = (s)=> String(s||'')
-    .replace(/[​-‍﻿]/g,'')
-    .replace(/\u00A0/g,' ')
-    .replace(/\s+/g,' ')
-    .trim();
-
-  const isWinLabel = (t)=>{ const s=norm(t); return s && /우\s*승/.test(s) && !/준\s*우\s*승/.test(s); };
-  const isRunLabel = (t)=>{ const s=norm(t); return s && /준\s*우\s*승/.test(s); };
-  const isOrgLabel = (t)=>{ const s=norm(t); return s && /(대회\s*진행자|대회진행자|진행자)/.test(s); };
-  const hasStageLabel = (t)=>{ const s=norm(t); return s && /(스테이지|16강|32강|64강|8강|4강|준결승|결승)/.test(s); };
-
-  // Find header row with multiple stage labels
-  let rHeader = -1;
-  for(let r=0; r<Math.min(blockData.length, 12); r++){
-    const row = blockData[r] || [];
-    const stageCnt = row.map(hasStageLabel).filter(Boolean).length;
-    if(stageCnt >= 2){ rHeader = r; break; }
-  }
-
-  // Find win/run/org rows
-  let rWin=-1, rRun=-1, rOrg=-1;
-  for(let r=0; r<blockData.length; r++){
-    const row = blockData[r] || [];
-    const first = norm(row[0]);
-    const joined = norm(row.join(' '));
-    if(rWin<0 && (isWinLabel(first) || isWinLabel(joined))) rWin = r;
-    if(rRun<0 && (isRunLabel(first) || isRunLabel(joined))) rRun = r;
-    if(rOrg<0 && (isOrgLabel(first) || isOrgLabel(joined))) rOrg = r;
-  }
-  if(rHeader<0 || rWin<0 || rRun<0) return false;
-
-  const header = blockData[rHeader] || [];
-  const winRow = blockData[rWin] || [];
-  const runRow = blockData[rRun] || [];
-  const orgRow = (rOrg>=0 ? (blockData[rOrg]||[]) : []);
-
-  // Build organizer string (spread across cells)
-  let organizer = '';
-  if(orgRow && orgRow.length){
-    organizer = orgRow
-      .map((v,i)=> i===0 ? '' : norm(v))
-      .filter(Boolean)
-      .join(', ')
-      .replace(/\s*,\s*/g, ', ')
-      .trim();
-  }
-
-  const cards = [];
-  for(let c=1; c<Math.max(header.length, winRow.length, runRow.length); c++){
-    const title = norm(header[c]);
-    const wv = norm(winRow[c]);
-    const rv = norm(runRow[c]);
-    if(!title && !wv && !rv) continue;
-    // Skip columns that aren't stages if header is noisy
-    if(title && !hasStageLabel(title) && (hasStageLabel(header.join(' ')) )){
-      // If the header row clearly has stages, ignore non-stage columns.
-      continue;
-    }
-    if(!wv && !rv) continue;
-    cards.push({ title: title || `스테이지 ${c}`, win: wv || '-', run: rv || '-', organizer });
-  }
-  if(!cards.length) return false;
-
-  const inline = document.getElementById('hofInline');
-  if(!inline) return false;
-  const box = ensureHofStageCardsContainer();
-  if(!box) return false;
-  box.innerHTML = '';
-  inline.classList.add('hof-has-stagecards','hof-inline-tst');
-  inline.classList.remove('hof-inline-tsl');
-
-  cards.forEach(card=>{
-    const el = document.createElement('div');
-    el.className = 'hof-stage-card';
-
-    const titleEl = document.createElement('div');
-    titleEl.className = 'hof-stage-title';
-    titleEl.textContent = card.title;
-
-    const mkLine = (emoji,label,value)=>{
-      const line = document.createElement('div');
-      line.className = 'hof-stage-line';
-      line.appendChild(document.createTextNode(emoji + ' '));
-      const lab = document.createElement('span');
-      lab.className='hof-stage-label';
-      lab.textContent = label;
-      const val = document.createElement('span');
-      val.className='hof-stage-value';
-      val.textContent = value;
-      line.appendChild(lab);
-      line.appendChild(document.createTextNode(' '));
-      line.appendChild(val);
-      return line;
-    };
-
-    el.appendChild(titleEl);
-    el.appendChild(mkLine('🏆','우승',card.win));
-    el.appendChild(mkLine('🥈','준우승',card.run));
-
-    if(card.organizer){
-      const org = document.createElement('div');
-      org.className = 'hof-stage-org';
-      const star = document.createElement('span');
-      star.className = 'hof-organizer-star';
-      star.textContent='★';
-      org.appendChild(star);
-      org.appendChild(document.createTextNode(' 대회진행자 : ' + card.organizer));
-      el.appendChild(org);
-    }
-    box.appendChild(el);
-  });
-
-  try{ tableEl.style.display='none'; }catch(_){ }
-  return true;
-}
-
-
-  
-
-  // --- PROLEAGUE podium renderer (matrix-style sheet) ---
-  // Expected pattern inside a season block (similar to your sheet screenshot):
-  //  row: ["우승", ..., "준우승", ...]  -> locate win/run columns
-  //  next row: image urls (optional)
-  //  rows below: labels (팀명/감독/부감독/운영팀...) + values under win/run columns
-  function renderProPodiumFromMatrix(tableEl, blockData){
-  if(!tableEl) return;
-  if(!Array.isArray(blockData) || blockData.length < 2) return;
-
-  const norm = (s)=> String(s ?? '')
-    .replace(/[​-‍﻿]/g,'')
-    .replace(/ /g,' ')
-    .replace(/\s+/g,' ')
-    .trim();
-  const isUrl = (v)=> /^https?:\/\//i.test(String(v||'').trim());
-  const cell = (row, c)=> (row && c >= 0 && c < row.length) ? row[c] : '';
-
-  // Find header row and winner/runner columns
-  let headerR=-1, cWin=-1, cRun=-1;
-  for(let r=0; r<Math.min(blockData.length, 12); r++){
-    const row = blockData[r] || [];
-    let win=-1, run=-1;
-    for(let c=0; c<row.length; c++){
-      const t = norm(row[c]);
-      if(t==='우승' && win<0) win=c;
-      if(t==='준우승' && run<0) run=c;
-    }
-    if(win>=0 && run>=0){ headerR=r; cWin=win; cRun=run; break; }
-  }
-  if(headerR<0) return;
-
-  // Detect logo row (first row below header where either winner/runner cell is a url)
-  let logoR=-1;
-  for(let r=headerR+1; r<Math.min(blockData.length, headerR+6); r++){
-    const row = blockData[r] || [];
-    const w = norm(cell(row,cWin));
-    const u = norm(cell(row,cRun));
-    if(isUrl(w) || isUrl(u)) { logoR=r; break; }
-  }
-
-  const win = { logo:'', team:'', coach:'', subcoach:'', ops:'' };
-  const run = { logo:'', team:'', coach:'', subcoach:'', ops:'' };
-  if(logoR>=0){
-    win.logo = norm(cell(blockData[logoR], cWin));
-    run.logo = norm(cell(blockData[logoR], cRun));
-  }
-
-  const labelMap = { '팀명':'team', '감독':'coach', '부감독':'subcoach', '운영팀':'ops', '운영':'ops' };
-
-  for(let r=headerR+1; r<blockData.length; r++){
-    const row = blockData[r] || [];
-    let labelCol=-1, key='';
-    for(let c=0; c<Math.min(4,row.length); c++){
-      const t = norm(row[c]);
-      if(labelMap[t]){ labelCol=c; key=labelMap[t]; break; }
-    }
-    if(labelCol<0) continue;
-
-    let wv = norm(cell(row, cWin));
-    let rv = norm(cell(row, cRun));
-
-    // If cells are empty, fallback to right of label
-    if(!wv) wv = norm(cell(row, labelCol+1));
-    if(!rv) rv = norm(cell(row, cRun+1));
-
-    if(wv) win[key] = wv;
-    if(rv && rv !== '-' && rv !== '—') run[key] = rv;
-  }
-
-  // Fallback team name: first non-empty non-url value under each column
-  if(!win.team){
-    for(let r=headerR+1; r<blockData.length; r++){
-      const v = norm(cell(blockData[r]||[], cWin));
-      if(v && !isUrl(v) && v!=='우승' && v!=='준우승') { win.team=v; break; }
-    }
-  }
-  if(!run.team){
-    for(let r=headerR+1; r<blockData.length; r++){
-      const v = norm(cell(blockData[r]||[], cRun));
-      if(v && !isUrl(v) && v!=='우승' && v!=='준우승') { run.team=v; break; }
-    }
-  }
-
-  const thead = tableEl.querySelector('thead');
-  const tbody = tableEl.querySelector('tbody');
-  if(!tbody) return;
-  if(thead) thead.innerHTML = '';
-  tbody.innerHTML = '';
-
-  const colSpan = Math.max(1, (blockData[0]||[]).length);
-
-  const makeCard = (type, obj)=>{
-    const wrap = document.createElement('div');
-    wrap.className = 'hof-pro-card ' + (type==='win'?'win':'runner');
-
-    const badge = document.createElement('div');
-    badge.className = 'hof-place-badge ' + (type==='win'?'win':'runner');
-
-    const crown = document.createElement('img');
-    crown.className = 'hof-place-crown';
-    crown.alt = (type==='win'?'우승':'준우승');
-    crown.src = (type==='win'?'./crown_gold.png':'./crown_silver.png');
-
-    const lbl = document.createElement('div');
-    lbl.className = 'hof-place-label';
-    lbl.textContent = (type==='win'?'우승':'준우승');
-
-    badge.appendChild(crown);
-    badge.appendChild(lbl);
-
-    const chip = document.createElement('div');
-    chip.className = 'hof-pro-chip';
-
-    const icon = document.createElement('div');
-    icon.className = 'hof-team-icon';
-    if(obj.logo && isUrl(obj.logo)){
-      const img = document.createElement('img');
-      img.src = obj.logo;
-      img.alt = '';
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      icon.appendChild(img);
-    }
-
-    const tbox = document.createElement('div');
-    const nm = document.createElement('div');
-    nm.className = 'hof-team-name';
-    nm.textContent = obj.team || '-';
-    tbox.appendChild(nm);
-
-    const subParts = [];
-    if(obj.coach) subParts.push('감독 ' + obj.coach);
-    if(obj.subcoach) subParts.push('부감독 ' + obj.subcoach);
-    if(subParts.length){
-      const sub = document.createElement('div');
-      sub.className = 'hof-team-sub';
-      sub.textContent = subParts.join('   ');
-      tbox.appendChild(sub);
-    }
-
-    chip.appendChild(icon);
-    chip.appendChild(tbox);
-
-    const lines = document.createElement('div');
-    lines.className = 'hof-pro-lines';
-
-    const pushLine = (k, v)=>{
-      if(!v) return;
-      const line = document.createElement('div');
-      line.className = 'hof-pro-line';
-      const kk = document.createElement('span');
-      kk.className = 'k';
-      kk.textContent = k + ':';
-      line.appendChild(kk);
-      line.appendChild(document.createTextNode(' ' + v));
-      lines.appendChild(line);
-    };
-
-    pushLine('감독', obj.coach);
-    pushLine('부감독', obj.subcoach);
-    pushLine('운영팀', obj.ops);
-
-    wrap.appendChild(badge);
-    wrap.appendChild(chip);
-    if(lines.children.length) wrap.appendChild(lines);
-
-    return wrap;
-  };
-
-  const addCardRow = (type, obj)=>{
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.colSpan = colSpan;
-    td.appendChild(makeCard(type, obj));
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-  };
-
-  addCardRow('win', win);
-  if(run.team && run.team !== '-' && run.team !== '—') addCardRow('runner', run);
-
-  tableEl.classList.add('hof-pro-podium-table');
-}
-
-
-
-  // TST/TSL: On small screens, the wide stage table becomes unreadable.
-  // Build a mobile-friendly "stage cards" view where each stage shows 우승/준우승 as readable lines.
-  function renderStageCardsForMobile(tableEl, blockData, leagueKey){
-      // Build cards first; only hide the original table if cards were successfully created.
-      let __built = 0;
-      const __k0 = String(leagueKey||'').toLowerCase();
-const k = String(leagueKey||'').toLowerCase();
-    if(!tableEl) return;
-
-    // Always remove old cards (prevents leakage between leagues / seasons)
-    const parent = tableEl.parentElement;
-    if(!parent) return;
-    parent.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove());
-
-    // Reset stagecards flag (will be re-added if we successfully build cards)
-    try{
-      const inline = document.getElementById('hofInline');
-      if(inline) inline.classList.remove('hof-has-stagecards');
-    }catch(_){}
-
-    if(k!=='tst' && k!=='tsl' && k!=='tpl' && k!=='msl' && k!=='tcl') return;
-    if(!Array.isArray(blockData) || !blockData.length) return;
-
-    const norm = (s)=> String(s||'')
-      .replace(/[\u200b-\u200d\ufeff]/g,'')
-      .replace(/\xa0/g,' ')
-      .replace(/[​-‍﻿]/g,'')
-      .replace(/ /g,' ')
-      .replace(/\s+/g,' ')
-      .trim();
-
-    // ---- TST SPECIAL (forced): parse the season block matrix and render the same card UI as TSL.
-    // The TST sheet is a wide "stage-by-column" table; DOM layout varies a lot due to merged headers,
-    // so we rely on the already-normalized matrix (blockData) for a deterministic result.
-    if(k==='tst'){
-      // TST is a wide stage-by-column table and merged headers vary a lot.
-      // 가장 확실한 방법: 이미 렌더된 table에서 직접 읽어서 카드로 변환한다.
-      let __ok = false;
-      try{
-        if(typeof mountStageCardsFromRenderedTable === 'function'){
-          __ok = !!mountStageCardsFromRenderedTable(tableEl, k);
-        }
-      }catch(_){}
-      if(__ok) return;
-
-      // 2nd choice: parse the wide "stage-by-column" matrix directly (robust for current TST tab)
-      try{
-        if(typeof mountStageCardsFromTstWideMatrix === 'function'){
-          __ok = !!mountStageCardsFromTstWideMatrix(tableEl, blockData);
-        }
-      }catch(_){ }
-      if(__ok) return;
-
-      // Fallback: matrix(blockData) 기반 파싱
-      try{
-        if(typeof mountStageCardsFromBlock === 'function'){
-          __ok = !!mountStageCardsFromBlock(blockData, k);
-          if(__ok){
-            try{ tableEl.style.display='none'; }catch(_){}
-          }
-        }
-      }catch(_){}
-      if(__ok) return;
-    }
-const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4위|S\s*스테이지|A\s*스테이지|B\s*스테이지|C\s*스테이지|D\s*스테이지|E\s*스테이지|F\s*스테이지)/i;
-    const tierRe  = /(갓|킹|퀸|잭|스페이드|조커|히든|\d+\s*티어|[1-7]\s*티어|\b[1-7]\b)/i;
-
-    const findRowAny = (re)=>{
-      for(let r=0;r<blockData.length;r++){
-        const row = blockData[r] || [];
-        for(let c=0;c<row.length;c++){
-          const t = norm(row[c]);
-          if(t && re.test(t)) return r;
-        }
-      }
-      return -1;
-    };
-
-    // Locate key rows (robust across old/new sheets)
-    // Older TST seasons sometimes use labels like "우승자", "준우승자", "우승팀" etc.
-    // We treat any cell that contains "우승" but NOT "준우승" as the winner label.
-    const isWinLabel = (t)=>{
-      const s = norm(t);
-      if(!s) return false;
-      if(/준\s*우\s*승/.test(s)) return false;
-      if(/우\s*승/.test(s)) return true;
-      return false;
-    };
-    const isRunLabel = (t)=>{
-      const s = norm(t);
-      if(!s) return false;
-      return /준\s*우\s*승/.test(s);
-    };
-
-
-    const isThirdLabel = (t)=>{
-      const s = norm(t);
-      if(!s) return false;
-      // accept: 3위 / 3 위 / 3위팀 / 3위 결정전 / 3-4위 etc.
-      return /3\s*위/.test(s) || /3\s*[-~]?\s*4\s*위/.test(s) || /\b3rd\b/i.test(s);
-    };
-
-    const findRowBy = (pred)=>{
-      for(let r=0;r<blockData.length;r++){
-        const row = blockData[r] || [];
-        for(let c=0;c<row.length;c++){
-          const t = row[c];
-          if(pred(t)) return r;
-        }
-      }
-      return -1;
-    };
-
-    const rWin = findRowBy(isWinLabel);
-    const rRun = findRowBy(isRunLabel);
-    const rThird = (typeof isThirdLabel==='function') ? findRowBy(isThirdLabel) : -1;
-    const rOrg = findRowAny(/대회\s*진행자|대회진행자|진행자/);
-
-    // If we can't find winner/runner, we can't build cards reliably
-    if(rWin < 0 && rRun < 0) return;
-
-    const maxCols = Math.max(...blockData.map(r=> (r||[]).length), 0);
-    if(maxCols <= 1) return;
-
-    const getCell = (r,c)=>{
-      if(r<0) return '';
-      const row = blockData[r] || [];
-      return norm(row[c]);
-    };
-
-    // Determine which column is the "label column" (where '우승/준우승' text sits)
-    const findLabelCol = (r, re)=>{
-      if(r<0) return -1;
-      const row = blockData[r] || [];
-      for(let c=0;c<row.length;c++){
-        if(re.test(norm(row[c]))) return c;
-      }
-      return -1;
-    };
-    const labelColWin = findLabelCol(rWin, /(우\s*승)/);
-    const labelColRun = findLabelCol(rRun, /(준\s*우\s*승)/);
-    const labelCol = (labelColWin>=0) ? labelColWin : (labelColRun>=0 ? labelColRun : 0);
-
-    // Choose a header row near the winner row that has stage/tier labels.
-    // Look up to 6 rows above the winner row; pick the one with most stage/tier hits.
-    const anchorRow = (rWin>=0 ? rWin : rRun);
-    let headerR = -1, headerScore = -1;
-    for(let r=Math.max(0, anchorRow-6); r<anchorRow; r++){
-      const row = (blockData[r]||[]).map(norm);
-      const score = row.filter(t=>stageRe.test(t) || tierRe.test(t)).length;
-      if(score > headerScore){
-        headerScore = score;
-        headerR = (score>=1) ? r : headerR;
-      }
-    }
-
-    // Fallback: if no stage/tier header found, use the immediate row above anchor
-    if(headerR < 0 && anchorRow-1 >= 0) headerR = anchorRow-1;
-
-    const header = (headerR>=0 ? (blockData[headerR]||[]).map(norm) : []);
-
-    // Build column list: any column (except labelCol) where winner or runner has a value
-    const cols = [];
-    for(let c=0; c<maxCols; c++){
-      if(c===labelCol) continue;
-      const vWin = getCell(rWin, c);
-      const vRun = getCell(rRun, c);
-      if(!vWin && !vRun) continue;
-
-      let lab = header[c] || '';
-      // If header label is empty or not meaningful, try row-specific stage labels (some sheets have stage labels in the first data row)
-      if(!lab || (!stageRe.test(lab) && !tierRe.test(lab) && lab.length<=1)){
-        // scan a couple of rows above for something usable in this column
-        for(let rr=Math.max(0, anchorRow-3); rr<anchorRow; rr++){
-          const cand = norm((blockData[rr]||[])[c]);
-          if(cand && (stageRe.test(cand) || tierRe.test(cand) || cand.length>=2)){
-            lab = cand; break;
-          }
-        }
-      }
-      cols.push({ col:c, label: lab || '' });
-    }
-
-    if(!cols.length) return;
-
-    // Organizer: scan row for first non-empty to the right of label col
-    let organizer = '';
-    if(rOrg>=0){
-      for(let c=0; c<(blockData[rOrg]||[]).length; c++){
-        if(c===labelCol) continue;
-        const v = getCell(rOrg,c);
-        if(v){ organizer = v; break; }
-      }
-    }
-
-    const wrap = document.createElement('div');
-    wrap.className = 'hof-stage-cards';
-
-    const stageNameFromTier = (label, idx)=>{
-      const t = norm(label||'');
-      // For old TSL seasons where header shows tiers, map to S/A/B/C/D/E/F
-      const tierOrder = ['갓','킹','퀸','잭','스페이드','조커','히든','1티어','2티어','3티어','4티어','5티어','6티어','7티어','1','2','3','4','5','6','7'];
-      const hitTier = tierOrder.find(x => t.replace(/\s+/g,'') === x.replace(/\s+/g,''));
-      if(hitTier){
-        const map = ['S','A','B','C','D','E','F'];
-        const mapped = map[Math.min(idx, map.length-1)] || 'S';
-        return `${mapped}스테이지(${t})`;
-      }
-      // If already has "스테이지" keep it
-      if(/스테이지/i.test(t)) return t;
-      return t || ((k==='tpl' || k==='tcl' || k==='msl') ? '' : `스테이지${idx+1}`);
-    };
-
-    let built = 0;
-    cols.forEach((it, idx)=>{
-      const col = it.col;
-      const label = stageNameFromTier(it.label, idx);
-      let winner = getCell(rWin, col);
-      let runner = getCell(rRun, col);
-      let third = getCell(rThird, col);
-
-      // Make TST match TSL visual output on mobile/resize.
-      // Some TST seasons can include tier tokens (e.g., "갓DayDream" or "갓 DayDream")
-      // inside the winner/runner values. Since the stage title already contains the tier
-      // (e.g., "S스테이지(갓)"), strip the leading tier token so the line reads like TSL.
-      if(k==='tst'){
-        const hasTierInTitle = /(갓|킹|퀸|잭|스페이드|조커|히든|\d+\s*티어|[1-7]\s*티어)/.test(label);
-        if(hasTierInTitle){
-          const stripTier = (v)=> String(v||'')
-            .replace(/^(갓|킹|퀸|잭|스페이드|조커|히든)\s*/,'')
-            .replace(/^(갓|킹|퀸|잭|스페이드|조커|히든)/,'')
-            .replace(/^\d+\s*티어\s*/,'')
-            .replace(/^[1-7]\s*티어\s*/,'')
-            .trim();
-          winner = stripTier(winner);
-          runner = stripTier(runner);
-          third = stripTier(third);
-        }
-      }
-
-      // only build cards that have at least one value
-      if(!winner && !runner && !third) return;
-
-      const card = document.createElement('div');
-      card.className = 'hof-stage-card';
-
-      const titleText = String(label||'').trim();
-      if(titleText && titleText!=='-' && titleText!=='–' && titleText!=='—' && titleText!=='－' && !/^스테이지\s*\d+$/.test(titleText) && !/^스테이지\d+$/.test(titleText)){
-        const title = document.createElement('div');
-        title.className = 'hof-stage-title';
-        title.textContent = titleText;
-        card.appendChild(title);
-      }
-
-      const mkLine = (place, value)=>{
-        if(!value) return;
-        const vv = String(value).trim();
-        if(!vv || vv==='-' || vv==='–' || vv==='—' || vv==='－') return;
-        const line = document.createElement('div');
-        line.className = 'hof-stage-line';
-
-        const badge = document.createElement('span');
-        badge.className = 'hof-stage-badge';
-        badge.textContent = (place==='win') ? '🏆' : (place==='third') ? '🥉' : '🥈';
-        line.appendChild(badge);
-
-        const lab = document.createElement('span');
-        lab.className = 'hof-stage-label';
-        lab.textContent = (place==='win') ? '우승' : (place==='third') ? '3위' : '준우승';
-        line.appendChild(lab);
-
-        const val = document.createElement('span');
-        val.className = 'hof-stage-value';
-        val.textContent = value;
-        line.appendChild(val);
-
-        card.appendChild(line);
-      };
-
-      mkLine('win', winner);
-      mkLine('run', runner);
-      mkLine('third', third);
-
-      if(organizer){
-        const org = document.createElement('div');
-        org.className = 'hof-stage-organizer';
-        org.innerHTML = `<span class="hof-organizer-star">★</span><span class="k">대회진행자</span> : ${organizer}`;
-        card.appendChild(org);
-      }
-
-      wrap.appendChild(card);
-      built++;
+    const innerTable = (tableEl.tagName && tableEl.tagName.toLowerCase()==='table')
+      ? tableEl
+      : tableEl.querySelector('table');
+    if(!innerTable) return;
+
+    tableEl.classList.add('hof-table-left');
+    tableEl.classList.add('hof-wide-scroll');
+
+    const allRows = [];
+    if(innerTable.tHead) allRows.push(...Array.from(innerTable.tHead.rows||[]));
+    innerTable.tBodies && Array.from(innerTable.tBodies||[]).forEach(tb=>{
+      allRows.push(...Array.from(tb.rows||[]));
     });
 
-    if(!built) return;
-
-    parent.appendChild(wrap);
-    // Cards use .hof-stage-card (not .stage-card)
-    __built = wrap.querySelectorAll('.hof-stage-card').length;
-
-    // TST/TSL: user wants the table view completely removed.
-    // If cards were built, hide the original table at all viewport sizes.
-    try{
-      if(__built > 0){
-        tableEl.style.display = 'none';
-      }
-    }catch(_){ }
-    try{
-      const inline = document.getElementById('hofInline');
-      if(inline){
-        if(__built>0) inline.classList.add('hof-has-stagecards');
-        else inline.classList.remove('hof-has-stagecards');
-      }
-    }catch(_){}
-  }
-
-  // Legacy (row-filter) seasons: build a matrix from the currently rendered table
-  // so we can reuse renderStageCardsForMobile and keep seasons 1~8 consistent with 9~12 on mobile.
-  function hofTableToMatrix(tableEl){
-    if(!tableEl) return [];
     const norm = (s)=> String(s||'').replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').trim();
-    const mat = [];
-    const pullRow = (tr)=>{
-      const out = [];
-      Array.from(tr.children||[]).forEach(td=>{
-        const img = td && td.querySelector ? td.querySelector('img') : null;
-        if(img && img.src){ out.push(norm(img.src)); return; }
-        out.push(norm(td ? (td.innerText != null ? td.innerText : td.textContent) : ''));
-      });
-      mat.push(out);
-    };
-    try{
-      if(tableEl.tHead){
-        Array.from(tableEl.tHead.querySelectorAll('tr')).forEach(pullRow);
-      }
-      Array.from(tableEl.tBodies||[]).forEach(tb=>{
-        Array.from(tb.querySelectorAll('tr')).forEach(pullRow);
-      });
-    }catch(_){ }
-    return mat;
-  }
+    const seasonRe = /(S|시즌)\s*0*\d+\b/i;
 
+    const maxCols = allRows.reduce((m,tr)=> Math.max(m, (tr.cells||[]).length), 0);
 
-// --- TST/TSL header row + organizer row merging ---
-  function mergeTstTslHeaderRows(tableEl, leagueKey){
-    const k = String(leagueKey||'').toLowerCase();
-    if(!tableEl || (k!=='tst' && k!=='tsl')) return;
-    const tbody = (tableEl.tBodies && tableEl.tBodies.length) ? tableEl.tBodies[0] : null;
-    if(!tbody) return;
-    const rows = Array.from(tbody.querySelectorAll('tr'));
-    const norm = (s)=> String(s||'').replace(/\s+/g,' ').trim();
-
-    // If there is a separate season row under the title, fold it into the title and remove the season row.
-    try{
-      let titleIdx=-1, seasonIdx=-1;
-      for(let i=0;i<Math.min(6, rows.length); i++){
-        const t = norm(rows[i].textContent);
-        if(titleIdx<0 && /명예의전당/.test(t)) titleIdx=i;
-        if(seasonIdx<0 && /(\(\s*시즌\s*\d+\s*\))/.test(t) && !/명예의전당/.test(t)) seasonIdx=i;
-      }
-      if(titleIdx>=0 && seasonIdx>=0 && seasonIdx>titleIdx){
-        const titleRow = rows[titleIdx];
-        const seasonRow = rows[seasonIdx];
-        const seasonTxt = norm(seasonRow.textContent);
-        const titleCell = (titleRow.children && titleRow.children.length) ? titleRow.children[0] : null;
-        if(titleCell && seasonTxt){
-          // Append season to the title (left aligned)
-          const base = norm(titleCell.textContent);
-          if(base && base.indexOf(seasonTxt)===-1){
-            titleCell.textContent = base + '  ' + seasonTxt;
-          }
-        }
-        // remove season row entirely
-        seasonRow.remove();
-        // refresh rows array (used later)
-        // eslint-disable-next-line no-unused-vars
-        rows.splice(seasonIdx,1);
-      }
-    }catch(_){}
-
-
-    const mergeRow = (tr, cls)=>{
-      const tds = Array.from(tr.children||[]);
-      if(tds.length<=1) return;
+    function mergeRow(tr, cls){
+      const tds = Array.from(tr.cells||[]);
+      if(!tds.length) return;
       const first = tds[0];
-      const text = norm(tr.textContent);
-      first.textContent = text;
-      first.colSpan = tds.length;
-      first.classList.add(cls);
-      for(let i=tds.length-1;i>=1;i--) tds[i].remove();
-    };
+      // Even if the row already has a single cell, stretch it across the table.
+      first.colSpan = Math.max(1, maxCols);
+      first.style.textAlign = 'left';
+      // remove the rest
+      for(let i=tds.length-1;i>=1;i--){
+        tr.removeChild(tds[i]);
+      }
+      tr.classList.add('hof-merged-row');
+      if(cls) tr.classList.add(cls);
+    }
 
-    // Merge first 2 header-style rows if they look like titles
-    rows.slice(0,4).forEach(tr=>{
+    allRows.forEach(tr=>{
       const txt = norm(tr.textContent);
       if(!txt) return;
-      if(/명예의전당/.test(txt) || /(TST|TSL)\s*\d{2,4}/i.test(txt) || /스타리그|토너먼트/.test(txt)){
-        mergeRow(tr, 'hof-merged-title');
+      if(/명예\s*의전당/.test(txt)){
+        mergeRow(tr,'title');
+      }else if(seasonRe.test(txt)){
+        mergeRow(tr,'season');
       }
     });
 
-    // Organizer row: label in first cell (대회 진행자) then IDs across other cells
-    rows.forEach(tr=>{
-      const tds = Array.from(tr.children||[]);
+    // Organizer row: merge all organizer cells and prepend a green star right before names.
+    allRows.forEach(tr=>{
+      const tds = Array.from(tr.cells||[]);
       if(tds.length<2) return;
       const label = norm(tds[0].textContent);
-      if(!/^(대회\s*진행자|대회\s*진행|진행자|운영팀)$/.test(label)) return;
-      // merge remaining into one cell
-      const ids = tds.slice(1).map(td=> (td.innerText!=null? String(td.innerText): String(td.textContent||''))).join(' ');
-      const merged = document.createElement('td');
-      merged.colSpan = tds.length-1;
+      if(!/^(대회\s*진행자|대회\s*진행|진행자|진행|운영팀)$/.test(label)) return;
+
+      // collect all names from cells 1..end
+      const parts = [];
+      for(let i=1;i<tds.length;i++){
+        const raw = (tds[i].innerText!=null) ? String(tds[i].innerText) : String(tds[i].textContent||'');
+        raw.split(/\r?\n/).map(x=>norm(x)).filter(Boolean).forEach(x=>parts.push(x));
+      }
+      const merged = parts.join(', ');
+      // keep only two cells: label + merged
+      const nameTd = tds[1];
+      nameTd.textContent = '';
       const star = document.createElement('span');
       star.className = 'hof-organizer-star';
       star.textContent = '*';
-      merged.appendChild(star);
-      merged.appendChild(document.createTextNode(' ' + norm(ids)));
-      merged.classList.add('hof-organizers-merged');
-      // remove old cells and insert
-      for(let i=tds.length-1;i>=1;i--) tds[i].remove();
-      tr.appendChild(merged);
-      tr.classList.add('hof-organizer-row');
-      // left align both label and merged cell
-      tds[0].style.textAlign = 'left';
-      merged.style.textAlign = 'left';
+      nameTd.appendChild(star);
+      nameTd.appendChild(document.createTextNode(' ' + merged));
+      nameTd.style.textAlign='left';
+      // colspan to the end
+      nameTd.colSpan = Math.max(1, maxCols-1);
+      for(let i=tds.length-1;i>=2;i--){
+        tr.removeChild(tds[i]);
+      }
+      tr.classList.add('hof-table-left');
     });
   }
-// PRO sidebar season list: extract winner/runner team names from a block for display.
+
+
+  // PRO sidebar season list: extract winner/runner team names from a block for display.
   function extractPodiumFromBlockData(blockData){
     const out = { win:'', runner:'' };
     if(!Array.isArray(blockData)) return out;
@@ -5773,207 +3716,6 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
     return out;
   }
 
-
-  // PRO: render podium cards from a season block laid out like the sheet screenshot:
-  //   [우승 | 준우승] header row, image/logo row, then label rows (팀명/감독/부감독/운영팀 ...)
-  function renderProPodiumFromBlockData(tableEl, blockData){
-    if(!tableEl) return false;
-    if(!Array.isArray(blockData) || !blockData.length) return false;
-
-    const norm = (s)=> String(s||'').replace(/[​-‍﻿]/g,'').replace(/ /g,' ').replace(/\s+/g,' ').trim();
-    const isUrl = (v)=> /^https?:\/\//i.test(String(v||'').trim());
-
-    // find header row containing 우승 && 준우승
-    let headerR=-1, cWin=-1, cRun=-1;
-    for(let r=0;r<blockData.length;r++){
-      const row = blockData[r]||[];
-      for(let c=0;c<row.length;c++){
-        const t = norm(row[c]);
-        if(t==='우승' && cWin<0) cWin=c;
-        if(t==='준우승' && cRun<0) cRun=c;
-      }
-      if(cWin>=0 && cRun>=0){ headerR=r; break; }
-      cWin=cWin; cRun=cRun;
-    }
-    if(headerR<0 || cWin<0) return false;
-    if(cRun<0) cRun = cWin+1;
-
-    // attempt to pick logo row: the next row with URL-ish values at win/run cols
-    let logoR=-1;
-    for(let r=headerR+1; r<Math.min(headerR+6, blockData.length); r++){
-      const row = blockData[r]||[];
-      const w=row[cWin];
-      const u=row[cRun];
-      if((isUrl(w) || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(String(w||''))) ||
-         (isUrl(u) || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(String(u||'')))){
-        logoR=r; break;
-      }
-    }
-
-    const win = { label:'우승', name:'-', logo:'', lines:{} };
-    const run = { label:'준우승', name:'-', logo:'', lines:{} };
-
-    if(logoR>=0){
-      const row = blockData[logoR]||[];
-      win.logo = pickImg(row, cWin);
-      run.logo = pickImg(row, cRun);
-    }
-
-    const wanted = ['팀명','감독','부감독','운영팀','대회 진행자','대회진행자','진행자','운영진'];
-    const isLabel = (t)=> wanted.includes(t) || t==='우승' || t==='준우승' || /준\s*우\s*승/.test(t) || (/(^|\s)우\s*승($|\s)/.test(t) && !/준\s*우\s*승/.test(t));
-    const pickVal = (row, col)=>{
-      const r=row||[];
-      for(let j=col; j<r.length; j++){
-        const raw=r[j];
-        const t=norm(raw);
-        if(!t) continue;
-        if(isUrl(raw)) continue;
-        if(isLabel(t)) continue;
-        return t;
-      }
-      return '';
-    };
-    const pickImg = (row, col)=>{
-      const r=row||[];
-      for(let j=col; j<r.length; j++){
-        const raw=r[j];
-        const t=String(raw||'').trim();
-        if(!t) continue;
-        if(isUrl(t) || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(t)) return t;
-      }
-      return '';
-    };
-
-    for(let r=headerR+1; r<blockData.length; r++){
-      const row = blockData[r]||[];
-      // find label cell in this row
-      let labelCol=-1; let label='';
-      for(let c=0;c<Math.min(6,row.length);c++){
-        const t=norm(row[c]);
-        if(wanted.includes(t)) { labelCol=c; label=t; break; }
-      }
-      if(labelCol<0) continue;
-      const wv = pickVal(row, cWin);
-      const rv = pickVal(row, cRun);
-      if(label==='팀명'){
-        if(wv) win.name = wv;
-        if(rv) run.name = rv;
-      }else{
-        if(wv) win.lines[label]=wv;
-        if(rv) run.lines[label]=rv;
-      }
-    }
-
-    // if runner-up is missing in the sheet for this season, hide it
-    const hasRunner = (run.name && run.name!=='-' && run.name!=='—') || Object.keys(run.lines).length || run.logo;
-
-    // build two stacked cards inside the table to keep layout consistent
-    const thead = tableEl.querySelector('thead');
-    const tbody = tableEl.querySelector('tbody');
-    if(!thead || !tbody) return false;
-    thead.innerHTML='';
-    tbody.innerHTML='';
-
-    const makeCard = (obj, type)=>{
-      const card = document.createElement('div');
-      card.className = 'hof-pro-card ' + type;
-
-      const badge = document.createElement('div');
-      badge.className = 'hof-place-badge ' + (type==='win'?'win':'runner');
-      const crown = document.createElement('img');
-      crown.className='hof-place-crown';
-      crown.alt = type==='win' ? '우승' : '준우승';
-      crown.src = type==='win' ? './crown_gold.png' : './crown_silver.png';
-      const lbl = document.createElement('div');
-      lbl.className='hof-place-label';
-      lbl.textContent = type==='win' ? '우승' : '준우승';
-      badge.appendChild(crown); badge.appendChild(lbl);
-
-      const top = document.createElement('div');
-      top.className = 'hof-pro-top';
-
-      const icon = document.createElement('div');
-      icon.className = 'hof-team-icon';
-      if(obj.logo){
-        const img=document.createElement('img');
-        img.src=obj.logo; img.alt='';
-        img.loading='lazy'; img.decoding='async';
-        img.referrerPolicy='no-referrer';
-        icon.appendChild(img);
-      }
-
-      const tbox=document.createElement('div');
-      const nm=document.createElement('div');
-      nm.className='hof-team-name';
-      nm.textContent=obj.name||'-';
-      tbox.appendChild(nm);
-
-      // show 감독/부감독 inline subtitle if present
-      const subParts=[];
-      const d=obj.lines;
-      const g = d['감독'];
-      const a = d['부감독'];
-      if(g) subParts.push('감독 ' + g);
-      if(a) subParts.push('부감독 ' + a);
-      if(subParts.length){
-        const sub=document.createElement('div');
-        sub.className='hof-team-sub';
-        sub.textContent=subParts.join('   ');
-        tbox.appendChild(sub);
-      }
-
-      top.appendChild(icon);
-      top.appendChild(tbox);
-
-      const lines=document.createElement('div');
-      lines.className='hof-pro-lines';
-      const ordered=['감독','부감독','운영팀','대회 진행자','대회진행자','진행자','운영진'];
-      ordered.forEach(k=>{
-        const v=d[k];
-        if(!v) return;
-        const line=document.createElement('div');
-        line.className='hof-pro-line';
-        const kk=document.createElement('span');
-        kk.className='k';
-        kk.textContent=(k.replace('대회 진행자','대회 진행자'))+':';
-        line.appendChild(kk);
-        // organizer gets green star prefix
-        if(/대회\s*진행자|대회진행자|진행자/.test(k)){
-          const star=document.createElement('span');
-          star.className='hof-organizer-star';
-          star.textContent='*';
-          line.appendChild(document.createTextNode(' '));
-          line.appendChild(star);
-        }
-        line.appendChild(document.createTextNode(' ' + v));
-        lines.appendChild(line);
-      });
-
-      card.appendChild(badge);
-      card.appendChild(top);
-      if(lines.children.length) card.appendChild(lines);
-      return card;
-    };
-
-    const wrap=document.createElement('div');
-    wrap.className='hof-pro-podium';
-    wrap.appendChild(makeCard(win,'win'));
-    if(hasRunner) wrap.appendChild(makeCard(run,'runner'));
-
-    const tr=document.createElement('tr');
-    const td=document.createElement('td');
-    td.colSpan = 1;
-    td.className='hof-pro-cell';
-    td.appendChild(wrap);
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-
-    // Tag for CSS
-    try{ tableEl.classList.add('hof-league-pro'); }catch(_){ }
-    return true;
-  }
-
-
   function showHofSeason(label, leagueKey){
     const k = (leagueKey || HOF_INLINE_CURRENT || 'pro').toLowerCase();
     const cache = HOF_INLINE_CACHE[k];
@@ -5989,24 +3731,12 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
           picked = Object.values(cache.blocks.byLabel).find(b=>b && b.num===want) || null;
         }
       }
-      if(picked){
-        renderBlockTable(tableEl, picked, k);
-        return;
-      }
-      // Fallback: if block label matching fails, try row-filter mode on the already-rendered table.
-      // (This prevents "전체목록"으로 보이는 현상 when labels differ slightly.)
-      try{ applySeasonFilter(tableEl, label, k); }catch(_){ }
-      try{ decorateHofPlacements(tableEl, key); }catch(_){ }
-      try{ if (isHofCardLeague(k)) { const mat=hofTableToMatrix(tableEl); renderStageCardsForMobile(tableEl, mat, k); } }catch(_){ }
+      if(picked) renderBlockTable(tableEl, picked, k);
       return;
     }
     // legacy row-filter mode
-    // Prevent table flash during season switch for TST/TSL
-    try{ if(tableEl && isHofCardLeague(k)) tableEl.style.visibility='hidden'; }catch(_){ }
     applySeasonFilter(tableEl, label, k);
-    try{ decorateHofPlacements(tableEl, key); }catch(_){ }
-    try{ if (isHofCardLeague(k)) { const mat=hofTableToMatrix(tableEl); renderStageCardsForMobile(tableEl, mat, k); } }catch(_){ }
-    try{ if(tableEl && isHofCardLeague(k)){ const built=(tableEl.parentElement?tableEl.parentElement.querySelectorAll('.hof-stage-card').length:0); if(built<=0) tableEl.style.visibility=''; } }catch(_){ }
+    try{ decorateHofPlacements(tableEl); }catch(_){ }
   }
 
   // Expose for renderSeasonBar (defined in global scope below)
@@ -6014,23 +3744,7 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
 
 
   async function openHOF(key){
-    const myReq = ++HOF_INLINE_REQ_TOKEN; try{ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN; }catch(_){ }
-    HOF_INLINE_CURRENT = key || 'pro'; try{ window.HOF_INLINE_CURRENT = HOF_INLINE_CURRENT; }catch(_){ }
-    // reset HOF table visibility on every tab switch (prevents blank screen if stage-cards build fails)
-    try{ const t=document.getElementById('hofInlineTable'); if(t){ t.style.display=''; if(t.parentElement) t.parentElement.classList.remove('hof-stage-only'); } }catch(_){ }
-    // Clear stage-cards + flags right away to avoid mobile blank when switching leagues (TST -> TSL etc.)
-    try{
-      const inline=document.getElementById('hofInline');
-      if(inline) inline.classList.remove('hof-has-stagecards','hof-inline-tst','hof-inline-tsl','hof-inline-tpl','hof-inline-msl','hof-inline-tcl');
-      // Remove any previously appended stage-card containers
-      const wrap=document.querySelector('#hofInline .hof-stage-cards');
-      if(wrap) wrap.remove();
-      const table=document.getElementById('hofInlineTable');
-      if(table && table.parentElement){
-        table.parentElement.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove());
-      }
-    }catch(_){}
-
+    HOF_INLINE_CURRENT = key || 'pro';
     const c = cfg[key];
     if(!c) return;
     if(!c.url){
@@ -6042,48 +3756,17 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
     const statusEl = $("hofInlineStatus");
     const tableEl = $("hofInlineTable");
 
-    // Prevent league content (especially TST/TSL mobile cards) from leaking into other views.
-    // When the viewport is small, CSS can show leftover .hof-stage-cards even after switching to PRO.
-    try{
-      const p = tableEl && tableEl.parentElement;
-      if(p) p.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove());
-    }catch(_){ }
-
-    // Tag the wrapper so CSS can safely scope responsive rules per-league.
-    try{
-      const box = $('hofInline');
-      if(box){
-        box.classList.remove('hof-inline-pro','hof-inline-tst','hof-inline-tsl');
-        box.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl');
-        
-        box.classList.add(key==='pro'?'hof-inline-pro':key==='tsl'?'hof-inline-tsl':key==='tst'?'hof-inline-tst':key==='tpl'?'hof-inline-tpl':key==='msl'?'hof-inline-msl':'hof-inline-tcl');
-        box.classList.add(key==='pro'?'hof-league-pro':key==='tsl'?'hof-league-tsl':key==='tst'?'hof-league-tst':key==='tpl'?'hof-league-tpl':key==='msl'?'hof-league-msl':'hof-league-tcl');
-      }
-    }catch(_){ }
-
     // Tag table with current league for CSS tweaks
     if(tableEl){
-      tableEl.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl','hof-league-tpl','hof-league-msl','hof-league-tcl');
-      tableEl.classList.add(key==='pro'?'hof-league-pro':key==='tst'?'hof-league-tst':key==='tsl'?'hof-league-tsl':key==='msl'?'hof-league-msl':key==='tcl'?'hof-league-tcl':'hof-league-race');
+      tableEl.classList.remove('hof-league-pro','hof-league-tst','hof-league-tsl');
+      tableEl.classList.add(key==='pro'?'hof-league-pro':key==='tst'?'hof-league-tst':'hof-league-tsl');
     }
 
     if(titleEl) titleEl.textContent = c.title;
-    // Prevent 0.1s table flash for TST/TSL: hide table while building cards
-    try{
-      if(tableEl && isHofCardLeague(key)){
-        tableEl.style.visibility = 'hidden';
-        // ensure it's not display:none so we can build cards off DOM if needed
-        if(tableEl.style.display==='none') tableEl.style.display='';
-      }else if(tableEl){
-        // restore for PRO or other views
-        tableEl.style.visibility = '';
-      }
-    }catch(_){ }
     // menu active
-    const proBtn = $('hofPro'); const tslBtn = $('hofTSL'); const tstBtn = $('hofTST');
-    const tplBtn = $('hofTPL'); const mslBtn = $('hofMSL'); const tclBtn = $('hofTCL');
-    [proBtn,tslBtn,tstBtn,tplBtn,mslBtn,tclBtn].forEach(b=>{ if(!b) return; b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
-    const pickBtn = (key==='pro')?proBtn:(key==='tsl')?tslBtn:(key==='tst')?tstBtn:(key==='tpl')?tplBtn:(key==='msl')?mslBtn:tclBtn;
+    const proBtn = $('hofPro'); const tstBtn = $('hofTST'); const tslBtn = $('hofTSL');
+    [proBtn,tstBtn,tslBtn].forEach(b=>{ if(!b) return; b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
+    const pickBtn = (key==='pro')?proBtn:(key==='tst')?tstBtn:tslBtn;
     if(pickBtn){ pickBtn.classList.add('active'); pickBtn.setAttribute('aria-selected','true'); }
     if(statusEl){ statusEl.style.display='block'; statusEl.textContent = '시트에서 데이터를 불러오는 중…'; }
     const inlineBox = $('hofInline');
@@ -6091,8 +3774,7 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
 
     try{
       // URL(edit?gid=...) 기반으로 그대로 로딩 → 기존 연동 유지
-      let data = await fetchGVIZbyUrl_v12b(c.url);
-      if(myReq !== HOF_INLINE_REQ_TOKEN) return;
+      let data = await fetchGVIZHTMLbyUrl_v1(c.url);
       data = normData(data);
       if(!data.length){
         if(statusEl) statusEl.textContent = '데이터가 없습니다.';
@@ -6137,7 +3819,7 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
       try{ markHofTitleCells(tableEl); }catch(_){}
       try{ convertImageUrlCells(tableEl); }catch(_){}
       try{ applyTableDataLabels(tableEl); }catch(_){}
-      try{ decorateHofPlacements(tableEl, key); }catch(_){}
+      try{ decorateHofPlacements(tableEl); }catch(_){}
 
       let seasonsSorted = [];
       let active = '';
@@ -6194,12 +3876,10 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
     });
 
     const proBtn = $("hofPro");
-    const tslBtn = $("hofTSL");
     const tstBtn = $("hofTST");
-    const tplBtn = $("hofTPL");
-    const mslBtn = $("hofMSL");
-    const tclBtn = $("hofTCL");
-// Stop bubbling so any legacy parent click h&&lers (that used to open Google Sheets) won't fire.
+    const tslBtn = $("hofTSL");
+
+    // Stop bubbling so any legacy parent click handlers (that used to open Google Sheets) won't fire.
     const guard = (e)=>{ try{ e.preventDefault(); }catch(_){} try{ e.stopPropagation(); }catch(_){} try{ e.stopImmediatePropagation(); }catch(_){} };
 
     if(proBtn && !proBtn.dataset.bound){
@@ -6215,18 +3895,6 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
       tslBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tsl'); });
     }
 
-    if(mslBtn && !mslBtn.dataset.bound){
-      mslBtn.dataset.bound='1';
-      mslBtn.addEventListener('click', (e)=>{ guard(e); openHOF('msl'); });
-    }
-    if(tclBtn && !tclBtn.dataset.bound){
-      tclBtn.dataset.bound='1';
-      tclBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tcl'); });
-    }
-    if(tplBtn && !tplBtn.dataset.bound){
-      tplBtn.dataset.bound='1';
-      tplBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tpl'); });
-    }
     // Auto render default (latest) when section exists
     try{
       if(!window.__HOF_INLINE_BOOTED && document.getElementById('hofInlineTable')){
@@ -6239,172 +3907,8 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', bindOnce);
   else bindOnce();
 
-  // Keep HOF readable on mobile/resize:
-  // - TST/TSL: ensure stage cards exist for the currently rendered season
-  // - PRO: ensure no leaked stage cards remain
-  (function(){
-    let t = null;
-    const run = ()=>{
-      try{
-        const tableEl = document.getElementById('hofInlineTable');
-        const inline = document.getElementById('hofInline');
-        if(!tableEl || !inline) return;
-        const k = (window.HOF_INLINE_CURRENT || 'pro').toLowerCase();
-        // Always remove leaked stage cards in PRO
-        if(k==='pro'){
-          inline.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove());
-          return;
-        }
-        if(k!=='tst' && k!=='tsl' && k!=='tpl' && k!=='msl' && k!=='tcl') return;
-        // Rebuild cards from last rendered block data (block mode)
-        const last = (window.__HOF_LAST_BLOCK && window.__HOF_LAST_BLOCK[k]) ? window.__HOF_LAST_BLOCK[k] : null;
-        if(last && Array.isArray(last.data) && last.data.length){
-          renderStageCardsForMobile(tableEl, last.data, k);
-        }
-      }catch(_){ }
-    };
-    window.addEventListener('resize', ()=>{
-      if(t) clearTimeout(t);
-      t = setTimeout(run, 120);
-    });
-  })();
-
   document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeMobile(); });
 })();
-
-
-
-
-function mountSimpleKeyValueHofCardFromRenderedTable(tableEl, leagueKey){
-  const k = String(leagueKey||'').toLowerCase();
-  if(!tableEl || (k!=='tpl' && k!=='tcl')) return false;
-
-  const norm = (s)=> String(s||'')
-    .replace(/[\u200B-\u200D\uFEFF]/g,'')
-    .replace(/\u00A0/g,' ')
-    .replace(/\s+/g,' ')
-    .trim();
-
-  // Extract a reasonable "stage/season" label.
-  let stageLabel = '';
-  try{
-    const head = tableEl.querySelector('thead tr');
-    if(head){
-      const t = norm(head.textContent);
-      if(t) stageLabel = t;
-    }
-  }catch(_){}
-  if(!stageLabel){
-    try{
-      const firstRow = tableEl.querySelector('tbody tr');
-      if(firstRow){
-        const t = norm(firstRow.textContent);
-        if(t && /(시즌|스테이지|리그|TPL|TCL)/.test(t)) stageLabel = t;
-      }
-    }catch(_){}
-  }
-  // If still empty, fall back to league title in the card header.
-  if(!stageLabel){
-    stageLabel = (k==='tpl') ? 'TPL' : 'TCL';
-  }
-
-  // Parse key/value rows (label in first cell, value in last non-empty cell)
-  let winner='', runner='', third='', organizer='';
-  try{
-    const rows = Array.from(tableEl.querySelectorAll('tbody tr'));
-    for(const tr of rows){
-      const cells = Array.from(tr.querySelectorAll('th,td'));
-      if(!cells.length) continue;
-      const label = norm(cells[0].textContent);
-      let value = '';
-      for(let i=cells.length-1;i>=1;i--){
-        const v = norm(cells[i].textContent);
-        if(v){ value = v; break; }
-      }
-      if(!label) continue;
-
-      if(/(^|\s)3\s*위($|\s)/.test(label) || /삼\s*위/.test(label)) third = value || third;
-      else if(/준\s*우\s*승/.test(label)) runner = value || runner;
-      else if(/(^|\s)우\s*승($|\s)/.test(label) && !/준\s*우\s*승/.test(label)) winner = value || winner;
-      else if(/대회\s*진행자|대회진행자|진행자/.test(label)) organizer = value || organizer;
-    }
-  }catch(_){}
-
-  // If we can't find winner/runner, don't take over (let the normal renderer show the table).
-  if(!winner && !runner) return false;
-
-  const parent = tableEl.parentElement;
-  if(!parent) return false;
-
-  // Remove any old cards first
-  try{ parent.querySelectorAll('.hof-stage-cards').forEach(n=>n.remove()); }catch(_){}
-
-  const wrap = document.createElement('div');
-  wrap.className = 'hof-stage-cards';
-
-  const card = document.createElement('div');
-  card.className = 'hof-stage-card';
-
-  const titleText = String(stageLabel||'').trim();
-  // Don't show placeholder / auto stage labels
-  if(titleText && titleText!=='-' && titleText!=='–' && titleText!=='—' && titleText!=='－' && !/^스테이지\s*\d+$/.test(titleText) && !/^스테이지\d+$/.test(titleText)){
-    const title = document.createElement('div');
-    title.className = 'hof-stage-title';
-    title.textContent = titleText;
-    card.appendChild(title);
-  }
-
-  const mkLine = (place, value)=>{
-    if(value===undefined || value===null) return;
-    const vv = String(value).trim();
-    if(!vv) return;
-    // hide placeholder dashes
-    if(vv==='-' || vv==='–' || vv==='—' || vv==='－') return;
-    const line = document.createElement('div');
-    line.className = 'hof-stage-line';
-
-    const badge = document.createElement('span');
-    badge.className = 'hof-stage-badge';
-    badge.textContent = (place==='win') ? '🏆' : (place==='third') ? '🥉' : '🥈';
-    line.appendChild(badge);
-
-    const lab = document.createElement('span');
-    lab.className = 'hof-stage-label';
-    lab.textContent = (place==='win') ? '우승' : (place==='third') ? '3위' : '준우승';
-    line.appendChild(lab);
-
-    const val = document.createElement('span');
-    val.className = 'hof-stage-value';
-    val.textContent = vv;
-    line.appendChild(val);
-
-    card.appendChild(line);
-  };
-
-  mkLine('win', winner);
-  mkLine('run', runner);
-  mkLine('third', third);
-
-  if(organizer){
-    const org = document.createElement('div');
-    org.className = 'hof-stage-organizer';
-    org.innerHTML = `<span class="hof-organizer-star">★</span><span class="k">대회진행자</span> : ${organizer}`;
-    card.appendChild(org);
-  }
-
-  wrap.appendChild(card);
-  parent.appendChild(wrap);
-
-  // Hide the original table when we successfully built cards (same as TSL/TST behavior).
-  try{ tableEl.style.display = 'none'; }catch(_){}
-
-  try{
-    const inline = document.getElementById('hofInline');
-    if(inline) inline.classList.add('hof-has-stagecards');
-  }catch(_){}
-
-  return true;
-}
 
 
 
@@ -6433,11 +3937,11 @@ function applySeasonGrouping(tableEl, leagueKey){
   const rows = Array.from(tableEl.querySelectorAll("tbody tr"));
   const seasons = [];
 
-  const pat = /(S|시즌)\s*0*\d+/i; // allow both S# && 시즌# across leagues
+  const pat = /(S|시즌)\s*0*\d+/i; // allow both S# and 시즌# across leagues
 
   // "Season header row" heuristic:
   // - contains S#/시즌# text
-  // - && is mostly a merged/label row (few non-empty cells)
+  // - and is mostly a merged/label row (few non-empty cells)
   // NOTE: some seasons rows have a few more filled cells (e.g., split tables),
   // so keep this threshold slightly generous.
   const isHeaderRow = (tr)=>{
@@ -6448,7 +3952,7 @@ function applySeasonGrouping(tableEl, leagueKey){
 
     // Header rows in our HOF sheets are "label rows":
     // usually 1 cell (or 2 cells for split tables) has the season title,
-    // && the rest are empty.
+    // and the rest are empty.
     const nonEmpty = texts.filter(Boolean);
     if(nonEmpty.length === 0) return false;
 
@@ -6556,7 +4060,7 @@ function renderSeasonBar(seasons, active, leagueKey){
   const k = leagueKey || HOF_INLINE_CURRENT || 'pro';
   const rawList = Array.isArray(seasons) ? seasons : [];
 
-  const toLabel = (s)=> _normSeasonText(s);
+  const toLabel = (s)=> cleanSeasonLabel(_normSeasonText(s));
   const seasonNum = (label)=> extractSeasonNum(String(label||''));
 
   // Normalize + de-dup
@@ -6583,8 +4087,33 @@ function renderSeasonBar(seasons, active, leagueKey){
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'hof-season-btn' + (label === act ? ' active' : '');
-    // Season buttons: show ONLY the season label (no winner/runner-up subtext)
-    btn.textContent = label;
+    // PRO: show winner + runner-up summary in the season list (sidebar)
+    const kSummary = (leagueKey || HOF_INLINE_CURRENT || 'pro');
+    const sumRoot = (window.__HOF_SEASON_SUMMARY && window.__HOF_SEASON_SUMMARY[kSummary]) ? window.__HOF_SEASON_SUMMARY[kSummary] : null;
+    const sum = sumRoot ? (sumRoot[_normSeasonText(label)] || sumRoot[label] || null) : null;
+    if(sum && (sum.win || sum.runner)){
+      btn.classList.add('has-podium');
+      const top = document.createElement('div');
+      top.className = 'hof-season-top';
+      top.textContent = label;
+      const pod = document.createElement('div');
+      pod.className = 'hof-season-podium';
+
+      const w = document.createElement('div');
+      w.className = 'hof-season-line win';
+      w.textContent = (sum.win ? ('우승 ' + sum.win) : '우승 -');
+
+      const r = document.createElement('div');
+      r.className = 'hof-season-line runner';
+      r.textContent = (sum.runner ? ('준우승 ' + sum.runner) : '준우승 -');
+
+      pod.appendChild(w);
+      pod.appendChild(r);
+      btn.appendChild(top);
+      btn.appendChild(pod);
+    }else{
+      btn.textContent = label;
+    }
     btn.title = label;
     btn.addEventListener('click', () => {
       bar.querySelectorAll('.hof-season-btn').forEach(b=>b.classList.remove('active'));
@@ -6604,7 +4133,7 @@ function renderSeasonBar(seasons, active, leagueKey){
 
 // Normalize season label text for robust matching across slight formatting differences.
 function _normSeasonText(s){
-  // normalize spaces, zero-width chars, && dash variants for robust season matching
+  // normalize spaces, zero-width chars, and dash variants for robust season matching
   return String(s||'')
     .replace(/[\u200B-\u200D\uFEFF]/g,'')
     .replace(/\u00A0/g,' ')
@@ -6613,6 +4142,13 @@ function _normSeasonText(s){
     .trim();
 }
 
+
+function cleanSeasonLabel(s){
+  const txt = _normSeasonText(s);
+  const m = txt.match(/(.*?\b(?:S|시즌)\s*0*\d+\b)/i);
+  if(m && m[1]) return m[1].trim();
+  return txt;
+}
 
 // A "generic" season label like "S1" or "시즌 1" (no year/league prefix).
 function isGenericSeasonLabel(label){
@@ -6640,7 +4176,7 @@ function applySeasonFilter(tableEl, season, leagueKey){
   if(!wantNum) return;
 
   const wantExact = !isGenericSeasonLabel(seasonNorm); // e.g. "17-18프로리그 S1" vs "S1"
-  const pat = /(S|시즌)\s*0*\d+/i; // allow both S# && 시즌# across leagues
+  const pat = /(S|시즌)\s*0*\d+/i; // allow both S# and 시즌# across leagues
 
   const tbody = (tableEl.tBodies && tableEl.tBodies.length) ? tableEl.tBodies[0] : null;
   if(!tbody) return;
@@ -6820,7 +4356,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const s = team.startCol;
     const anchor = Number.isFinite(team.anchorRow) ? team.anchorRow : 0;
 
-    // Heuristic: locate roster header row that has "티어" at s && "T" at s+1 (or within next few rows)
+    // Heuristic: locate roster header row that has "티어" at s and "T" at s+1 (or within next few rows)
     let headerIdx = -1;
     for(let r=anchor; r<rows.length; r++){
       const a = cleanCell(rows[r]?.[s]);
