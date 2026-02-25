@@ -773,15 +773,14 @@ img, svg, canvas{max-width:100%; height:auto;}
 
 /* ===== Player detail race table responsive ===== */
 @media (max-width: 720px){
-  #player table.detail{
+  table.detail{
     display:block !important;
     width:100% !important;
-    overflow-x:auto !important;
+    overflow-x:hidden !important;
     -webkit-overflow-scrolling:touch;
     white-space:nowrap;
-    min-width:600px;
   }
-  #player table.detail th, #player table.detail td{
+  table.detail th, table.detail td{
     white-space:nowrap !important;
   }
 }
@@ -1102,12 +1101,7 @@ img, svg, canvas{max-width:100%; height:auto;}
 @media (max-width: 900px){.topmenu{justify-content:center}}
 
 #proRankTable{width:100%}
-.season-card .table-wrap{overflow:visible}
-
-/* season-card mobile overflow */
-@media (max-width: 720px){
-  .season-card .table-wrap{overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;}
-}
+.season-card .table-wrap{overflow:auto}
 
 
 /* ===== Fixed Header Layout (logo+YT left, search centered, menu right) ===== */
@@ -1511,25 +1505,23 @@ td.rank-cell .rank-num{ font-weight:900; }
 
 /* HOF: menu + inline list */
 .hof-menu{
-  display:flex;
-  flex-wrap:wrap;
-  justify-content:center;
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap:10px;
   align-items:stretch;
-  gap:14px;
-  margin:12px 0 18px;
+  margin:10px 0 14px;
 }
 .hof-menu-btn{
-  flex:1 1 260px;
-  max-width:340px;
-  min-width:220px;
-  display:flex;
+  width:100%;
+  min-width:0;
+display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
   gap:4px;
-  padding:18px 22px;
+  padding:14px 16px;
   border:none;
-  border-radius:22px;
+  border-radius:18px;
   background:linear-gradient(135deg,var(--premium-surface),var(--premium-surface2));
   color:var(--premium-text);
   cursor:pointer;
@@ -1542,20 +1534,8 @@ td.rank-cell .rank-num{ font-weight:900; }
 /* keep active clearly selected */
 .hof-menu-btn.active{ outline:2px solid rgba(167,141,64,.55); outline-offset:2px; }
 
-.hof-menu-main{ font-weight:900; font-size:20px; letter-spacing:.2px; line-height:1.1; }
-.hof-menu-sub{ font-weight:700; font-size:12px; opacity:.9; letter-spacing:.6px; }
-
-@media (max-width: 900px){
-  .hof-menu-btn{ flex:1 1 180px; min-width:160px; max-width:240px; padding:16px 18px; }
-  .hof-menu-main{ font-size:18px; }
-}
-@media (max-width: 520px){
-  .hof-menu{ gap:10px; }
-  .hof-menu-btn{ flex:1 1 140px; min-width:0; max-width:none; padding:14px 14px; }
-  .hof-menu-main{ font-size:17px; }
-  .hof-menu-sub{ font-size:11px; }
-}
-
+.hof-menu-main{ font-weight:800; font-size:14.5px; letter-spacing:.2px; }
+.hof-menu-sub{ font-size:12px; opacity:.85; color:rgba(255,255,255,.78); }
 
 .hof-inline{
   margin-top:8px;
@@ -2442,10 +2422,7 @@ td.rank-cell .rank-num{ font-weight:900; }
 @media (max-width: 720px){
   /* Hide wide stage tables and show readable cards instead */
   #hofInlineTable.hof-league-tst,
-#hofInlineTable.hof-league-tsl,
-#hofInlineTable.hof-league-tpl,
-#hofInlineTable.hof-league-msl,
-#hofInlineTable.hof-league-tcl{
+  #hofInlineTable.hof-league-tsl{
     display:none !important;
   }
   .hof-stage-cards{
@@ -2472,10 +2449,7 @@ td.rank-cell .rank-num{ font-weight:900; }
 }
 
 #hofInlineTable.hof-league-tst,
-#hofInlineTable.hof-league-tsl,
-#hofInlineTable.hof-league-tpl,
-#hofInlineTable.hof-league-msl,
-#hofInlineTable.hof-league-tcl{
+#hofInlineTable.hof-league-tsl{
   width:100% !important;
   table-layout: fixed !important;
 }
@@ -2602,17 +2576,11 @@ td.rank-cell .rank-num{ font-weight:900; }
 #hofInline.hof-league-pro .hof-stage-cards{ display:none !important; }
 /* Desktop default: keep stage cards hidden to avoid duplicate output */
 #hofInline.hof-league-tst .hof-stage-cards,
-#hofInline.hof-league-tsl .hof-stage-cards,
-#hofInline.hof-league-tpl .hof-stage-cards,
-#hofInline.hof-league-msl .hof-stage-cards,
-#hofInline.hof-league-tcl .hof-stage-cards{ display:none; }
+#hofInline.hof-league-tsl .hof-stage-cards{ display:none; }
 
 /* Default (desktop): show tables for TST/TSL, keep PRO podium table */
 #hofInlineTable.hof-league-tst,
-#hofInlineTable.hof-league-tsl,
-#hofInlineTable.hof-league-tpl,
-#hofInlineTable.hof-league-msl,
-#hofInlineTable.hof-league-tcl{ display:table; width:100%; table-layout:auto; }
+#hofInlineTable.hof-league-tsl{ display:table; width:100%; table-layout:auto; }
 #hofInlineTable.hof-league-pro{ width:100%; table-layout:auto; }
 
 /* Prevent any container from clipping expanded content */
@@ -2626,10 +2594,7 @@ td.rank-cell .rank-num{ font-weight:900; }
     display:none !important;
   }
   #hofInline.hof-league-tst .hof-stage-cards,
-#hofInline.hof-league-tsl .hof-stage-cards,
-#hofInline.hof-league-tpl .hof-stage-cards,
-#hofInline.hof-league-msl .hof-stage-cards,
-#hofInline.hof-league-tcl .hof-stage-cards{
+  #hofInline.hof-league-tsl .hof-stage-cards{
     display:block !important;
   }
 
@@ -2694,10 +2659,7 @@ td.rank-cell .rank-num{ font-weight:900; }
 
 /* Desktop default: hide mobile stage cards (they are still generated for quick responsive switch) */
 #hofInline.hof-league-tst .hof-stage-cards,
-#hofInline.hof-league-tsl .hof-stage-cards,
-#hofInline.hof-league-tpl .hof-stage-cards,
-#hofInline.hof-league-msl .hof-stage-cards,
-#hofInline.hof-league-tcl .hof-stage-cards{
+#hofInline.hof-league-tsl .hof-stage-cards{
   display:none !important;
 }
 
@@ -2717,10 +2679,7 @@ td.rank-cell .rank-num{ font-weight:900; }
     display:none !important;
   }
   #hofInline.hof-league-tst .hof-stage-cards,
-#hofInline.hof-league-tsl .hof-stage-cards,
-#hofInline.hof-league-tpl .hof-stage-cards,
-#hofInline.hof-league-msl .hof-stage-cards,
-#hofInline.hof-league-tcl .hof-stage-cards{
+  #hofInline.hof-league-tsl .hof-stage-cards{
     display:block !important;
   }
 
@@ -2941,13 +2900,3 @@ td.rank-cell .rank-num{ font-weight:900; }
   .h2h-center{ flex-basis:auto; }
   .h2h-top5{ grid-template-columns: 1fr; }
 }
-
-
-/* H2H / Top5 player link */
-.h2h-player-link{color:inherit;text-decoration:none;cursor:pointer;}
-.h2h-player-link:hover{text-decoration:underline;}
-
-
-/* === HOF: 3위 뱃지(브론즈) 지원 === */
-.hof-place-badge.third .hof-place-label{color:#8b5a2b;}
-.hof-place-row.third{opacity:1;}

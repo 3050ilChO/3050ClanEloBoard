@@ -4609,14 +4609,6 @@ function mountStageCardsFromBlock(blockData, leagueKey){
       return /준\s*우\s*승/.test(s);
     };
 
-
-    const isThirdLabel = (t)=>{
-      const s = norm(t);
-      if(!s) return false;
-      // accept: "3위", "3 위", "3위팀", "3위 결정전" 등
-      return /(\b3\s*위\b|3\s*위\s*팀|3\s*위\s*결정)/.test(s) || /\b3rd\b/i.test(s);
-    };
-
     const findRowBy = (pred)=>{
       for(let r=0;r<blockData.length;r++){
         const row = blockData[r] || [];
@@ -4630,7 +4622,6 @@ function mountStageCardsFromBlock(blockData, leagueKey){
 
     const rWin = findRowBy(isWinLabel);
     const rRun = findRowBy(isRunLabel);
-    const rThird = (typeof isThirdLabel==='function') ? findRowBy(isThirdLabel) : -1;
     const rOrg = findRowAny(/대회\s*진행자|대회진행자|진행자/);
 
     // If we can't find winner/runner, we can't build cards reliably
@@ -4734,7 +4725,6 @@ function mountStageCardsFromBlock(blockData, leagueKey){
       const label = stageNameFromTier(it.label, idx);
       let winner = getCell(rWin, col);
       let runner = getCell(rRun, col);
-      let third = getCell(rThird, col);
 
       // Make TST match TSL visual output on mobile/resize.
       // Some TST seasons can include tier tokens (e.g., "갓DayDream" or "갓 DayDream")
@@ -4751,12 +4741,11 @@ function mountStageCardsFromBlock(blockData, leagueKey){
             .trim();
           winner = stripTier(winner);
           runner = stripTier(runner);
-          third = stripTier(third);
         }
       }
 
       // only build cards that have at least one value
-      if(!winner && !runner && !third) return;
+      if(!winner && !runner) return;
 
       const card = document.createElement('div');
       card.className = 'hof-stage-card';
@@ -4791,7 +4780,6 @@ function mountStageCardsFromBlock(blockData, leagueKey){
 
       mkLine('win', winner);
       mkLine('run', runner);
-      mkLine('third', third);
 
       if(organizer){
         const org = document.createElement('div');

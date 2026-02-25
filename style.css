@@ -1534,8 +1534,8 @@ td.rank-cell .rank-num{ font-weight:900; }
 /* keep active clearly selected */
 .hof-menu-btn.active{ outline:2px solid rgba(167,141,64,.55); outline-offset:2px; }
 
-.hof-menu-main{ font-weight:800; font-size: 16.5px; letter-spacing:.2px; }
-.hof-menu-sub{ font-size: 13px; opacity:.85; color:rgba(255,255,255,.78); }
+.hof-menu-main{ font-weight:800; font-size:14.5px; letter-spacing:.2px; }
+.hof-menu-sub{ font-size:12px; opacity:.85; color:rgba(255,255,255,.78); }
 
 .hof-inline{
   margin-top:8px;
@@ -2297,8 +2297,3 @@ td.rank-cell .rank-num{ font-weight:900; }
   .h2h-center{ flex-basis:auto; }
   .h2h-top5{ grid-template-columns: 1fr; }
 }
-
-
-/* H2H / Top5 player link */
-.h2h-player-link{color:inherit;text-decoration:none;cursor:pointer;}
-.h2h-player-link:hover{text-decoration:underline;}
