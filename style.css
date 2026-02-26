@@ -3347,19 +3347,19 @@ background: inherit;
 
 
 /* Tier head backgrounds (premium pastel) */
-.tb-tier-갓 .tb-tier-head{ background: linear-gradient(180deg, rgba(2,132,199,0.10), rgba(255,255,255,0)); }
-.tb-tier-킹 .tb-tier-head{ background: linear-gradient(180deg, rgba(30,64,175,0.10), rgba(255,255,255,0)); }
-.tb-tier-퀸 .tb-tier-head{ background: linear-gradient(180deg, rgba(13,148,136,0.10), rgba(255,255,255,0)); }
-.tb-tier-잭 .tb-tier-head{ background: linear-gradient(180deg, rgba(124,58,237,0.10), rgba(255,255,255,0)); }
-.tb-tier-스페이드 .tb-tier-head{ background: linear-gradient(180deg, rgba(148,163,184,0.20), rgba(255,255,255,0)); }
-.tb-tier-조커 .tb-tier-head{ background: linear-gradient(180deg, rgba(244,63,94,0.10), rgba(255,255,255,0)); }
-.tb-tier-히든 .tb-tier-head{ background: linear-gradient(180deg, rgba(17,24,39,0.08), rgba(255,255,255,0)); }
+.tb-tier-갓 .tb-tier-head{ background: linear-gradient(180deg, rgba(250,229,48,0.12), rgba(255,255,255,0)); }
+.tb-tier-킹 .tb-tier-head{ background: linear-gradient(180deg, rgba(238,41,4,0.12), rgba(255,255,255,0)); }
+.tb-tier-퀸 .tb-tier-head{ background: linear-gradient(180deg, rgba(201,28,246,0.12), rgba(255,255,255,0)); }
+.tb-tier-잭 .tb-tier-head{ background: linear-gradient(180deg, rgba(53,160,253,0.12), rgba(255,255,255,0)); }
+.tb-tier-스페이드 .tb-tier-head{ background: linear-gradient(180deg, rgba(32,252,252,0.12), rgba(255,255,255,0)); }
+.tb-tier-조커 .tb-tier-head{ background: linear-gradient(180deg, rgba(54,254,193,0.12), rgba(255,255,255,0)); }
+.tb-tier-히든 .tb-tier-head{ background: linear-gradient(180deg, rgba(170,175,165,0.12), rgba(255,255,255,0)); }
 
 /* Tier accents (subtle & premium) */
-.tb-tier-갓{ --tb-accent: rgba(2,132,199,0.45); }
-.tb-tier-킹{ --tb-accent: rgba(30,64,175,0.40); }
-.tb-tier-퀸{ --tb-accent: rgba(13,148,136,0.40); }
-.tb-tier-잭{ --tb-accent: rgba(124,58,237,0.38); }
-.tb-tier-스페이드{ --tb-accent: rgba(15,23,42,0.35); }
-.tb-tier-조커{ --tb-accent: rgba(217,119,6,0.38); }
-.tb-tier-히든{ --tb-accent: rgba(71,85,105,0.35); }
+.tb-tier-갓{ --tb-accent: #fae530; }
+.tb-tier-킹{ --tb-accent: #ee2904; }
+.tb-tier-퀸{ --tb-accent: #c91cf6; }
+.tb-tier-잭{ --tb-accent: #35a0fd; }
+.tb-tier-스페이드{ --tb-accent: #20fcfc; }
+.tb-tier-조커{ --tb-accent: #36fec1; }
+.tb-tier-히든{ --tb-accent: #aaafa5; }

@@ -68,6 +68,18 @@ function renderTable(tableEl, data){
     console.error('renderTable error', e);
   }
 }
+// ---- Logo path helper (for local assets after repo cleanup) ----
+function resolveLogoPath(raw, defaultFolder) {
+  const s = (raw ?? "").toString().trim();
+  if (!s) return "";
+  // keep full URLs and data URIs as-is
+  if (/^(https?:)?\/\//i.test(s) || /^data:image\//i.test(s)) return s;
+  // if already a relative path like "hof/xxx.png", keep it
+  if (s.includes("/")) return s;
+  // otherwise assume it's a filename and prepend folder (e.g., "jd.png" -> "s10team/jd.png")
+  return defaultFolder ? `${defaultFolder.replace(/\/$/,"")}/${s}` : s;
+}
+
 
 /* v9_107 datalabels */
 try{
@@ -1412,7 +1424,7 @@ async function loadProRank(){
           wrap.className = 'logo-wrap';
 
           const img = document.createElement('img');
-          img.src = match[0];
+          img.src = resolveLogoPath(match[0], 's10team');
           img.alt = '팀로고';
           img.className = 'team-logo';
           wrap.appendChild(img);
@@ -3818,7 +3830,7 @@ rows.forEach(tr=>{
           icon.className = 'hof-pro-icon';
           if(logo){
             const img = document.createElement('img');
-            img.src = logo;
+            img.src = resolveLogoPath(logo, 's10team');
             img.alt = '';
             img.loading = 'lazy';
             img.decoding = 'async';
@@ -3959,7 +3971,7 @@ rows.forEach(tr=>{
       icon.className = 'hof-pro-icon';
       if(logo){
         const img = document.createElement('img');
-        img.src = logo;
+        img.src = resolveLogoPath(logo, 's10team');
         img.alt = '';
         img.loading = 'lazy';
         img.decoding = 'async';
@@ -7198,6 +7210,5 @@ function renderTeamMenu(teams){
     teamHeaderEl.textContent='팀을 선택하세요';
   });
 });
-
 
 
