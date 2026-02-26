@@ -395,5 +395,20 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 </div>
 </div>
 </div>
+<script>
+  function openByHash(){
+    const hash = (location.hash || '').replace('#','').trim();
+    if(!hash) return;
+
+    const btn =
+      document.querySelector(`.tab-btn[data-target="${hash}"]`) ||
+      document.querySelector(`.mobile-item[data-target="${hash}"]`);
+
+    if(btn) btn.click();
+  }
+
+  window.addEventListener('load', openByHash);
+  window.addEventListener('hashchange', openByHash);
+</script>
 </body>
 </html>
