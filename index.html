@@ -340,7 +340,44 @@
 </div>
 </div>
 </div>
+
+<!-- ✅ app.js 로드 -->
 <script src="app.js?v=1073"></script>
+
+<!-- ✅ (추가) PC/모바일 모두 #hash 탭으로 "바로 열기" -->
+<script>
+(function () {
+  function goHash() {
+    const hash = (location.hash || "").replace("#", "").trim();
+    if (!hash) return;
+
+    // 버튼 클릭 방식(기존 로직 재사용)
+    const btn =
+      document.querySelector(`.tab-btn[data-target="${hash}"]`) ||
+      document.querySelector(`.mobile-item[data-target="${hash}"]`);
+
+    if (btn) btn.click();
+
+    // 최종 보험: 강제로 해당 panel active
+    const panel = document.getElementById(hash);
+    if (panel) {
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      panel.classList.add("active");
+    }
+  }
+
+  // PC에서 대시보드로 덮이는 타이밍 이슈 방지(여러 번 맞춰줌)
+  window.addEventListener("load", () => {
+    goHash();
+    setTimeout(goHash, 50);
+    setTimeout(goHash, 200);
+    setTimeout(goHash, 600);
+  });
+
+  window.addEventListener("hashchange", goHash);
+})();
+</script>
+
 <script>
 window.addEventListener('load', () => {
   const dateEl = document.getElementById("currentDate");
@@ -395,20 +432,5 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 </div>
 </div>
 </div>
-<script>
-  function openByHash(){
-    const hash = (location.hash || '').replace('#','').trim();
-    if(!hash) return;
-
-    const btn =
-      document.querySelector(`.tab-btn[data-target="${hash}"]`) ||
-      document.querySelector(`.mobile-item[data-target="${hash}"]`);
-
-    if(btn) btn.click();
-  }
-
-  window.addEventListener('load', openByHash);
-  window.addEventListener('hashchange', openByHash);
-</script>
 </body>
 </html>
