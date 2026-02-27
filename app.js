@@ -388,6 +388,100 @@ function nl2br(s){
   return String(s||'').replace(/\r\n|\n|\r/g, '<br>');
 }
 
+
+
+// --- TierBoard search helpers ---
+function normalizeTierboardPlayerKey(v){
+  return String(v||'')
+    .replace(/ /g,' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g,'');
+}
+
+function setupTierboardSearch(playerNames){
+  const input = document.getElementById('tierboardSearch');
+  const btn   = document.getElementById('tierboardSearchBtn');
+  const dl    = document.getElementById('tierboardDatalist');
+  const status= document.getElementById('tierboardStatus');
+  if(!input || !btn) return;
+
+  // populate datalist (autocomplete)
+  if(dl){
+    const uniq = Array.from(new Set((playerNames||[]).map(s=>String(s||'').trim()).filter(Boolean)));
+    uniq.sort((a,b)=>a.localeCompare(b,'ko',{numeric:true,sensitivity:'base'}));
+    dl.innerHTML = '';
+    for(const name of uniq){
+      const opt = document.createElement('option');
+      opt.value = name;
+      dl.appendChild(opt);
+    }
+  }
+
+  if(input.dataset.bound === '1') return;
+  input.dataset.bound = '1';
+
+  const cssEscape = (s)=> (window.CSS && typeof CSS.escape==='function') ? CSS.escape(s) : String(s).replace(/[^a-zA-Z0-9_\-]/g,'\$&');
+
+  const flashStatus = (msg)=>{
+    if(!status) return;
+    const prev = status.textContent;
+    status.textContent = msg;
+    setTimeout(()=>{ if(status.textContent===msg) status.textContent = prev || ''; }, 1500);
+  };
+
+  const go = ()=>{
+    const qRaw = String(input.value||'').trim();
+    if(!qRaw){ flashStatus('선수 이름을 입력하세요.'); return; }
+    const key = normalizeTierboardPlayerKey(qRaw);
+    const wrap = document.getElementById('tierboardWrap');
+    if(!wrap){ flashStatus('티어표가 아직 로드되지 않았습니다.'); return; }
+
+    let el = null;
+    // exact match by normalized key
+    try{
+      el = wrap.querySelector(`.tb-chip[data-player-key="${cssEscape(key)}"]`);
+    }catch(_){
+      // ignore
+    }
+
+    // fallback: scan
+    if(!el){
+      const chips = wrap.querySelectorAll('.tb-chip');
+      for(const c of chips){
+        const ck = c.getAttribute('data-player-key') || normalizeTierboardPlayerKey(c.textContent);
+        if(ck == key){ el = c; break; }
+      }
+    }
+
+    // fuzzy contains
+    if(!el && key){
+      const chips = wrap.querySelectorAll('.tb-chip');
+      for(const c of chips){
+        const ck = c.getAttribute('data-player-key') || normalizeTierboardPlayerKey(c.textContent);
+        if(ck.includes(key) || normalizeTierboardPlayerKey(c.textContent).includes(key)) { el = c; break; }
+      }
+    }
+
+    if(!el){ flashStatus('해당 선수를 찾지 못했습니다.'); return; }
+
+    el.scrollIntoView({ behavior:'smooth', block:'center' });
+    el.classList.remove('tb-chip-hit');
+    // reflow for restarting animation
+    void el.offsetWidth;
+    el.classList.add('tb-chip-hit');
+    setTimeout(()=>el.classList.remove('tb-chip-hit'), 1600);
+  };
+
+  btn.addEventListener('click', (e)=>{ e.preventDefault(); go(); });
+  input.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      go();
+    }
+  });
+};
+
 async function loadTierBoard(){
   const wrap = document.getElementById('tierboardWrap');
   const status = document.getElementById('tierboardStatus');
@@ -539,6 +633,7 @@ async function loadTierBoard(){
         const chip = document.createElement('span');
         chip.className = 'tb-chip';
         chip.textContent = name;
+        chip.setAttribute('data-player-key', normalizeTierboardPlayerKey(name));
         list.appendChild(chip);
       });
 
@@ -552,7 +647,18 @@ async function loadTierBoard(){
 
   wrap.appendChild(gridEl);
   if(status) status.textContent = '';
+
+  // Wire search UI (autocomplete + scroll-to-player)
+  try{
+    const allNames = [];
+    tierData.forEach(t=>{['T','Z','P'].forEach(rk=>t.races[rk].forEach(n=>allNames.push(n)));});
+    setupTierboardSearch(allNames);
+  }catch(e){ console.warn('tierboard search setup failed', e); }
+
 }
+
+// TierBoard reload button
+$('tierboardReloadBtn')?.addEventListener('click', ()=> loadTierBoard());
 
 async function buildRaceWinrate(){
   try{
