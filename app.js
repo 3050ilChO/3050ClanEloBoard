@@ -714,13 +714,50 @@ async function buildRaceWinrate(){
 
 async function loadRanking(){
   if(rankStatus) rankStatus.textContent='시트에서 데이터를 불러오는 중…';
-  [RANK_SRC, MATCH_SRC] = await Promise.all([ fetchGVIZ(SHEETS.rank), fetchGVIZ(SHEETS.matches) ]);
-  // Backward compatibility: some functions expect MATCH_SRCH_SRC
+
+  [RANK_SRC, MATCH_SRC] = await Promise.all([
+    fetchGVIZ(SHEETS.rank),
+    fetchGVIZ(SHEETS.matches)
+  ]);
+
+  // Backward compatibility
   MATCH_SRCH_SRC = MATCH_SRC;
-  if(!RANK_SRC.length){ if(rankStatus) rankStatus.textContent='불러오기 실패(권한/네트워크/CORS 확인)'; return; }
-  drawRankRows(RANK_SRC.slice(1));
-  const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
-  if(rankStatus) rankStatus.textContent=`불러오기 완료 • ${RANK_SRC.length-1}행`;
+
+  if(!RANK_SRC.length){
+    if(rankStatus) rankStatus.textContent='불러오기 실패(권한/네트워크/CORS 확인)';
+    return;
+  }
+
+  let rows = RANK_SRC.slice(1);
+
+  // --- 안정화: ELO 정렬 ---
+  rows.sort((a,b)=>{
+    const ea = Number(String(a[9]||0).replace(/,/g,''));
+    const eb = Number(String(b[9]||0).replace(/,/g,''));
+    return eb - ea;
+  });
+
+  // --- 안정화: 랭킹 계산 ---
+  rows.forEach((r,i)=>{
+    r[0] = i+1;
+  });
+
+  drawRankRows(rows);
+
+  // datalist 생성
+  const dl = document.getElementById('playerList');
+  if(dl){
+    dl.innerHTML='';
+    rows.forEach(r=>{
+      const id = String(r[1]||'').split('/')[0].trim();
+      if(!id) return;
+      const opt=document.createElement('option');
+      opt.value=id;
+      dl.appendChild(opt);
+    });
+  }
+
+  if(rankStatus) rankStatus.textContent=`불러오기 완료 • ${rows.length}행`;
 }
 $('rankRefresh')?.addEventListener('click', loadRanking);
 $('rankSearchBtn')?.addEventListener('click', ()=>{
