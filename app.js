@@ -216,9 +216,9 @@ const normalizeId = (typeof window !== 'undefined' && window.normalizeId) ? wind
 
 // === Hall of Fame popup links (configurable) ===
 const HOF_LINKS = {
-  pro: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit#gid=1935955704",
-  tst: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit#gid=1935955704",
-  tsl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit#gid=1935955704",
+  pro: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=1658280214#gid=1658280214",
+  tst: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=381201435#gid=381201435",
+  tsl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=2130451924#gid=2130451924",
   // New HOF menus
   tpl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=TPL",
   // New HOF menus (sheet-name based; works even if gid changes)
@@ -1727,7 +1727,7 @@ $('schedSearchBtn')?.addEventListener('click', ()=> filterSchedule($('schedQuery
 $('schedResetBtn')?.addEventListener('click', ()=>{ const i=$('schedQuery'); if(i) i.value=''; filterSchedule(''); });
 $('schedQuery')?.addEventListener('keydown', e=>{ if(e.key==='Enter') $('schedSearchBtn').click(); });
 $('schedOpenSheet')?.addEventListener('click', ()=>{
-  const url='https://docs.google.com/spreadsheets/d/1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE/edit#gid=1935955704';
+  const url='https://docs.google.com/spreadsheets/d/1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE/edit?gid=1935955704';
   try{window.open(url, 'schedPopup', 'width=1200,height=800,noopener');}catch(e){console.warn('popup suppressed')}
 });
 
@@ -2661,9 +2661,9 @@ function toDateKR(s){
 
 /* User-provided Google Sheets */
 const URLS_V12 = {
-  active: "https://docs.google.com/spreadsheets/d/18m01CS5kUZKByQHmusXMN54Pa0SXwozgPGp92Q2Nnwo/edit#gid=1935955704",
-  matches: "https://docs.google.com/spreadsheets/d/1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs/edit#gid=1935955704",
-  schedule: "https://docs.google.com/spreadsheets/d/1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE/edit#gid=1935955704"
+  active: "https://docs.google.com/spreadsheets/d/18m01CS5kUZKByQHmusXMN54Pa0SXwozgPGp92Q2Nnwo/edit?gid=829552378#gid=829552378",
+  matches: "https://docs.google.com/spreadsheets/d/1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs/edit?gid=1297807009#gid=1297807009",
+  schedule: "https://docs.google.com/spreadsheets/d/1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE/edit?gid=1796534117#gid=1796534117"
 };
 
 /* 1) 활동인원 & 총경기수 */
@@ -2792,7 +2792,7 @@ async function v12_loadNextSchedule(){
     const home = String(r[3]||'').trim();
     const away = String(r[7]||'').trim();
     return d && d>=today && home && away;
-  }).sort((a,b)=> toDateKR(a[1]) - toDateKR(b[1])).slice(0,3);
+  }).sort((a,b)=> toDateKR(a[1]) - toDateKR(b[1])).slice(0,5);
   const tbl=document.getElementById('dashSched'); if(!tbl) return;
   const tbody=tbl.querySelector('tbody'); if(!tbody) return;
   tbody.innerHTML='';
