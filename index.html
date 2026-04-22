@@ -1,12 +1,439 @@
 <!DOCTYPE html>
+
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<title>3050 Clan</title>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>3050ClanEloBoard</title>
+<!-- Cache Bypass + OG Refresh -->
+<meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
+<meta content="no-cache" http-equiv="Pragma"/>
+<meta content="0" http-equiv="Expires"/>
+<meta content="3050ClanEloBoard - 스타크래프트 3050클랜 공식 Elo 보드" property="og:title"/>
+<meta content="3050클랜의 전적, 프로리그 순위, 일정, 클랜원 명단을 한눈에 확인하세요." property="og:description"/>
+<meta content="https://cool-croquembouche-1f074d.netlify.app/logo.png?v=99" property="og:image"/>
+<meta content="website" property="og:type"/>
+<meta content="https://cool-croquembouche-1f074d.netlify.app/" property="og:url"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<meta content="https://cool-croquembouche-1f074d.netlify.app/logo.png?v=99" name="twitter:image"/>
+<link href="./logo.png" rel="icon" type="image/png"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="style.css?v=1069" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+<script>
+  // Data bindings (unchanged endpoints)
+  window.SHEETS = {
+    rank:   { id:"1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet:"ELOrank",      range:"A:Z" },
+    matches:{ id:"1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet:"ELOboard",     range:"A:Z" },
+    proRank:{ id:"1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE", sheet:"DontREMOVE11", range:"E24:O30" },
+    sched:  { id:"1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE", sheet:"S11Schedule",  range:"B4:M348" },
+    roster:{ id:"1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE", sheet:"S11RoasterHOME", range:"A4:Z120" },
+    all:    { id:"1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs", sheet:"ELOboard", range:"A:J" },
+    members:{ id:"18m01CS5kUZKByQHmusXMN54Pa0SXwozgPGp92Q2Nnwo", sheet:"ClanMembers",  range:"A:F"},
+    // NOTE: Keep a wide range so all tiers (including 스페이드/조커/히든) are always included.
+    tierBoard:{ id:"18m01CS5kUZKByQHmusXMN54Pa0SXwozgPGp92Q2Nnwo", sheet:"티어발표용", range:"A:Z"}
+  };
+  window.USE_PROXY = false;
+  window.PROXY_URL = "https://cors.isomorphic-git.org/";
+  </script>
 </head>
 <body>
+<header class="topbar">
+<div class="topbar-inner">
+<div class="topbar-row row1">
+<div class="left-group">
+<button aria-label="메뉴 열기" class="hamburger" id="hamburgerBtn">☰</button>
+<a aria-label="메인페이지로 이동" class="home-link" href="./index.html">
+<img alt="3050 Clan" class="home-logo" src="./logo.png"/>
+</a>
+<a class="yt-link" href="https://www.youtube.com/@3050clan" rel="noopener" target="_blank">
+<img alt="YouTube" class="yt-icon" src="./youtube.png"/>
+<span class="yt-text">3050공식유튜브</span>
+</a>
+</div>
+<div class="right-group">
+<nav class="menu topmenu" id="mainMenu">
+<button class="tab-btn home-btn" data-target="dashboard"><span class="micon">📊</span><span class="mlabel">대시보드</span></button>
+<button class="tab-btn" data-target="rank"><span class="micon">🏅</span><span class="mlabel">랭킹</span></button>
+<button class="tab-btn" data-target="h2h"><span class="micon">🔎</span><span class="mlabel">상대전적</span></button>
+<button class="tab-btn" data-target="all"><span class="micon">📜</span><span class="mlabel">전체경기기록</span></button>
+<button class="tab-btn" data-target="sched"><span class="micon">📅</span><span class="mlabel">프로리그일정</span></button>
+<button class="tab-btn" data-target="hof"><span class="micon">🏛️</span><span class="mlabel">명예의전당</span></button>
+<button class="tab-btn" data-target="tierboard"><span class="micon">🏷️</span><span class="mlabel">클랜원티어표</span></button>
+<button class="tab-btn" data-target="members"><span class="micon">👥</span><span class="mlabel">클랜원명단</span></button>
+</nav>
+</div>
+</div>
+</div>
+</header>
+<div class="hero-title">
+<div class="titles">
+<div class="minor">OP 3050-</div>
+<div class="mainline">스타크래프트 3050클랜 ELO보드</div>
+<div class="league gold-text">THEIR OWN LEAGUE</div>
+<div class="subline">그들만의리그</div>
+</div><div class="hero-search">
+<div class="dash-search hero-searchbox">
+<input class="search" id="globalSearch" list="playerList" placeholder="플레이어 검색…"/>
+<button class="ghost" id="globalSearchBtn">검색</button>
+</div>
+</div><div class="hero-stats">
+<div class="top-stats">
+<div class="cards center-cards">
+<div class="dash-card gold">
+<div class="card-title">현재진행시즌</div>
+<div class="card-value">S11</div>
+</div>
+<div class="dash-card gold">
+<div class="card-title">활동인원</div>
+<div class="card-value" id="activeCount">-명</div>
+</div>
+<div class="dash-card gold">
+<div class="card-title">총경기수 <span class="today-badge" id="todayBadge"></span></div>
+<div class="card-value" id="totalMatches">-경기</div>
+</div>
+</div>
+<div class="dash-card gold">
+<div class="card-title">마지막 업데이트</div>
+<div class="card-value" id="lastUpdate">-</div>
+</div>
+</div>
+</div>
+</div>
+<section class="panel active" id="dashboard">
+<div class="dash-wrap">
+<div class="season-card premium">
+<div class="season-head">
+<div class="season-meta">
+<div class="season-kicker">프로리그순위S11</div>
+<div class="season-name" id="dashSeasonName">S11</div>
+<div class="season-range" id="dashSeasonRange">-</div>
+</div>
+<div class="dash-btns"><button class="season-btn" id="viewRosterBtn" type="button">팀 로스터</button> <button class="season-btn" id="viewAllScheduleBtn" type="button">전체 일정 보기 →</button>
+</div>
+</div>
+<div class="table-wrap">
+<table id="proRankTable">
+<thead><tr></tr></thead>
+<tbody></tbody>
+</table>
+</div>
+</div>
+<div class="dash-block premium">
+<h3>종족별상대승률(전체)</h3>
+<table class="table" id="raceTable">
+<thead>
+<tr><th>종족</th><th>vs Z</th><th>vs P</th><th>vs T</th><th>합계</th></tr>
+</thead>
+<tbody></tbody>
+</table>
+<div class="status" id="raceNote"></div>
+</div>
+<div class="dash-block premium">
+<h3>다음 프로리그 일정</h3>
+<div class="loading" id="schedLoading"></div>
+<table class="table" id="dashSched">
+<thead>
+<tr><th>라운드</th><th>날짜</th><th>요일</th><th>HOME</th><th></th><th>AWAY</th></tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+</div>
+</section>
+<div aria-hidden="true" class="mobile-menu" id="mobileMenu">
+<div class="mobile-menu-inner">
+<button aria-label="닫기" class="mobile-close" id="mobileMenuClose">×</button>
+<ul class="mobile-list">
+<li><button class="mobile-item" data-target="dashboard">🏠 대시보드</button></li><li><button class="mobile-item" data-target="members">👥 클랜원명단</button></li>
+<li><button class="mobile-item" data-target="tierboard">🏷️ 클랜원티어표</button></li>
+<li><button class="mobile-item" data-target="rank">랭킹</button></li>
+<li><button class="mobile-item" data-target="h2h">맞대결(상대전적)</button></li>
+<li><button class="mobile-item" data-target="all">전체경기기록</button></li>
+<li><button class="mobile-item" data-target="sched">프로리그일정</button></li>
+<li><button class="mobile-item" data-target="hof">명예의전당</button></li>
+</ul>
+</div>
+</div>
+<main class="container">
+<section class="panel" id="hof">
+<div class="panel-head">
+<h2>명예의전당</h2>
+<div class="status">프로리그 / TSL / TST / TPL / MSL / TCL</div>
+</div>
+<div class="hof-wrap premium">
+<div class="hof-page">
+<div aria-label="명예의전당 메뉴" class="hof-menu" role="tablist">
+<button aria-selected="true" class="hof-menu-btn active" id="hofPro" role="tab" type="button">
+<span class="hof-menu-main">프로리그</span>
+<span class="hof-menu-sub">PROLEAGUE</span>
+</button>
+<button aria-selected="false" class="hof-menu-btn" id="hofTSL" role="tab" type="button">
+<span class="hof-menu-main">TSL</span>
+<span class="hof-menu-sub">3050스타리그</span>
+</button>
+<button aria-selected="false" class="hof-menu-btn" id="hofTST" role="tab" type="button">
+<span class="hof-menu-main">TST</span>
+<span class="hof-menu-sub">3050토너먼트</span>
+</button>
+<button aria-selected="false" class="hof-menu-btn" id="hofTPL" role="tab" type="button">
+<span class="hof-menu-main">TPL</span>
+<span class="hof-menu-sub">갓/킹리그</span>
+</button>
+<button aria-selected="false" class="hof-menu-btn" id="hofMSL" role="tab" type="button">
+<span class="hof-menu-main">MSL</span>
+<span class="hof-menu-sub">퀸.잭 리그</span>
+</button>
+<button aria-selected="false" class="hof-menu-btn" id="hofTCL" role="tab" type="button">
+<span class="hof-menu-main">TCL</span>
+<span class="hof-menu-sub">(스페/조커/히든)</span>
+</button>
+</div>
+<div class="hof-shell">
+<aside aria-label="시즌별 성적" class="hof-side">
+<div class="hof-side-head">
+<div class="hof-side-title">시즌별 성적</div>
+</div>
+<div class="hof-seasons" id="hofSeasonList"></div>
+</aside>
+<main class="hof-main">
+<div class="hof-card" id="hofInline">
+<div class="hof-card-head">
+<div class="hof-card-title" id="hofInlineTitle">명예의전당</div>
+<div class="hof-card-sub" id="hofInlineStatus"></div>
+</div>
+<div class="table-wrap full hof-table-wrap">
+<table class="table" id="hofInlineTable">
+<thead><tr></tr></thead>
+<tbody></tbody>
+</table>
+</div>
+</div>
+</main>
+</div>
+</div>
+</div>
+</section><section class="panel" id="rank">
+<div class="panel-head">
+<h2>랭킹</h2>
+<div class="actions">
+<div class="tier-filters" id="tierFilters" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+<button class="ghost tier-btn active" data-tier="전체">전체</button>
+<button class="ghost tier-btn" data-tier="갓">갓</button>
+<button class="ghost tier-btn" data-tier="킹">킹</button>
+<button class="ghost tier-btn" data-tier="퀸">퀸</button>
+<button class="ghost tier-btn" data-tier="잭">잭</button>
+<button class="ghost tier-btn" data-tier="스페이드">스페이드</button>
+<button class="ghost tier-btn" data-tier="조커">조커</button>
+<button class="ghost tier-btn" data-tier="히든">히든</button>
+</div>
+<input class="search" id="rankSearch" list="playerList" placeholder="플레이어 검색…"/>
+<button class="ghost" id="rankSearchBtn">검색</button>
+<button class="ghost" id="rankRefresh">새로고침</button>
+</div>
+</div>
+<div class="status" id="rankStatus">시트에서 데이터를 </div>
+<div class="table-wrap full"><table class="clickable" id="rankTable"><thead><tr></tr></thead><tbody></tbody></table></div>
+</section>
+<section class="panel" id="player">
+<div class="panel-head">
+<h2 id="playerTitle">선수 상세</h2>
+<div class="actions">
+<button class="ghost" id="playerClose">뒤로가기</button>
+</div>
+</div>
+<div class="player-body" id="playerBody"></div>
+</section>
+<section class="panel" id="h2h">
+<div class="panel-head"><h2>상대전적</h2></div>
+<div class="filters">
+<!-- Player Search Filters -->
+</div>
+<label>플레이어1(ID) <input id="h2hP1" list="playerList" placeholder="ID만 입력"/></label>
+<label>플레이어2(ID) <input id="h2hP2" list="playerList" placeholder="선택입력"/></label>
+<label>리그명 <input id="h2hMap" placeholder="전체"/></label>
+<button class="search-button" id="h2hRun">검색</button>
+<button class="reset-button" id="h2hReset">초기화</button>
+<datalist id="playerList"></datalist>
+<div class="chart-wrap" id="h2hOutcomeWrap" style="display:none"><canvas height="140" id="h2hOutcomeChart"></canvas></div>
+<div class="chart-wrap" id="h2hMapWrap" style="display:none"><canvas height="180" id="h2hMapChart"></canvas></div>
+<div class="status" id="h2hSummary"></div>
+<div class="table-wrap full"><table id="h2hTable"><thead><tr></tr></thead><tbody></tbody></table></div>
+</section>
+<section class="panel" id="sched">
+<div class="panel-head">
+<h2>프로리그일정</h2>
+<div class="actions">
+<input class="search" id="schedQuery" placeholder="팀명 검색…"/>
+<button class="ghost" id="schedSearchBtn">검색</button>
+<button class="ghost" id="schedResetBtn">초기화</button>
+<button class="ghost" id="schedOpenSheet">🗓️ 일정 자세히 보기</button>
+</div>
+</div>
+<div class="status" id="schedStatus"></div>
+<div class="table-wrap full"><table id="schedTable"><thead><tr></tr></thead><tbody></tbody></table></div>
+</section>
+<section class="panel" id="all">
+<div class="panel-head">
+<h2>전체경기기록</h2>
+<div class="actions">
+<input class="search" id="allQuery" placeholder="선수/맵/리그명…"/>
+<button class="ghost" id="allSearchBtn">검색</button>
+<button class="ghost" id="allResetBtn">초기화</button>
+</div>
+</div>
+<div class="status" id="allStatus"></div>
+<div class="table-wrap full"><table id="allTable"><thead><tr></tr></thead><tbody></tbody></table></div>
+</section>
 
+<section class="panel" id="tierboard">
+  <div class="panel-head">
+    <h2>클랜원티어표 <span id="tierboardTotal" class="tb-total"></span></h2>
+    <div class="actions">
+      <input class="search" id="tierboardSearch" list="tierboardDatalist" placeholder="선수 검색…"/>
+      <datalist id="tierboardDatalist"></datalist>
+      <button class="ghost" id="tierboardSearchBtn">이동</button>
+      <button class="ghost" id="tierboardReloadBtn">새로고침</button>
+    </div>
+  </div>
+  <div class="status" id="tierboardStatus"></div>
+  <div class="tierboard-wrap" id="tierboardWrap"></div>
+</section>
+
+<section class="panel" id="members">
+<div class="panel-head">
+<h2>클랜원명단</h2>
+<div class="actions">
+<input class="search" id="memberSearch" placeholder="이름/역할 검색…"/>
+<button class="ghost" id="memberSearchBtn">검색</button>
+<button class="ghost" id="memberResetBtn">초기화</button>
+</div>
+</div>
+<div class="status" id="membersStatus"></div>
+<div class="table-wrap"><table id="membersTable"><thead><tr></tr></thead><tbody></tbody></table></div>
+</section>
+</main>
+<footer class="footer">
+<span>©2017-2025 Starcraft 3050 Clan . All right reserved. Created by ilChO</span>
+</footer>
+<div class="scroll-fab">
+<button aria-label="위로" class="fab-btn" id="scrollUp">▲</button>
+<button aria-label="아래로" class="fab-btn" id="scrollDown">▼</button>
+</div>
+<!-- Hall of Fame Popup -->
+<div aria-hidden="true" class="popup" id="hofPopup">
+<div class="popup-backdrop" id="hofPopupBackdrop"></div>
+<div aria-labelledby="hofPopupTitle" aria-modal="true" class="popup-panel" role="dialog">
+<div class="popup-head">
+<div class="popup-title" id="hofPopupTitle">명예의전당</div>
+<button aria-label="닫기" class="popup-close" id="hofPopupClose">닫기</button>
+</div>
+<div class="popup-body">
+<div class="status" id="hofPopupStatus"></div>
+<div aria-label="시즌별 성적" class="season-bar" id="hofSeasonBar"></div>
+<div class="table-wrap full">
+<table class="table" id="hofPopupTable">
+<thead><tr></tr></thead>
+<tbody></tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+
+<!-- ✅ app.js 로드 -->
 <script src="app.js?v=1074"></script>
 
+<!-- ✅ (추가) PC/모바일 모두 #hash 탭으로 "바로 열기" -->
+<script>
+(function () {
+  function goHash() {
+    const hash = (location.hash || "").replace("#", "").trim();
+    if (!hash) return;
+
+    // 버튼 클릭 방식(기존 로직 재사용)
+    const btn =
+      document.querySelector(`.tab-btn[data-target="${hash}"]`) ||
+      document.querySelector(`.mobile-item[data-target="${hash}"]`);
+
+    if (btn) btn.click();
+
+    // 최종 보험: 강제로 해당 panel active
+    const panel = document.getElementById(hash);
+    if (panel) {
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      panel.classList.add("active");
+    }
+  }
+
+  // PC에서 대시보드로 덮이는 타이밍 이슈 방지(여러 번 맞춰줌)
+  window.addEventListener("load", () => {
+    goHash();
+    setTimeout(goHash, 50);
+    setTimeout(goHash, 200);
+    setTimeout(goHash, 600);
+  });
+
+  window.addEventListener("hashchange", goHash);
+})();
+</script>
+
+<script>
+window.addEventListener('load', () => {
+  const dateEl = document.getElementById("currentDate");
+  if (dateEl) {
+    const today = new Date();
+    const yoil = ['일','월','화','수','목','금','토'][today.getDay()];
+    const formatted = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')} (${yoil})`;
+    dateEl.textContent = formatted;
+  }
+  setTimeout(() => document.getElementById('loadingScreen')?.remove(), 3000);
+});
+</script>
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+  anchor.addEventListener('click', function (e) {
+    const target = document.querySelector(this.getAttribute('href'));
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+});
+</script>
+<!-- (removed) Team Roster Modal -->
+<!-- Team Roster Popup -->
+<div aria-hidden="true" class="popup" id="rosterPopup">
+<div class="popup-backdrop" data-close="rosterPopup"></div>
+<div class="popup-panel">
+<div class="popup-head">
+<div class="popup-title">S11 팀 로스터</div>
+<button class="popup-close" data-close="rosterPopup" type="button">닫기 ✕</button>
+</div>
+<div class="popup-body roster-body">
+<div class="roster-layout">
+<aside class="roster-menu">
+<div class="roster-menu-title">팀 선택</div>
+<div class="roster-team-list" id="rosterTeamList"></div>
+</aside>
+<section class="roster-content">
+<div class="roster-team-header" id="rosterTeamHeader">팀을 선택하세요</div>
+<div class="table-wrap roster-table-wrap">
+<table class="table" id="rosterTable">
+<thead>
+<tr><th>티어</th><th>T</th><th>P</th><th>Z</th></tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+<div class="roster-meta" id="rosterMeta"></div>
+</section>
+</div>
+</div>
+</div>
+</div>
 </body>
 </html>
