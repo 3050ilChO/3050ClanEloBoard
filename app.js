@@ -2663,7 +2663,7 @@ function toDateKR(s){
 const URLS_V12 = {
   active: "https://docs.google.com/spreadsheets/d/18m01CS5kUZKByQHmusXMN54Pa0SXwozgPGp92Q2Nnwo/edit?gid=829552378#gid=829552378",
   matches: "https://docs.google.com/spreadsheets/d/1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs/edit?gid=1297807009#gid=1297807009",
-  schedule: "https://docs.google.com/spreadsheets/d/1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE/edit?gid=1796534117#gid=1796534117"
+  schedule: "https://docs.google.com/spreadsheets/d/1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE/edit?gid=1935955704#gid=1796534117"
 };
 
 /* 1) 활동인원 & 총경기수 */
@@ -2791,8 +2791,8 @@ async function v12_loadNextSchedule(){
     const d = toDateKR(r[1]);
     const home = String(r[3]||'').trim();
     const away = String(r[7]||'').trim();
-    return d;
-  }).sort((a,b)=> toDateKR(a[1]) - toDateKR(b[1])).slice(0,5);
+    return d && d>=today && home && away;
+  }).sort((a,b)=> toDateKR(a[1]) - toDateKR(b[1])).slice(0,3);
   const tbl=document.getElementById('dashSched'); if(!tbl) return;
   const tbody=tbl.querySelector('tbody'); if(!tbody) return;
   tbody.innerHTML='';
