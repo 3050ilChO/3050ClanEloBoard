@@ -2651,8 +2651,13 @@ async function fetchGVIZbyUrl_v12b(fullUrl){
 function fmtNum(n){ const x=Number(n||0); return isNaN(x)?'-':x.toLocaleString('ko-KR'); }
 function fmtPct(win,total){ const t=Number(total||0), w=Number(win||0); if(!t) return '0%'; return ((w/t)*100).toFixed(1)+'%'; }
 function toDateKR(s){
-  const str=String(s||'').trim();
-  let m=str.match(/(\d{4})[^\d](\d{1,2})[^\d](\d{1,2})/);
+  const str = String(s||'').trim();
+  const m = str.match(/(\d{4}).*?(\d{1,2}).*?(\d{1,2})/);
+  if(m){
+    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
+  return null;
+})[^\d](\d{1,2})[^\d](\d{1,2})/);
   if(m){ return new Date(`${m[1]}-${('0'+m[2]).slice(-2)}-${('0'+m[3]).slice(-2)}`); }
   m=str.match(/(\d{4})-(\d{2})-(\d{2})/);
   if(m){ return new Date(`${m[1]}-${m[2]}-${m[3]}`); }
@@ -2663,7 +2668,7 @@ function toDateKR(s){
 const URLS_V12 = {
   active: "https://docs.google.com/spreadsheets/d/18m01CS5kUZKByQHmusXMN54Pa0SXwozgPGp92Q2Nnwo/edit?gid=829552378#gid=829552378",
   matches: "https://docs.google.com/spreadsheets/d/1F6Ey-whXAsTSMCWVmfexGd77jj6WDgv6Z7hkK3BHahs/edit?gid=1297807009#gid=1297807009",
-  schedule: "https://docs.google.com/spreadsheets/d/1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE/edit?gid=1935955704#gid=1796534117"
+  schedule: "https://docs.google.com/spreadsheets/d/1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE/edit?gid=1796534117#gid=1796534117"
 };
 
 /* 1) 활동인원 & 총경기수 */
@@ -2791,8 +2796,8 @@ async function v12_loadNextSchedule(){
     const d = toDateKR(r[1]);
     const home = String(r[3]||'').trim();
     const away = String(r[7]||'').trim();
-    return d && d>=today && home && away;
-  }).sort((a,b)=> toDateKR(a[1]) - toDateKR(b[1])).slice(0,3);
+    return d && d>=today && home !== "";
+  }).sort((a,b)=> toDateKR(a[1]) - toDateKR(b[1])).slice(0,5);
   const tbl=document.getElementById('dashSched'); if(!tbl) return;
   const tbody=tbl.querySelector('tbody'); if(!tbody) return;
   tbody.innerHTML='';
