@@ -2791,8 +2791,8 @@ async function v12_loadNextSchedule(){
     const d = toDateKR(r[1]);
     const home = String(r[3]||'').trim();
     const away = String(r[7]||'').trim();
-    return d && d>=today && home !== "";
-  }).sort((a,b)=> toDateKR(a[1]) - toDateKR(b[1])).slice(0,5);
+    return d && d>=today && home && away;
+  }).sort((a,b)=> toDateKR(a[1]) - toDateKR(b[1])).slice(0,3);
   const tbl=document.getElementById('dashSched'); if(!tbl) return;
   const tbody=tbl.querySelector('tbody'); if(!tbody) return;
   tbody.innerHTML='';
