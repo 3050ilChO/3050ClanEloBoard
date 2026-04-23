@@ -923,14 +923,14 @@ const S11H = S11[0] || [];
 const S11R = S11.slice(1);
 
 const s11Player = S11R.filter(r => {
-  const pid = normalizeId(r[1]);
+  const pid = normalizeId(r[2]); // C열: 승자선수
   return pid === you;
 });
 
 let s11W = 0, s11L = 0;
 s11Player.forEach(r => {
-  const win = normalizeId(r[2]);
-  const lose = normalizeId(r[5]);
+  const win = normalizeId(r[2]);  // 승자선수 (C열)
+  const lose = normalizeId(r[5]); // 패자선수 (F열)
   if (win === you) s11W++;
   else if (lose === you) s11L++;
 });
