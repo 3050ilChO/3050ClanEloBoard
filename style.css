@@ -395,7 +395,7 @@ table{
   width:100%;
   border-collapse:separate;
   border-spacing:0;
-  min-width:720px;
+  min-width:unset;
   color:var(--fg);
 }
 
@@ -2342,7 +2342,7 @@ td.rank-cell .rank-num{ font-weight:900; }
 
 /* === HOF inline tables: keep as real table; allow horizontal scroll on small screens === */
 .hof-table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
-.hof-table-wrap table{ width:100%; min-width:720px; }
+.hof-table-wrap table{ width:100%; min-width:unset; }
 @media (max-width: 980px){
   .hof-table-wrap table{ min-width:760px; }
 }
@@ -2357,7 +2357,7 @@ td.rank-cell .rank-num{ font-weight:900; }
 .hof-wide-scroll table{
   table-layout:auto !important;
   width:max-content !important;
-  min-width:720px;
+  min-width:unset;
 }
 .hof-wide-scroll th,
 .hof-wide-scroll td{
@@ -3376,3 +3376,9 @@ background: inherit;
 .tb-tier-스페이드{ --tb-accent: #20fcfc; }
 .tb-tier-조커{ --tb-accent: #36fec1; }
 .tb-tier-히든{ --tb-accent: #aaafa5; }
+
+@media (max-width: 720px){
+  table{
+    min-width:unset !important;
+  }
+}
