@@ -908,7 +908,43 @@ async function openPlayer(bCellValue){
   });
 
   // 표용 HTML 생성 (총전 많은 순으로 정렬)
-  const leagueRows = Object.entries(leagueAgg)
+  
+// ==============================
+// 🔥 현재 프로리그 (S11) 성적 추가
+// ==============================
+const S11 = await fetchGVIZ({
+  id: "1othAdoPUHvxo5yDKmEZSGH-cjslR1WyV90F7FdU30OE",
+  sheet: "S11PlayerResult",
+  range: "A:Z"
+});
+
+const currentSeason = "S11PlayerResult".match(/S\d+/)[0];
+const S11H = S11[0] || [];
+const S11R = S11.slice(1);
+
+const s11Player = S11R.filter(r => {
+  const pid = normalizeId(r[1]);
+  return pid === you;
+});
+
+let s11W = 0, s11L = 0;
+s11Player.forEach(r => {
+  const win = normalizeId(r[2]);
+  const lose = normalizeId(r[5]);
+  if (win === you) s11W++;
+  else if (lose === you) s11L++;
+});
+
+let s11Html = "";
+if (s11Player.length === 0) {
+  s11Html = `<tr><td>현재프로리그(${currentSeason})</td><td colspan="4">전적없음</td></tr>`;
+} else {
+  const total = s11W + s11L;
+  const pct = total ? Math.round(s11W * 1000 / total) / 10 : 0;
+  s11Html = `<tr><td>현재프로리그(${currentSeason})</td><td>${total}전</td><td>${s11W}</td><td>${s11L}</td><td>${pct}%</td></tr>`;
+}
+
+const leagueRows = Object.entries(leagueAgg)
     .map(([name, v]) => ({ name, total: v.w + v.l, w: v.w, l: v.l, pct: (v.w+v.l) ? Math.round(v.w*1000/(v.w+v.l))/10 : 0 }))
     .sort((a, b) => b.total - a.total);
 
@@ -994,6 +1030,7 @@ const leagueHtml = `
           <tr><th>리그명</th><th>총전적</th><th>승</th><th>패</th><th>승률</th></tr>
         </thead>
         <tbody>
+          ${s11Html}
           ${leagueRows.map(r => `<tr>
             <td>${r.name}</td>
             <td>${r.total}전</td>
