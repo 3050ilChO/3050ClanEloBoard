@@ -2799,7 +2799,12 @@ const filtered = rows.slice(1)
 
     return { row: r, date: d };
   })
-  .filter(item => item.date && item.date >= today)
+.filter(item => {
+  if (!item.date) return false;
+  const d = new Date(item.date);
+  d.setHours(0,0,0,0);
+  return d >= today;
+})
   .sort((a,b)=> a.date - b.date)
   .slice(0,5)
   .map(item => item.row);
@@ -2808,7 +2813,7 @@ const filtered = rows.slice(1)
   tbody.innerHTML='';
   filtered.forEach(r=>{
     const tr=document.createElement('tr');
-    const cells=[r[0]||'', r[1]||'', r[2]||'', r[3]||'', 'VS', r[7]||''];
+    const cells=[r[0]||'', r[1]||'', r[2]||'', r[3]||'', (r[3] && r[7]) ? 'VS' : '', r[7]||''];
     cells.forEach(v=>{ const td=document.createElement('td'); td.textContent=String(v||''); tr.appendChild(td); });
     tbody.appendChild(tr);
   });
