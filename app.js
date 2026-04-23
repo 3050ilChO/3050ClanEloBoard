@@ -2791,7 +2791,7 @@ async function v12_loadNextSchedule(){
 
 const filtered = rows.slice(1)
   .map(r => {
-    let d = toDateKR(r[1]);
+   let d = toDateKR(r[1] || r[0]);
 
     // 병합셀 대응
     if (!d && lastDate) d = lastDate;
