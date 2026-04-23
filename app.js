@@ -2786,35 +2786,62 @@ function v12_renderRace(B){
       Columns: A Round, B Date, C 요일, D HOME, (VS blank), H AWAY */
 async function v12_loadNextSchedule(){
   const rows = await fetchGVIZbyUrl_v12b(URLS_V12.schedule);
-  const today = new Date(); today.setHours(0,0,0,0);
- let lastDate = null;
+  const today = new Date(); 
+  today.setHours(0,0,0,0);
 
-const filtered = rows.slice(1)
-  .map(r => {
-   let d = toDateKR(r[1] || r[0]);
+  let lastDate = null;
 
-    // 병합셀 대응
-    if (!d && lastDate) d = lastDate;
-    if (d) lastDate = d;
+  const filtered = rows   // ⭐ slice(1) 제거 (이게 핵심)
+    .map(r => {
+      let d = toDateKR(r[1] || r[0]);
 
-    return { row: r, date: d };
-  })
-.filter(item => {
-  if (!item.date) return false;
-  const d = new Date(item.date);
-  d.setHours(0,0,0,0);
-  return d >= today;
-})
-  .sort((a,b)=> a.date - b.date)
-  .slice(0,5)
-  .map(item => item.row);
-  const tbl=document.getElementById('dashSched'); if(!tbl) return;
-  const tbody=tbl.querySelector('tbody'); if(!tbody) return;
+      // 병합셀 대응
+      if (!d && lastDate) d = lastDate;
+      if (d) lastDate = d;
+
+      return { row: r, date: d };
+    })
+    .filter(item => {
+      if (!item.date) return false;
+
+      const d = new Date(item.date);
+      d.setHours(0,0,0,0);
+
+      // ⭐ HOME 없는 행 제거
+      if (!item.row[3]) return false;
+
+      return d >= today;
+    })
+    .sort((a,b)=> a.date - b.date)
+    .slice(0,5)
+    .map(item => item.row);
+
+  const tbl=document.getElementById('dashSched'); 
+  if(!tbl) return;
+
+  const tbody=tbl.querySelector('tbody'); 
+  if(!tbody) return;
+
   tbody.innerHTML='';
+
   filtered.forEach(r=>{
     const tr=document.createElement('tr');
-    const cells=[r[0]||'', r[1]||'', r[2]||'', r[3]||'', (r[3] && r[7]) ? 'VS' : '', r[7]||''];
-    cells.forEach(v=>{ const td=document.createElement('td'); td.textContent=String(v||''); tr.appendChild(td); });
+
+    const cells=[
+      r[0]||'',
+      r[1]||'',
+      r[2]||'',
+      r[3]||'',
+      (r[3] && r[7]) ? 'VS' : '',
+      r[7]||''
+    ];
+
+    cells.forEach(v=>{
+      const td=document.createElement('td');
+      td.textContent=String(v||'');
+      tr.appendChild(td);
+    });
+
     tbody.appendChild(tr);
   });
 }
