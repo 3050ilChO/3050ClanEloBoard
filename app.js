@@ -2850,7 +2850,7 @@ async function v12_loadNextSchedule(){
       return d >= today;
     })
     .sort((a,b)=> a.date - b.date)
-    .slice(0,5)
+    .slice(0,6)
     .map(item => item.row);
 
   const tbl=document.getElementById('dashSched'); 
