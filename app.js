@@ -1142,7 +1142,9 @@ const leagueHtml = `
         <div class="row"><span class="badge">플레이어</span> <strong>${playerName}</strong></div>
         <div class="row"><span class="badge">주종</span> ${currentRace}</div>
         <div class="row"><span class="badge">티어</span> ${tier||'-'}</div>
-        <div class="row"><span class="badge">ELO</span> ${row[4] || '-'}</div>
+        <div class="row"><span class="badge">ELO</span> ${row[3] || "-"} </div>
+        <div class="row"><span class="badge">티어별순위</span> ${row[4] || "-"}위</div>
+        <div class="row"><span class="badge">전체랭킹</span> ${row[5] || "-"}위</div>
         <div class="row"><span class="badge">티어별순위</span> ${tierRank}위</div>
         <div class="row"><span class="badge">전체랭킹</span> ${totalRank}위</div>
       </div>
