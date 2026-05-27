@@ -3228,11 +3228,25 @@ function pickSingleCrownRank(tierRank, overallRank){
         const IDX_ELO = 9, IDX_TIER=3;
         let out = [];
         if(name === '전체'){
-          // 시트 원본 순위 유지
-          out = [...rows];
+          // 10전 이상만 출력
+          out = [...rows].filter(r=>{
+            const rec = String(r[IDX_TOTAL]||'');
+            const m = rec.match(/(\\d+)전/);
+            return m && parseInt(m[1],10) >= 10;
+          });
         }else{
-          // 시트 원본 순위 유지
-          out = rows.filter(r=> String(r[IDX_TIER]||'').trim()===name);
+          // 티어별 10전 이상만 + 티어내 순위 재계산
+          out = rows
+            .filter(r=> String(r[IDX_TIER]||'').trim()===name)
+            .filter(r=>{
+              const rec = String(r[IDX_TOTAL]||'');
+              const m = rec.match(/(\\d+)전/);
+              return m && parseInt(m[1],10) >= 10;
+            });
+
+          out.forEach((r,i)=>{
+            r[0] = i + 1;
+          });
         }
         drawRankRows(out);
         const st = document.getElementById('rankStatus');
@@ -7346,3 +7360,21 @@ function renderTeamMenu(teams){
 });
 
 
+
+
+document.addEventListener('click', function(e){
+  const a = e.target.closest('.playerName');
+  if(!a) return;
+
+  e.preventDefault();
+
+  const playerName = a.textContent.trim();
+
+  if(typeof showPlayerDetail === 'function'){
+    showPlayerDetail(playerName);
+  } else if(typeof openPlayerDetail === 'function'){
+    openPlayerDetail(playerName);
+  } else if(typeof openPlayerModal === 'function'){
+    openPlayerModal(playerName);
+  }
+});
