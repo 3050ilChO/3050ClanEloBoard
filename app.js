@@ -831,34 +831,25 @@ async function openPlayer(bCellValue){
   const playerName = String(row[COL.B]||'').split('/')[0].trim();
   const currentRace = String(row[COL.C]||'').trim().toUpperCase();
   const tier = String(row[COL.D]||'').trim();
-  const eloText = String(found?.[3] || '-')
-    .replace(/\s*\([^)]*\)/g,'')
-    .trim();
+  const eloText = String(row[COL.J] ?? '');
   const awardsRaw = String(row[COL.L] ?? '');
 
   // ===== 클랜원전체명단 순위 불러오기 =====
-  let tierRank = found?.[4] || '-';
-  let totalRank = found?.[5] || '-';
+  let tierRank = "-";
+  let totalRank = "-";
 
   try{
     const memberRankData = await fetchGVIZ({
       id: "14FUpa0Hcgtx6J1ZByx-cXGfbF7_ze1edONz8Wt70Obw",
       sheet: "클랜원전체명단",
-      range: "B:K"
+      range: "B:G"
     });
 
     if (memberRankData.length > 1) {
       const memberRows = memberRankData.slice(1);
 
-      const cleanId = v =>
-        String(v || '')
-          .replace(/\\u00A0/g,' ')
-          .replace(/\\s+/g,'')
-          .trim()
-          .toLowerCase();
-
       const found = memberRows.find(r =>
-        cleanId(r[0]) === cleanId(playerName)
+        normalizeId(r[0]) === normalizeId(playerName)
       );
 
       if (found) {
@@ -1181,10 +1172,10 @@ const leagueHtml = `
         <tr><th>저그전</th><th>프로토스전</th><th>테란전</th><th>총전적</th><th>승률</th></tr>
       </thead><tbody>
         <tr>
-          <td>${found?.[6] || '-'}</td>
-          <td>${found?.[7] || '-'}</td>
-          <td>${found?.[8] || '-'}</td>
-          <td>${found?.[9] || '-'}</td>
+          <td>${fmtCell(cz)}</td>
+          <td>${fmtCell(cp)}</td>
+          <td>${fmtCell(ct)}</td>
+          <td>${fmtCell(ctot)}</td>
           <td>${ctot.w+ctot.l? Math.round(ctot.w*1000/(ctot.w+ctot.l))/10 : 0}%</td>
         </tr>
       </tbody></table>
