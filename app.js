@@ -718,17 +718,7 @@ async function loadRanking(){
   // Backward compatibility: some functions expect MATCH_SRCH_SRC
   MATCH_SRCH_SRC = MATCH_SRC;
   if(!RANK_SRC.length){ if(rankStatus) rankStatus.textContent='불러오기 실패(권한/네트워크/CORS 확인)'; return; }
-  (function(){
-  let rows = RANK_SRC.slice(1);
-
-  function elo(v){ return Number(String(v||0).replace(/,/g,'')); }
-  function total(r){
-    const m = String(r[7]||'').match(/(\d+)전/);
-    return m ? Number(m[1]) : 0;
-  }
-
-  drawRankRows(rows);
-})();
+  drawRankRows(RANK_SRC.slice(1));
   const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
   if(rankStatus) rankStatus.textContent=`불러오기 완료 • ${RANK_SRC.length-1}행`;
 }
@@ -822,7 +812,7 @@ async function openPlayer(bCellValue){
   const playerName = String(row[COL.B]||'').split('/')[0].trim();
   const currentRace = String(row[COL.C]||'').trim().toUpperCase();
   const tier = String(row[COL.D]||'').trim();
-  const eloText = String(row[COL.E] ?? '').trim();
+  const eloText = String(row[COL.J] ?? '');
   const awardsRaw = String(row[COL.L] ?? '');
 
   // ===== 클랜원전체명단 순위 불러오기 =====
@@ -844,12 +834,8 @@ async function openPlayer(bCellValue){
       );
 
       if (found) {
-        tierRank = String(found[4] || '').trim();
-        totalRank = String(found[5] || '').trim();
-
-        // 빈값 방지
-        if(!tierRank) tierRank='-';
-        if(!totalRank) totalRank='-';
+        tierRank = found[4] || "-";   // F열
+        totalRank = found[5] || "-";  // G열
       }
     }
   }catch(e){
@@ -1157,7 +1143,9 @@ const leagueHtml = `
         <div class="row"><span class="badge">주종</span> ${currentRace}</div>
         <div class="row"><span class="badge">티어</span> ${tier||'-'}</div>
         <div class="row"><span class="badge">ELO</span> ${eloText}</div>
-        <div class="row"><span class="badge">티어별랭킹</span> ${tierRank}위</div>
+        <div class="row"><span class="badge">티어별순위</span> ${tierRank}위</div>
+        <div class="row"><span class="badge">전체랭킹</span> ${totalRank}위</div>
+        <div class="row"><span class="badge">티어별순위</span> ${tierRank}위</div>
         <div class="row"><span class="badge">전체랭킹</span> ${totalRank}위</div>
       </div>
       <h3>상대 종족별 성적 (주종: ${currentRace})</h3>
@@ -1175,7 +1163,7 @@ const leagueHtml = `
       ${offBlocks.join('')}
       <hr class="gold"/>
       <h3>주요성적</h3>
-      <div class="awards">${awardsRaw || '-'}
+      <div class="awards">${awardsRaw || '-'}</div>
       <hr class="gold"/>
       <h3>티어 변동추이</h3>
       <div class="chart-wrap"><canvas id="tierTrendChart" height="85"></canvas></div>
