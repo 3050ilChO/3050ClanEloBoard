@@ -818,13 +818,11 @@ async function openPlayer(bCellValue){
   const row = rows.find(r=> normalizeId(String(r[1]||'').split('/')[0].trim())===normalizeId(id));
   if(!row){ if(body) body.innerHTML='<div class="err">선수를 찾을 수 없습니다.</div>'; activate('player'); return; }
 
-  const COL = { B:1, C:2, D:3, J:9, L:11 };
+  const COL = { B:1, C:2, D:3, E:4, F:5, G:6, H:7, I:8, J:9, K:10, L:11 };
   const playerName = String(row[COL.B]||'').split('/')[0].trim();
   const currentRace = String(row[COL.C]||'').trim().toUpperCase();
   const tier = String(row[COL.D]||'').trim();
-  const eloText = String(row[COL.J] ?? '')
-  .replace(/\([^)]*위\)/g,'')
-  .trim();
+  const eloText = String(row[COL.E] ?? '').trim();
   const awardsRaw = String(row[COL.L] ?? '');
 
   // ===== 클랜원전체명단 순위 불러오기 =====
@@ -846,8 +844,8 @@ async function openPlayer(bCellValue){
       );
 
       if (found) {
-        tierRank = String(found[4] || '').trim();
-        totalRank = String(found[5] || '').trim();
+        tierRank = found[4] ? String(found[4]).trim() : "-";
+        totalRank = found[5] ? String(found[5]).trim() : "-";
 
         // 빈값 방지
         if(!tierRank) tierRank='-';
@@ -1161,7 +1159,7 @@ const leagueHtml = `
         <div class="row"><span class="badge">ELO</span> ${eloText}</div>
         <div class="row"><span class="badge">티어별랭킹</span> ${tierRank}위</div>
         <div class="row"><span class="badge">전체랭킹</span> ${totalRank}위</div>
-      </div>
+</div>
       <h3>상대 종족별 성적 (주종: ${currentRace})</h3>
       <table class="detail"><thead>
         <tr><th>저그전</th><th>프로토스전</th><th>테란전</th><th>총전적</th><th>승률</th></tr>
