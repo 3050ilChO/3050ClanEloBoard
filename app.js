@@ -750,15 +750,21 @@ async function loadRanking(){
 
     if(!id) return;
 
-    RANK_SRC.push([
-      overallRank,
-      id,
-      race,
-      tier,
-      team,
-      elo,
-      tierRank
-    ]);
+    // 기존 사이트 drawRankRows 구조 유지
+    // [0]=전체랭킹 [1]=아이디 [2]=종족 [3]=티어
+    // [7]=총전적(dummy) [9]=ELO [10]=티어랭킹
+    const rowData = [];
+
+    rowData[0] = overallRank;
+    rowData[1] = id;
+    rowData[2] = race;
+    rowData[3] = tier;
+    rowData[4] = team;
+    rowData[7] = '-';
+    rowData[9] = elo;
+    rowData[10] = tierRank;
+
+    RANK_SRC.push(rowData);
   });
 
   drawRankRows(RANK_SRC.slice(1));
