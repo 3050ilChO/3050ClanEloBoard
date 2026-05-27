@@ -831,9 +831,7 @@ async function openPlayer(bCellValue){
   const playerName = String(row[COL.B]||'').split('/')[0].trim();
   const currentRace = String(row[COL.C]||'').trim().toUpperCase();
   const tier = String(row[COL.D]||'').trim();
-  const eloText = String(row[COL.J] ?? '')
-  .replace(/\([^)]*\)/g,'')
-  .trim();
+  
   const awardsRaw = String(row[COL.L] ?? '');
 
   // ===== 클랜원전체명단 순위 불러오기 =====
@@ -852,8 +850,8 @@ async function openPlayer(bCellValue){
 
       const clean = v =>
         String(v || '')
-          .replace(/\u00A0/g,' ')
-          .replace(/\s+/g,'')
+          .replace(/\\u00A0/g,' ')
+          .replace(/\\s+/g,'')
           .trim()
           .toLowerCase();
 
@@ -861,9 +859,11 @@ async function openPlayer(bCellValue){
         clean(r[0]) === clean(playerName)
       );
 
+      const eloText = found?.[3] || '-';
+
       if (found) {
-        tierRank = found[4] || "-";   // F열
-        totalRank = found[5] || "-";  // G열
+        tierRank = found?.[4] || '-';   // F열
+        totalRank = found?.[5] || '-';  // G열
       }
     }
   }catch(e){
