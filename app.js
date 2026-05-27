@@ -2968,6 +2968,7 @@ function drawRankRows(rows){
           const id = String(v).split('/')[0].trim();
           const a = document.createElement('a');
           a.href = '#';
+          a.className = 'playerName';
           a.textContent = id;
           a.addEventListener('click', e => {
             e.preventDefault();
@@ -3167,13 +3168,19 @@ document.addEventListener('DOMContentLoaded', setupTierButtons);
 
 // === v9_80: '전체' filter + overall rank label + single-crown guard ===
 function getOverallRankForPlayer(playerRow, allRows){
-  const IDX_ELO = 9; // J
-  const IDX_NAME = 1; // B
-  const me = String(playerRow[IDX_NAME]||'').split('/')[0].trim().toLowerCase();
+  const me = String(playerRow[1]||'').split('/')[0].trim().toLowerCase();
   const all = [...allRows];
-  all.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
-  const pos = all.findIndex(r=> String(r[IDX_NAME]||'').split('/')[0].trim().toLowerCase() === me) + 1;
-  return {overallRank: pos>0?pos:null, total: all.length};
+
+  const found = all.find(r =>
+    String(r[1]||'').split('/')[0].trim().toLowerCase() === me
+  );
+
+  const sheetRank = parseInt(found?.[0], 10);
+
+  return {
+    overallRank: Number.isFinite(sheetRank) ? sheetRank : null,
+    total: all.length
+  };
 }
 
 // Remove any existing crown in ELO line
@@ -3221,12 +3228,11 @@ function pickSingleCrownRank(tierRank, overallRank){
         const IDX_ELO = 9, IDX_TIER=3;
         let out = [];
         if(name === '전체'){
-          out = [...rows].sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
-          out.forEach((r,i)=> r[0]=i+1);
+          // 시트 원본 순위 유지
+          out = [...rows];
         }else{
-          out = rows.filter(r=> String(r[IDX_TIER]||'').trim()===name)
-                    .sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
-          out.forEach((r,i)=> r[0]=i+1);
+          // 시트 원본 순위 유지
+          out = rows.filter(r=> String(r[IDX_TIER]||'').trim()===name);
         }
         drawRankRows(out);
         const st = document.getElementById('rankStatus');
