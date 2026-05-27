@@ -822,7 +822,9 @@ async function openPlayer(bCellValue){
   const playerName = String(row[COL.B]||'').split('/')[0].trim();
   const currentRace = String(row[COL.C]||'').trim().toUpperCase();
   const tier = String(row[COL.D]||'').trim();
-  const eloText = String(row[COL.J] ?? '').replace(/\s*\([^)]*위\)/g, '').trim();
+  const eloText = String(row[COL.J] ?? '')
+  .replace(/\([^)]*위\)/g,'')
+  .trim();
   const awardsRaw = String(row[COL.L] ?? '');
 
   // ===== 클랜원전체명단 순위 불러오기 =====
@@ -844,8 +846,12 @@ async function openPlayer(bCellValue){
       );
 
       if (found) {
-        tierRank = found[4] || "-";   // F열
-        totalRank = found[5] || "-";  // G열
+        tierRank = String(found[4] || '').trim();
+        totalRank = String(found[5] || '').trim();
+
+        // 빈값 방지
+        if(!tierRank) tierRank='-';
+        if(!totalRank) totalRank='-';
       }
     }
   }catch(e){
