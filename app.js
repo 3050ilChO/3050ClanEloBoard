@@ -834,6 +834,34 @@ async function openPlayer(bCellValue){
   const eloText = String(row[COL.J] ?? '');
   const awardsRaw = String(row[COL.L] ?? '');
 
+  // ===== 클랜원전체명단 순위 불러오기 =====
+  let tierRank = "-";
+  let totalRank = "-";
+
+  try{
+    const memberRankData = await fetchGVIZ({
+      id: "14FUpa0Hcgtx6J1ZByx-cXGfbF7_ze1edONz8Wt70Obw",
+      sheet: "클랜원전체명단",
+      range: "B:G"
+    });
+
+    if (memberRankData.length > 1) {
+      const memberRows = memberRankData.slice(1);
+
+      const found = memberRows.find(r =>
+        normalizeId(r[0]) === normalizeId(playerName)
+      );
+
+      if (found) {
+        tierRank = found[4] || "-";   // F열
+        totalRank = found[5] || "-";  // G열
+      }
+    }
+  }catch(e){
+    console.warn('member rank load error', e);
+  }
+
+
   const data = MATCH_SRC.length? MATCH_SRC : await fetchGVIZ(SHEETS.matches);
   const MH = data[0]||[]; const M = data.slice(1);
   const you = normalizeId(playerName);
@@ -1133,7 +1161,9 @@ const leagueHtml = `
         <div class="row"><span class="badge">플레이어</span> <strong>${playerName}</strong></div>
         <div class="row"><span class="badge">주종</span> ${currentRace}</div>
         <div class="row"><span class="badge">티어</span> ${tier||'-'}</div>
-        <div class="row"><span class="badge">ELO</span> ${eloText} (${row[0] ? row[0] + "위" : "-위"})</div>
+        <div class="row"><span class="badge">ELO</span> ${eloText}</div>
+        <div class="row"><span class="badge">티어별순위</span> ${tierRank}위</div>
+        <div class="row"><span class="badge">전체랭킹</span> ${totalRank}위</div>
       </div>
       <h3>상대 종족별 성적 (주종: ${currentRace})</h3>
       <table class="detail"><thead>
