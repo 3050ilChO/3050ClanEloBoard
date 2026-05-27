@@ -818,11 +818,13 @@ async function openPlayer(bCellValue){
   const row = rows.find(r=> normalizeId(String(r[1]||'').split('/')[0].trim())===normalizeId(id));
   if(!row){ if(body) body.innerHTML='<div class="err">선수를 찾을 수 없습니다.</div>'; activate('player'); return; }
 
-  const COL = { B:1, C:2, D:3, E:4, F:5, G:6, H:7, I:8, J:9, K:10, L:11 };
+  const COL = { B:1, C:2, D:3, J:9, L:11 };
   const playerName = String(row[COL.B]||'').split('/')[0].trim();
   const currentRace = String(row[COL.C]||'').trim().toUpperCase();
   const tier = String(row[COL.D]||'').trim();
-  const eloText = String(row[COL.E] ?? '').trim();
+  const eloText = String(row[COL.J] ?? '')
+  .replace(/\([^)]*위\)/g,'')
+  .trim();
   const awardsRaw = String(row[COL.L] ?? '');
 
   // ===== 클랜원전체명단 순위 불러오기 =====
@@ -844,8 +846,8 @@ async function openPlayer(bCellValue){
       );
 
       if (found) {
-        tierRank = found[4] ? String(found[4]).trim() : "-";
-        totalRank = found[5] ? String(found[5]).trim() : "-";
+        tierRank = String(found[4] || '').trim();
+        totalRank = String(found[5] || '').trim();
 
         // 빈값 방지
         if(!tierRank) tierRank='-';
@@ -1159,7 +1161,7 @@ const leagueHtml = `
         <div class="row"><span class="badge">ELO</span> ${eloText}</div>
         <div class="row"><span class="badge">티어별랭킹</span> ${tierRank}위</div>
         <div class="row"><span class="badge">전체랭킹</span> ${totalRank}위</div>
-</div>
+      </div>
       <h3>상대 종족별 성적 (주종: ${currentRace})</h3>
       <table class="detail"><thead>
         <tr><th>저그전</th><th>프로토스전</th><th>테란전</th><th>총전적</th><th>승률</th></tr>
@@ -3330,42 +3332,9 @@ function setupTierButtons(){
 }
 document.addEventListener('DOMContentLoaded', setupTierButtons);
 
-// Patch openPlayer to show "(조커:1위)" style + crown
-const __orig_openPlayer = window.openPlayer;
-window.openPlayer = async function(bCellValue){
-  if(!RANK_SRC.length) await loadRanking();
-  const H = RANK_SRC[0]||[]; const rows = RANK_SRC.slice(1);
-  // we need tier rank for the selected player
-  let id = String(bCellValue||'').split('/')[0].trim();
-  // Find the row
-  const row = rows.find(r=> String(r[1]||'').split('/')[0].trim().toLowerCase() === id.toLowerCase());
-  // Call original logic
-  await __orig_openPlayer(bCellValue);
-  try{
-    if(!row) return;
-    const info = getTierRankForPlayer(row, rows, H);
-    // Find the ELO row container we rendered earlier
-    const body = document.getElementById('playerBody');
-    if(!body) return;
-    // Find the line that contains "ELO"
-    const rowsEls = Array.from(body.querySelectorAll('.row'));
-    const eloRow = rowsEls.find(el => /ELO/i.test(el.textContent||''));
-    if(eloRow){
-      // Append "(티어:순위)" if missing
-      const tierText = info.tierName ? ` (${info.tierName}:${info.tierRank??'-'}위)` : '';
-      if (!eloRow.textContent.includes(tierText)){
-        eloRow.innerHTML = eloRow.innerHTML + tierText;
-      }
-      // Append crown image if 1~3
-      decoratePlayerEloWithCrown(eloRow, info.tierRank);
-    }
-  }catch(e){ console.warn('decorate crown failed', e); }
-};
-
-
 // === v9_80: '전체' filter + overall rank label + single-crown guard ===
 function getOverallRankForPlayer(playerRow, allRows){
-  const IDX_ELO = 9; // J
+  const IDX_ELO = 4; // J
   const IDX_NAME = 1; // B
   const me = String(playerRow[IDX_NAME]||'').split('/')[0].trim().toLowerCase();
   const all = [...allRows];
