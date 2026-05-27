@@ -548,10 +548,11 @@ async function loadTierBoard(){
   const tierIndex = new Map(tierData.map((t,i)=>[t.key,i]));
 
   for(const r of body){
-    // A:F range => C=2, D=3, E=4
-    const id = cleanId(r[2]);
-    const tier = normTier(r[3]);
-    const race = normRace(r[4]);
+    // 새 클랜원전체명단 구조
+    // A=티어 B=아이디 C=종족
+    const tier = normTier(r[0]);
+    const id = cleanId(r[1]);
+    const race = normRace(r[2]);
 
     if(!id) continue;
     if(!tierIndex.has(tier)) continue;
@@ -714,31 +715,71 @@ async function buildRaceWinrate(){
 
 async function loadRanking(){
   if(rankStatus) rankStatus.textContent='시트에서 데이터를 불러오는 중…';
-  [RANK_SRC, MATCH_SRC] = await Promise.all([ fetchGVIZ(SHEETS.rank), fetchGVIZ(SHEETS.matches) ]);
-  // Backward compatibility: some functions expect MATCH_SRCH_SRC
-  MATCH_SRCH_SRC = MATCH_SRC;
-  if(!RANK_SRC.length){ if(rankStatus) rankStatus.textContent='불러오기 실패(권한/네트워크/CORS 확인)'; return; }
-  (function(){
-  let rows = RANK_SRC.slice(1);
 
-  function elo(v){ return Number(String(v||0).replace(/,/g,'')); }
-  function total(r){
-    const m = String(r[7]||'').match(/(\d+)전/);
-    return m ? Number(m[1]) : 0;
+  const raw = await fetchGVIZ(SHEETS.members);
+
+  MATCH_SRC = await fetchGVIZ(SHEETS.matches);
+  MATCH_SRCH_SRC = MATCH_SRC;
+
+  if(!raw.length){
+    if(rankStatus) rankStatus.textContent='불러오기 실패(권한/네트워크/CORS 확인)';
+    return;
   }
 
-  let ranked=[], unranked=[];
-  rows.forEach(r=>{ (total(r)>=10 ? ranked : unranked).push(r); });
+  const body = raw.slice(1);
 
-  ranked.sort((a,b)=> elo(b[9]) - elo(a[9]));
-  unranked.sort((a,b)=> elo(b[9]) - elo(a[9]));
+  RANK_SRC = [[
+    '전체랭킹',
+    '아이디',
+    '종족',
+    '티어',
+    '팀',
+    'ELO',
+    '티어랭킹'
+  ]];
 
-  ranked.forEach((r,i)=> r[0]=i+1);
-  unranked.forEach(r=> r[0]='-');
+  body.forEach(r=>{
 
-  drawRankRows([...ranked,...unranked]);
-})();
-  const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
+    const tier = String(r[0] || '').trim();
+    const id = String(r[1] || '').trim();
+    const race = String(r[2] || '').trim();
+    const team = String(r[3] || '').trim();
+    const elo = String(r[4] || '').trim();
+    const tierRank = String(r[5] || '-').trim();
+    const overallRank = String(r[6] || '-').trim();
+
+    if(!id) return;
+
+    RANK_SRC.push([
+      overallRank,
+      id,
+      race,
+      tier,
+      team,
+      elo,
+      tierRank
+    ]);
+  });
+
+  drawRankRows(RANK_SRC.slice(1));
+
+  const dl=$('playerList');
+
+  if(dl){
+    dl.innerHTML='';
+
+    RANK_SRC.slice(1).forEach(r=>{
+      const id=String(r[1]||'').trim();
+
+      if(!id) return;
+
+      const opt=document.createElement('option');
+      opt.value=id;
+
+      dl.appendChild(opt);
+    });
+  }
+
   if(rankStatus) rankStatus.textContent=`불러오기 완료 • ${RANK_SRC.length-1}행`;
 }
 $('rankRefresh')?.addEventListener('click', loadRanking);
