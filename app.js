@@ -721,12 +721,6 @@ async function loadRanking(){
   (function(){
   let rows = RANK_SRC.slice(1);
 
-  function elo(v){ return Number(String(v||0).replace(/,/g,'')); }
-  function total(r){
-    const m = String(r[7]||'').match(/(\d+)전/);
-    return m ? Number(m[1]) : 0;
-  }
-
   drawRankRows(rows);
 })();
   const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
@@ -823,7 +817,7 @@ async function openPlayer(bCellValue){
   const currentRace = String(row[COL.C]||'').trim().toUpperCase();
   const tier = String(row[COL.D]||'').trim();
   const eloRaw = String(row[COL.E] ?? '').trim();
-  const eloText = (eloRaw.match(/[\d,.]+/)||['-'])[0];
+  const eloText = eloRaw || '-';
   const awardsRaw = String(row[COL.L] ?? '');
 
   // ===== 클랜원전체명단 순위 불러오기 =====
