@@ -19,11 +19,6 @@ let eloChart = null;
 let RANK_SRC = [];
 let MATCH_SRC = [];
 // Older parts of the codebase may still reference this name.
-let MATCH_SRCH_SRC = [];
-let SCHED_CACHE = [];
-let ALL_CACHE = [];
-let MEMBERS_CACHE = [];
-
 // ==============================
 // Table renderer (AS-IS compatible)
 // Several pages call renderTable(); keep a single canonical implementation.
@@ -214,87 +209,7 @@ if (typeof window !== 'undefined' && typeof window.normalizeId !== 'function') {
 const normalizeId = (typeof window !== 'undefined' && window.normalizeId) ? window.normalizeId : (v)=>String(v??'').toLowerCase();
 
 
-// === Hall of Fame popup links (configurable) ===
-const HOF_LINKS = {
-  pro: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=1658280214#gid=1658280214",
-  tst: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=381201435#gid=381201435",
-  tsl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=2130451924#gid=2130451924",
-  // New HOF menus
-  tpl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=TPL",
-  // New HOF menus (sheet-name based; works even if gid changes)
-  msl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=MSL",
-  tcl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=TCL",
-  race: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=종족최강전"
-};
-
-function initHOFButtons(){
-  const proBtn = document.getElementById('hofViewPro');
-  const tstBtn = document.getElementById('hofViewTST');
-  const tslBtn = document.getElementById('hofViewTSL');
-  const frame  = document.getElementById('hofFrame');
-  const openA  = document.getElementById('hofOpenNew');
-  const loading= document.getElementById('hofLoading');
-
-  // If HOF panel isn't on this build, silently ignore.
-  if(!frame || (!proBtn && !tstBtn && !tslBtn)) return;
-
-  function parseSheet(url){
-    try{
-      const u = new URL(url);
-      const parts = u.pathname.split('/').filter(Boolean);
-      const dIdx = parts.indexOf('d');
-      const id = (dIdx>=0 && parts[dIdx+1]) ? parts[dIdx+1] : null;
-      const gid = u.searchParams.get('gid') || (u.hash.match(/gid=(\d+)/)?.[1]) || '0';
-      return {id, gid};
-    }catch(e){ return {id:null, gid:'0'}; }
-  }
-  function toEmbed(url){
-    const {id, gid} = parseSheet(url);
-    if(!id) return url;
-    // NOTE: pubhtml works best if the sheet is published to web. If not, user can use "새창으로 열기".
-    return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?gid=${gid}&tqx=out:html`;
-  }
-
-  function setActive(which){
-    const map = {
-      pro: {btn: proBtn, label: '프로리그'},
-      tst: {btn: tstBtn, label: 'TST'},
-      tsl: {btn: tslBtn, label: 'TSL'}
-    };
-
-    [proBtn, tstBtn, tslBtn].forEach(b=>{
-      if(!b) return;
-      b.classList.remove('active');
-      b.setAttribute('aria-pressed','false');
-    });
-
-    const picked = map[which] || map.pro;
-    if(picked?.btn){
-      picked.btn.classList.add('active');
-      picked.btn.setAttribute('aria-pressed','true');
-    }
-    if(titleEl) titleEl.textContent = picked?.label || '프로리그';
-  }
-
-  function load(which){
-    const url = (which==='pro') ? HOF_LINKS.pro : (which==='tst') ? HOF_LINKS.tst : HOF_LINKS.tsl;
-    if(openA) openA.href = url || '#';
-    if(!url) return;
-
-    setActive(which);
-    if(loading){ loading.style.display='block'; loading.textContent='불러오는 중…'; }
-    frame.src = toEmbed(url);
-  }
-
-  frame.addEventListener('load', ()=>{ if(loading) loading.style.display='none'; });
-
-  proBtn && proBtn.addEventListener('click', ()=>load('pro'));
-  tstBtn && tstBtn.addEventListener('click', ()=>load('tst'));
-  tslBtn && tslBtn.addEventListener('click', ()=>load('tsl'));
-
-  // default
-  load('pro');
-}
+// HOF removed (cleanup)
 
 
 
@@ -313,9 +228,6 @@ function $(id){
   return document.getElementById(id) || null;
 }
 const lc = s => String(s ?? '').toLowerCase();
-const normalize = (s) => String(s || '').trim().toLowerCase();
-
-
 // Use formatted values from GViz (c.f) to keep sheet formatting AS-IS
 function gvizURL({id, sheet, range, select}){
   const p = new URLSearchParams({ tqx: 'out:json' });
@@ -359,30 +271,7 @@ return [headers, ...rows];
 }
 
 
-async function fetchGVIZMatrix(cfg){
-  try{
-    const p = new URLSearchParams({ tqx: 'out:json', headers: '0' });
-    if (cfg.sheet) p.set('sheet', cfg.sheet);
-    if (cfg.range) p.set('range', cfg.range);
-    if (cfg.select) p.set('tq', String(cfg.select));
-    const base = `https://docs.google.com/spreadsheets/d/${cfg.id}/gviz/tq?${p.toString()}`;
-    const url = (window.USE_PROXY ? window.PROXY_URL : '') + base;
-
-    const res = await fetch(url, { cache: 'no-store' });
-    const txt = await res.text();
-    const json = JSON.parse(txt.replace(/^[^{]+/, '').replace(/\);?\s*$/, ''));
-    const rows = (json.table.rows||[]).map(r => (r.c||[]).map(c => {
-      if (!c) return '';
-      return (c.f != null ? c.f : (c.v != null ? c.v : ''));
-    }));
-    // Trim trailing empty rows
-    while(rows.length && rows[rows.length-1].every(v => !String(v||'').trim())) rows.pop();
-    return rows;
-  }catch(e){
-    console.error('GVIZ matrix error:', e);
-    return [];
-  }
-}
+// fetchGVIZMatrix removed (unused cleanup)
 
 function nl2br(s){
   return String(s||'').replace(/\r\n|\n|\r/g, '<br>');
@@ -2204,8 +2093,6 @@ function normalizeId(v){
 */
 (function(){
   const $ = (id) => document.getElementById(id);
-  const normalize = (s) => String(s || '').trim().toLowerCase();
-
   function ensureChartLib(){ return (typeof Chart !== 'undefined'); }
   function destroyChart(refName){
     if (window[refName]) { try { window[refName].destroy(); } catch(e){} window[refName]=null; }
