@@ -837,14 +837,14 @@ async function openPlayer(bCellValue){
   const awardsRaw = String(row[COL.L] ?? '');
 
   // ===== 클랜원전체명단 순위 불러오기 =====
-  let tierRank = "-";
-  let totalRank = "-";
+  let tierRank = found?.[4] || '-';
+  let totalRank = found?.[5] || '-';
 
   try{
     const memberRankData = await fetchGVIZ({
       id: "14FUpa0Hcgtx6J1ZByx-cXGfbF7_ze1edONz8Wt70Obw",
       sheet: "클랜원전체명단",
-      range: "B:G"
+      range: "B:K"
     });
 
     if (memberRankData.length > 1) {
@@ -852,8 +852,8 @@ async function openPlayer(bCellValue){
 
       const cleanId = v =>
         String(v || '')
-          .replace(/\u00A0/g,' ')
-          .replace(/\s+/g,'')
+          .replace(/\\u00A0/g,' ')
+          .replace(/\\s+/g,'')
           .trim()
           .toLowerCase();
 
@@ -862,8 +862,8 @@ async function openPlayer(bCellValue){
       );
 
       if (found) {
-        tierRank = found?.[4] || '-';   // F열
-        totalRank = found?.[5] || '-';  // G열
+        tierRank = found[4] || "-";   // F열
+        totalRank = found[5] || "-";  // G열
       }
     }
   }catch(e){
@@ -1171,20 +1171,20 @@ const leagueHtml = `
         <div class="row"><span class="badge">주종</span> ${currentRace}</div>
         <div class="row"><span class="badge">티어</span> ${tier||'-'}</div>
         <div class="row"><span class="badge">ELO</span> ${eloText}</div>
-        <div class="row"><span class="badge">티어별순위</span> ${tierRank === "-" ? "-" : tierRank + "위"}</div>
-        <div class="row"><span class="badge">전체랭킹</span> ${totalRank === "-" ? "-" : totalRank + "위"}</div>
+        <div class="row"><span class="badge">티어별순위</span> ${tierRank}위</div>
+        <div class="row"><span class="badge">전체랭킹</span> ${totalRank}위</div>
+        <div class="row"><span class="badge">티어별순위</span> ${tierRank}위</div>
+        <div class="row"><span class="badge">전체랭킹</span> ${totalRank}위</div>
       </div>
       <h3>상대 종족별 성적 (주종: ${currentRace})</h3>
       <table class="detail"><thead>
         <tr><th>저그전</th><th>프로토스전</th><th>테란전</th><th>총전적</th><th>승률</th></tr>
       </thead><tbody>
         <tr>
-          
-<td>${found?.[6] || '-'}</td>
-<td>${found?.[7] || '-'}</td>
-<td>${found?.[8] || '-'}</td>
-<td>${found?.[9] || '-'}</td>
-
+          <td>${found?.[6] || '-'}</td>
+          <td>${found?.[7] || '-'}</td>
+          <td>${found?.[8] || '-'}</td>
+          <td>${found?.[9] || '-'}</td>
           <td>${ctot.w+ctot.l? Math.round(ctot.w*1000/(ctot.w+ctot.l))/10 : 0}%</td>
         </tr>
       </tbody></table>
