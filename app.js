@@ -3282,7 +3282,7 @@ function setupTierButtons(){
       const unqualified = [];
       cloned.forEach(r => {
         const games = gamesOf(r[IDX_NAME]);
-        if(games >= 5){ qualified.push(r); }
+        if(games >= 10){ qualified.push(r); }
         else { unqualified.push(r); }
       });
 
@@ -3298,7 +3298,7 @@ function setupTierButtons(){
       if(st){
         const q = qualified.length;
         const u = unqualified.length;
-        st.textContent = `${tierName} 티어 • 총 ${q+u}명 (랭킹 대상 ${q}명 / 5경기 미만 ${u}명)`;
+        st.textContent = `${tierName} 티어 • 총 ${q+u}명 (랭킹 대상 ${q}명 / 10경기 미만 ${u}명)`;
       }
     })();
   });
