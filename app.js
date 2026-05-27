@@ -729,7 +729,7 @@ async function loadRanking(){
   const body = raw.slice(1);
 
   RANK_SRC = [[
-    '전체랭킹',
+    '랭킹',
     '아이디',
     '종족',
     '티어',
@@ -761,13 +761,21 @@ async function loadRanking(){
     rowData[3] = tier;
     rowData[4] = team;
     rowData[7] = '-';
-    rowData[9] = elo;
-    rowData[10] = tierRank;
+    rowData[9] = tierRank;
+    rowData[10] = elo;
 
     RANK_SRC.push(rowData);
   });
 
-  drawRankRows(RANK_SRC.slice(1));
+
+  // 전체랭킹 기준 정렬
+  const sortedRows = RANK_SRC.slice(1).sort((a,b)=>{
+    const av = a[0] === '-' ? 999999 : Number(a[0]||999999);
+    const bv = b[0] === '-' ? 999999 : Number(b[0]||999999);
+    return av - bv;
+  });
+
+  drawRankRows(sortedRows);
 
   const dl=$('playerList');
 
@@ -791,7 +799,17 @@ async function loadRanking(){
 $('rankRefresh')?.addEventListener('click', loadRanking);
 $('rankSearchBtn')?.addEventListener('click', ()=>{
   const q = lc($('rankSearch').value || '').trim();
-  if (!q) { drawRankRows(RANK_SRC.slice(1)); return; }
+  if (!q) {
+
+    const sortedRows = RANK_SRC.slice(1).sort((a,b)=>{
+      const av = a[0] === '-' ? 999999 : Number(a[0]||999999);
+      const bv = b[0] === '-' ? 999999 : Number(b[0]||999999);
+      return av - bv;
+    });
+
+    drawRankRows(sortedRows);
+    return;
+  }
 
   // 정확 일치 결과만
   const rows = (RANK_SRC.slice(1) || []).filter(r => {
