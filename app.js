@@ -709,7 +709,7 @@ async function openPlayer(bCellValue){
   const eloText = eloRaw || '-';
   const awardsRaw = String(row[COL.L] ?? '');
 
-  // ===== 클랜원전체명단 순위 불러오기 =====
+  // ===== 클랜원전체명단 순위 불러오기 (시트값 고정 사용) =====
   let tierRank = "-";
   let totalRank = "-";
 
@@ -728,18 +728,13 @@ async function openPlayer(bCellValue){
       );
 
       if (found) {
-        tierRank = String(found[4] || '').trim();
-        totalRank = String(found[5] || '').trim();
-
-        // 빈값 방지
-        if(!tierRank) tierRank='-';
-        if(!totalRank) totalRank='-';
+        tierRank = String(found[4] || '-').trim() || '-';
+        totalRank = String(found[5] || '-').trim() || '-';
       }
     }
   }catch(e){
     console.warn('member rank load error', e);
   }
-
 
   const data = MATCH_SRC.length? MATCH_SRC : await fetchGVIZ(SHEETS.matches);
   const MH = data[0]||[]; const M = data.slice(1);
@@ -3114,7 +3109,7 @@ function setupTierButtons(){
         await loadRanking();
       }
       if(tierName === '전체'){
-        // === v9_83: 전체 탭도 ELO 정렬 + 5경기 미만 아래로 ===
+        // === v9_83: 전체 탭도 ELO 정렬 +  아래로 ===
         const rows = RANK_SRC.slice(1);
         const IDX_ELO  = 9; // J
         const IDX_NAME = 1; // B
@@ -3156,7 +3151,7 @@ function setupTierButtons(){
         if(st){
           const q = qualified.length;
           const u = unqualified.length;
-          st.textContent = `전체 • 총 ${q+u}명 (랭킹 대상 ${q}명 / 5경기 미만 ${u}명)`;
+          st.textContent = `전체 • 총 ${q+u}명 (시트 기준 ${q}명 /  ${u}명)`;
         }
         return;
       }
@@ -3205,7 +3200,7 @@ function setupTierButtons(){
       if(st){
         const q = qualified.length;
         const u = unqualified.length;
-        st.textContent = `${tierName} 티어 • 총 ${q+u}명 (랭킹 대상 ${q}명 / 5경기 미만 ${u}명)`;
+        st.textContent = `${tierName} 티어 • 총 ${q+u}명 (시트 기준 ${q}명 /  ${u}명)`;
       }
     })();
   });
