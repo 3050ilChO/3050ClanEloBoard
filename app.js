@@ -209,7 +209,6 @@ if (typeof window !== 'undefined' && typeof window.normalizeId !== 'function') {
 const normalizeId = (typeof window !== 'undefined' && window.normalizeId) ? window.normalizeId : (v)=>String(v??'').toLowerCase();
 
 
-// HOF removed (cleanup)
 
 
 
@@ -6617,35 +6616,34 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
 
     if(proBtn && !proBtn.dataset.bound){
       proBtn.dataset.bound='1';
-      proBtn.addEventListener('click', (e)=>{ guard(e); openHOF('pro'); });
+      proBtn.addEventListener('click', (e)=>{ guard(e); });
     }
     if(tstBtn && !tstBtn.dataset.bound){
       tstBtn.dataset.bound='1';
-      tstBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tst'); });
+      tstBtn.addEventListener('click', (e)=>{ guard(e); });
     }
     if(tslBtn && !tslBtn.dataset.bound){
       tslBtn.dataset.bound='1';
-      tslBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tsl'); });
+      tslBtn.addEventListener('click', (e)=>{ guard(e); });
     }
 
     if(mslBtn && !mslBtn.dataset.bound){
       mslBtn.dataset.bound='1';
-      mslBtn.addEventListener('click', (e)=>{ guard(e); openHOF('msl'); });
+      mslBtn.addEventListener('click', (e)=>{ guard(e); });
     }
     if(tclBtn && !tclBtn.dataset.bound){
       tclBtn.dataset.bound='1';
-      tclBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tcl'); });
+      tclBtn.addEventListener('click', (e)=>{ guard(e); });
     }
     if(tplBtn && !tplBtn.dataset.bound){
       tplBtn.dataset.bound='1';
-      tplBtn.addEventListener('click', (e)=>{ guard(e); openHOF('tpl'); });
+      tplBtn.addEventListener('click', (e)=>{ guard(e); });
     }
     // Auto render default (latest) when section exists
     try{
       if(!window.__HOF_INLINE_BOOTED && document.getElementById('hofInlineTable')){
         window.__HOF_INLINE_BOOTED = true;
-        openHOF('pro');
-      }
+        }
     }catch(_){ }
   }
 
