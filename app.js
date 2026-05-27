@@ -831,8 +831,9 @@ async function openPlayer(bCellValue){
   const playerName = String(row[COL.B]||'').split('/')[0].trim();
   const currentRace = String(row[COL.C]||'').trim().toUpperCase();
   const tier = String(row[COL.D]||'').trim();
-  const eloRaw = String(row[COL.J] ?? '');
-  const eloText = eloRaw.replace(/\([^)]*\)/g, '').trim();
+  const eloText = String(row[COL.J] ?? '')
+  .replace(/\([^)]*\)/g,'')
+  .trim();
   const awardsRaw = String(row[COL.L] ?? '');
 
   // ===== 클랜원전체명단 순위 불러오기 =====
@@ -849,13 +850,20 @@ async function openPlayer(bCellValue){
     if (memberRankData.length > 1) {
       const memberRows = memberRankData.slice(1);
 
+      const clean = v =>
+        String(v || '')
+          .replace(/\u00A0/g,' ')
+          .replace(/\s+/g,'')
+          .trim()
+          .toLowerCase();
+
       const found = memberRows.find(r =>
-        normalizeId(r[0]) === normalizeId(playerName)
+        clean(r[0]) === clean(playerName)
       );
 
       if (found) {
-        tierRank = String(found[4] || '').trim() || '-';   // F열
-        totalRank = String(found[5] || '').trim() || '-';  // G열
+        tierRank = found[4] || "-";   // F열
+        totalRank = found[5] || "-";  // G열
       }
     }
   }catch(e){
@@ -1163,6 +1171,8 @@ const leagueHtml = `
         <div class="row"><span class="badge">주종</span> ${currentRace}</div>
         <div class="row"><span class="badge">티어</span> ${tier||'-'}</div>
         <div class="row"><span class="badge">ELO</span> ${eloText}</div>
+        <div class="row"><span class="badge">티어별순위</span> ${tierRank === "-" ? "-" : tierRank + "위"}</div>
+        <div class="row"><span class="badge">전체랭킹</span> ${totalRank === "-" ? "-" : totalRank + "위"}</div>
         <div class="row"><span class="badge">티어별순위</span> ${tierRank === "-" ? "-" : tierRank + "위"}</div>
         <div class="row"><span class="badge">전체랭킹</span> ${totalRank === "-" ? "-" : totalRank + "위"}</div>
       </div>
