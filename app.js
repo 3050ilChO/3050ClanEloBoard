@@ -1142,9 +1142,7 @@ const leagueHtml = `
         <div class="row"><span class="badge">플레이어</span> <strong>${playerName}</strong></div>
         <div class="row"><span class="badge">주종</span> ${currentRace}</div>
         <div class="row"><span class="badge">티어</span> ${tier||'-'}</div>
-        <div class="row"><span class="badge">ELO</span> ${eloText}</div>
-        <div class="row"><span class="badge">티어별순위</span> ${tierRank}위</div>
-        <div class="row"><span class="badge">전체랭킹</span> ${totalRank}위</div>
+       <div class="row"><span class="badge">ELO</span> ${parseFloat(String(eloText).replace(/[^0-9.]/g,''))}</div>
         <div class="row"><span class="badge">티어별순위</span> ${tierRank}위</div>
         <div class="row"><span class="badge">전체랭킹</span> ${totalRank}위</div>
       </div>
