@@ -831,7 +831,7 @@ async function openPlayer(bCellValue){
   const playerName = String(row[COL.B]||'').split('/')[0].trim();
   const currentRace = String(row[COL.C]||'').trim().toUpperCase();
   const tier = String(row[COL.D]||'').trim();
-  
+  const eloText = String(found?.[3] || '-');
   const awardsRaw = String(row[COL.L] ?? '');
 
   // ===== 클랜원전체명단 순위 불러오기 =====
@@ -850,16 +850,14 @@ async function openPlayer(bCellValue){
 
       const clean = v =>
         String(v || '')
-          .replace(/\\u00A0/g,' ')
-          .replace(/\\s+/g,'')
+          .replace(/\u00A0/g,' ')
+          .replace(/\s+/g,'')
           .trim()
           .toLowerCase();
 
       const found = memberRows.find(r =>
         clean(r[0]) === clean(playerName)
       );
-
-      const eloText = found?.[3] || '-';
 
       if (found) {
         tierRank = found?.[4] || '-';   // F열
@@ -1171,10 +1169,10 @@ const leagueHtml = `
         <div class="row"><span class="badge">주종</span> ${currentRace}</div>
         <div class="row"><span class="badge">티어</span> ${tier||'-'}</div>
         <div class="row"><span class="badge">ELO</span> ${eloText}</div>
-        <div class="row"><span class="badge">티어별순위</span> ${tierRank === "-" ? "-" : tierRank + "위"}</div>
-        <div class="row"><span class="badge">전체랭킹</span> ${totalRank === "-" ? "-" : totalRank + "위"}</div>
-        <div class="row"><span class="badge">티어별순위</span> ${tierRank === "-" ? "-" : tierRank + "위"}</div>
-        <div class="row"><span class="badge">전체랭킹</span> ${totalRank === "-" ? "-" : totalRank + "위"}</div>
+        <div class="row"><span class="badge">티어별순위</span> ${tierRank}위</div>
+        <div class="row"><span class="badge">전체랭킹</span> ${totalRank}위</div>
+        <div class="row"><span class="badge">티어별순위</span> ${tierRank}위</div>
+        <div class="row"><span class="badge">전체랭킹</span> ${totalRank}위</div>
       </div>
       <h3>상대 종족별 성적 (주종: ${currentRace})</h3>
       <table class="detail"><thead>
