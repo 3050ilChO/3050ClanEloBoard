@@ -718,26 +718,7 @@ async function loadRanking(){
   // Backward compatibility: some functions expect MATCH_SRCH_SRC
   MATCH_SRCH_SRC = MATCH_SRC;
   if(!RANK_SRC.length){ if(rankStatus) rankStatus.textContent='불러오기 실패(권한/네트워크/CORS 확인)'; return; }
-  (function(){
-  let rows = RANK_SRC.slice(1);
-
-  function elo(v){ return Number(String(v||0).replace(/,/g,'')); }
-  function total(r){
-    const m = String(r[7]||'').match(/(\d+)전/);
-    return m ? Number(m[1]) : 0;
-  }
-
-  let ranked=[], unranked=[];
-  rows.forEach(r=>{ (total(r)>=10 ? ranked : unranked).push(r); });
-
-  ranked.sort((a,b)=> elo(b[9]) - elo(a[9]));
-  unranked.sort((a,b)=> elo(b[9]) - elo(a[9]));
-
-  ranked.forEach((r,i)=> r[0]=i+1);
-  unranked.forEach(r=> r[0]='-');
-
-  drawRankRows([...ranked,...unranked]);
-})();
+  drawRankRows(RANK_SRC.slice(1));
   const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
   if(rankStatus) rankStatus.textContent=`불러오기 완료 • ${RANK_SRC.length-1}행`;
 }
@@ -1182,7 +1163,7 @@ const leagueHtml = `
       ${offBlocks.join('')}
       <hr class="gold"/>
       <h3>주요성적</h3>
-      <div class="awards">${awardsRaw || '-'}
+      <div class="awards">${awardsRaw || '-'}</div>
       <hr class="gold"/>
       <h3>티어 변동추이</h3>
       <div class="chart-wrap"><canvas id="tierTrendChart" height="85"></canvas></div>
