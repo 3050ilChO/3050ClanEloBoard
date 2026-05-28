@@ -7480,55 +7480,60 @@ function openPlayer(playerId){
   title.innerText = player.id;
 
   body.innerHTML = `
-    <div class="player-summary-grid">
 
-      <div class="summary-card">
-        <div class="label">티어</div>
-        <div class="value">${player.tier}</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+
+      <div style="background:#f8f9fb;border-radius:14px;padding:18px;text-align:center;">
+        <div style="font-size:13px;color:#777;margin-bottom:8px;">티어</div>
+        <div style="font-size:24px;font-weight:700;">${player.tier}</div>
       </div>
 
-      <div class="summary-card">
-        <div class="label">티어랭킹</div>
-        <div class="value">${player.tierRank}</div>
+      <div style="background:#f8f9fb;border-radius:14px;padding:18px;text-align:center;">
+        <div style="font-size:13px;color:#777;margin-bottom:8px;">티어랭킹</div>
+        <div style="font-size:24px;font-weight:700;">
+          ${player.tierRank === "-" ? "-" : player.tierRank + "위"}
+        </div>
       </div>
 
-      <div class="summary-card">
-        <div class="label">전체랭킹</div>
-        <div class="value">${player.totalRank}</div>
+      <div style="background:#f8f9fb;border-radius:14px;padding:18px;text-align:center;">
+        <div style="font-size:13px;color:#777;margin-bottom:8px;">전체랭킹</div>
+        <div style="font-size:24px;font-weight:700;">
+          ${player.totalRank === "-" ? "-" : player.totalRank + "위"}
+        </div>
       </div>
 
-      <div class="summary-card">
-        <div class="label">ELO</div>
-        <div class="value">${player.elo}</div>
+      <div style="background:#f8f9fb;border-radius:14px;padding:18px;text-align:center;">
+        <div style="font-size:13px;color:#777;margin-bottom:8px;">ELO</div>
+        <div style="font-size:24px;font-weight:700;">${player.elo}</div>
       </div>
 
     </div>
 
-    <table class="detail-table">
+    <table class="detail-table" style="width:100%;border-collapse:collapse;">
 
       <tr>
-        <th>저그전</th>
-        <td>${player.zvz}</td>
+        <th style="padding:14px;border-bottom:1px solid #eee;text-align:left;">저그전</th>
+        <td style="padding:14px;border-bottom:1px solid #eee;">${player.zvz}</td>
       </tr>
 
       <tr>
-        <th>프로토스전</th>
-        <td>${player.pvz}</td>
+        <th style="padding:14px;border-bottom:1px solid #eee;text-align:left;">프로토스전</th>
+        <td style="padding:14px;border-bottom:1px solid #eee;">${player.pvz}</td>
       </tr>
 
       <tr>
-        <th>테란전</th>
-        <td>${player.tvz}</td>
+        <th style="padding:14px;border-bottom:1px solid #eee;text-align:left;">테란전</th>
+        <td style="padding:14px;border-bottom:1px solid #eee;">${player.tvz}</td>
       </tr>
 
       <tr>
-        <th>총전적</th>
-        <td>${player.total}</td>
+        <th style="padding:14px;border-bottom:1px solid #eee;text-align:left;">총전적</th>
+        <td style="padding:14px;border-bottom:1px solid #eee;">${player.total}</td>
       </tr>
 
       <tr>
-        <th>승률</th>
-        <td>${player.winrate}</td>
+        <th style="padding:14px;text-align:left;">승률</th>
+        <td style="padding:14px;">${player.winrate}</td>
       </tr>
 
     </table>
