@@ -756,7 +756,10 @@ async function loadRanking(){
   // 페이지 이동시 동일 배열 사용
   window.currentRankRows = rows;
 
-  // 절대 재정렬 금지
+  // 전체 랭킹 원본 백업 (티어 이동 후 전체 복귀용)
+  window.ALL_RANK_ROWS = [...rows];
+
+// 절대 재정렬 금지
   drawRankRows(rows);
 })();
   const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
