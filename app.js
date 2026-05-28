@@ -724,9 +724,7 @@ async function loadRanking(){
   let rows = RANK_SRC.slice(1).map(r=>{
     const copy = [...r];
     const clan = getClanRankRow(copy[1]) || {};
-
     copy[9] = clan.elo || copy[9];
-
     const tier = String(copy[3] || '').trim();
     const record = String(copy[7] || '');
 
@@ -742,14 +740,10 @@ async function loadRanking(){
 
     copy.__totalRank =
       isRankTarget ? (clan.totalRank || '-') : '-';
-
     return copy;
   });
 
-  rows = rows.filter(r => r.__totalRank !== '-');
-
-  rows.sort((a,b)=> Number(a.__totalRank) - Number(b.__totalRank));
-
+  // 시트 순서 그대로 유지 (홈페이지에서 랭킹 재정렬 금지)
   drawRankRows(rows);
 })();
   const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
