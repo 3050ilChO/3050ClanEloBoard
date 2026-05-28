@@ -723,15 +723,40 @@ async function loadRanking(){
 
   let rows = RANK_SRC.slice(1).map(r=>{
     const copy = [...r];
+
     const clan = getClanRankRow(copy[1]) || {};
+
+    const tier = String(copy[3] || '').trim();
+    const totalRecord = String(copy[7] || '');
+
+    const gamesMatch = totalRecord.match(/(\\d+)전/);
+    const games = gamesMatch ? Number(gamesMatch[1]) : 0;
+
+    // 탈퇴 제외
+    if(tier === '탈퇴'){
+      return null;
+    }
+
+    // 시트값 그대로 사용
     copy[9] = clan.elo || copy[9];
-    copy.__tierRank = clan.tierRank || '-';
-    copy.__totalRank = clan.totalRank || '-';
+
+    // 10전 미만은 랭킹 제외
+    if(games < 10){
+      copy.__tierRank = '-';
+      copy.__totalRank = '-';
+    }else{
+      copy.__tierRank = clan.tierRank || '-';
+      copy.__totalRank = clan.totalRank || '-';
+    }
+
     return copy;
-  });
+  })
+  .filter(Boolean);
 
-  rows.sort((a,b)=> rankNum(a.__totalRank) - rankNum(b.__totalRank));
+  // 페이지 이동시 동일 배열 사용
+  window.currentRankRows = rows;
 
+  // 절대 재정렬 금지
   drawRankRows(rows);
 })();
   const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
