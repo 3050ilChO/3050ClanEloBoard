@@ -3279,7 +3279,11 @@ function setupTierButtons(){
 
         cloned.forEach(r => {
           const games = gamesOf(r[IDX_NAME]);
-          if (games >= 5) qualified.push(r);
+          const tier = String(r[IDX_TIER] || '').trim();
+
+          if (games >= 10 && tier !== '탈퇴') {
+            qualified.push(r);
+          }
           else unqualified.push(r);
         });
 
