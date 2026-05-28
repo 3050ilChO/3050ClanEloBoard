@@ -3259,7 +3259,7 @@ function getTierRankForPlayer(playerRow, allRows, H){
         return c;
       }
 
-      qualified = sameTier.filter(r => gamesOf(r[IDX_NAME]) >= 5);
+      qualified = sameTier.filter(r => gamesOf(r[IDX_NAME]) >= 10);
     }catch(e){ /* ignore, fallback */ }
 
     // sort by ELO desc
@@ -3328,17 +3328,11 @@ function setupTierButtons(){
 
         cloned.forEach(r => {
           const games = gamesOf(r[IDX_NAME]);
-          if (games >= 5) qualified.push(r);
+          if (games >= 10) qualified.push(r);
           else unqualified.push(r);
         });
 
-        qualified.sort((a,b)=> rankNum((getClanRankRow(a[IDX_NAME])||{}).totalRank) - rankNum((getClanRankRow(b[IDX_NAME])||{}).totalRank));
-
-        qualified.forEach((r,i)=> { r[0] = i+1; });
-        unqualified.forEach(r => { r[0] = '–'; });
-
-        const finalRows = [...qualified, ...unqualified];
-        drawRankRows(finalRows);
+        drawRankRows(window.currentRankRows || RANK_SRC.slice(1));
 
         const st = document.getElementById('rankStatus');
         if(st){
