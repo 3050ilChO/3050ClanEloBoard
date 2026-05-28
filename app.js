@@ -724,13 +724,31 @@ async function loadRanking(){
   let rows = RANK_SRC.slice(1).map(r=>{
     const copy = [...r];
     const clan = getClanRankRow(copy[1]) || {};
+
     copy[9] = clan.elo || copy[9];
-    copy.__tierRank = clan.tierRank || '-';
-    copy.__totalRank = clan.totalRank || '-';
+
+    const tier = String(copy[3] || '').trim();
+    const record = String(copy[7] || '');
+
+    const gamesMatch = record.match(/(\d+)전/);
+    const games = gamesMatch ? Number(gamesMatch[1]) : 0;
+
+    const isRankTarget =
+      tier !== '탈퇴' &&
+      games >= 10;
+
+    copy.__tierRank =
+      isRankTarget ? (clan.tierRank || '-') : '-';
+
+    copy.__totalRank =
+      isRankTarget ? (clan.totalRank || '-') : '-';
+
     return copy;
   });
 
-  rows.sort((a,b)=> rankNum(a.__totalRank) - rankNum(b.__totalRank));
+  rows = rows.filter(r => r.__totalRank !== '-');
+
+  rows.sort((a,b)=> Number(a.__totalRank) - Number(b.__totalRank));
 
   drawRankRows(rows);
 })();
@@ -3279,11 +3297,7 @@ function setupTierButtons(){
 
         cloned.forEach(r => {
           const games = gamesOf(r[IDX_NAME]);
-          const tier = String(r[IDX_TIER] || '').trim();
-
-          if (games >= 10 && tier !== '탈퇴') {
-            qualified.push(r);
-          }
+          if (games >= 5) qualified.push(r);
           else unqualified.push(r);
         });
 
