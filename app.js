@@ -409,7 +409,7 @@ function setupTierboardSearch(playerNames){
   // populate datalist (autocomplete)
   if(dl){
     const uniq = Array.from(new Set((playerNames||[]).map(s=>String(s||'').trim()).filter(Boolean)));
-    uniq.sort((a,b)=>a.localeCompare(b,'ko',{numeric:true,sensitivity:'base'}));
+    uniq=>a.localeCompare(b,'ko',{numeric:true,sensitivity:'base'}));
     dl.innerHTML = '';
     for(const name of uniq){
       const opt = document.createElement('option');
@@ -563,7 +563,7 @@ async function loadTierBoard(){
   // Sort ids (locale aware)
   tierData.forEach(t=>{
     ['T','Z','P'].forEach(rk=>{
-      t.races[rk].sort((a,b)=>String(a).localeCompare(String(b),'ko',{numeric:true,sensitivity:'base'}));
+      t.races[rk]=>String(a).localeCompare(String(b),'ko',{numeric:true,sensitivity:'base'}));
     });
     const total = t.races.T.length + t.races.Z.length + t.races.P.length;
     t.label = `${t.key}티어(${tierLetter[t.key]||''}) ${total}명`;
@@ -731,21 +731,24 @@ async function loadRanking(){
     const gamesMatch = record.match(/(\\d+)전/);
     const games = gamesMatch ? Number(gamesMatch[1]) : 0;
 
-    const isRankTarget =
-      tier !== '탈퇴' &&
-      games >= 10;
+    const isRemoved = tier === '탈퇴';
+    const isRankTarget = games >= 10;
 
-    copy.__tierRank = isRankTarget
-      ? (clan.tierRank || '-')
-      : '-';
+    copy.__removed = isRemoved;
 
-    copy.__totalRank = isRankTarget
-      ? (clan.totalRank || '-')
-      : '-';
+    copy.__tierRank =
+      (!isRemoved && isRankTarget)
+        ? (clan.tierRank || '-')
+        : '-';
+
+    copy.__totalRank =
+      (!isRemoved && isRankTarget)
+        ? (clan.totalRank || '-')
+        : '-';
     return copy;
   });
 
-  // sort removed
+  rows=> rankNum(a.__totalRank) - rankNum(b.__totalRank));
 
   drawRankRows(rows);
 })();
@@ -876,7 +879,7 @@ async function openPlayer(bCellValue){
   const id = String(bCellValue||'').split('/')[0].trim();
   const body=$('playerBody'); const title=$('playerTitle'); if(title) title.textContent=id; if(body) body.innerHTML='';
   if(!RANK_SRC.length) await loadRanking();
-  const header = RANK_SRC[0]||[]; const rows = RANK_SRC.slice(1);
+  const header = RANK_SRC[0]||[]; const // 원본 재생성 제거
   const row = rows.find(r=> normalizeId(String(r[1]||'').split('/')[0].trim())===normalizeId(id));
   if(!row){ if(body) body.innerHTML='<div class="err">선수를 찾을 수 없습니다.</div>'; activate('player'); return; }
 
@@ -1005,7 +1008,7 @@ if (s11Player.length === 0) {
 
 const leagueRows = Object.entries(leagueAgg)
     .map(([name, v]) => ({ name, total: v.w + v.l, w: v.w, l: v.l, pct: (v.w+v.l) ? Math.round(v.w*1000/(v.w+v.l))/10 : 0 }))
-    .sort((a, b) => b.total - a.total);
+     => b.total - a.total);
 
 
 // === 상대전(H2H) 집계: "가장 승을 많이 올린 상대" + "최다 매치 TOP5" ===
@@ -1074,11 +1077,11 @@ const oppRows = Object.entries(oppAgg).map(([key,v])=>{ const name = v.disp || k
 
 const mostWinOpp = oppRows
   .slice()
-  .sort((a,b)=> (b.w-a.w) || (b.total-a.total) || (a.name>b.name?1:-1))[0] || null;
+  => (b.w-a.w) || (b.total-a.total) || (a.name>b.name?1:-1))[0] || null;
 
 const topMatch5 = oppRows
   .slice()
-  .sort((a,b)=> (b.total-a.total) || (b.w-a.w) || (a.name>b.name?1:-1))
+  => (b.total-a.total) || (b.w-a.w) || (a.name>b.name?1:-1))
   .slice(0,5);
 
 const leagueHtml = `
@@ -1372,7 +1375,7 @@ try {
       byDay.set(k, { key:k, post });
     }
 
-    const daily = Array.from(byDay.values()).sort((a,b)=> a.key.localeCompare(b.key));
+    const daily = Array.from(byDay.values())=> a.key.localeCompare(b.key));
     if (body){
       body.insertAdjacentHTML('beforeend', `
         <hr class="gold"/>
@@ -1419,7 +1422,7 @@ try {
   const seq = yourRows.map(r=>({
     d:String(iDate>=0? r[iDate]:""),
     res:(lc(r[iWinN]||"")===you)?"W":"L"
-  })).sort((a,b)=> (a.d > b.d ? 1 : -1));
+  }))=> (a.d > b.d ? 1 : -1));
   const last10 = seq.slice(-10);
 
   if (body && last10.length){
@@ -1438,7 +1441,7 @@ try {
       l:String(iLoseN>=0? r[iLoseN]:""),
       m:String(iMap>=0? r[iMap]:""),
       lg:String(iLeague>=0? r[iLeague]:"")
-    })).sort((a,b)=> (a.d > b.d ? 1 : -1))).slice(-10).reverse();
+    }))=> (a.d > b.d ? 1 : -1))).slice(-10).reverse();
 
     const rowHtml = rows10.map(r=>{
       const opp = (lc(r.w)===you) ? r.l : r.w;
@@ -2910,7 +2913,7 @@ async function v12_loadNextSchedule(){
 
       return d >= today;
     })
-    .sort((a,b)=> a.date - b.date)
+    => a.date - b.date)
     .slice(0,6)
     .map(item => item.row);
 
@@ -3103,17 +3106,9 @@ function renderOnce(sel, html) {
 
 function drawRankRows(rows){
 
-  rows = (rows || []).map(r=>{
+  rows = (rows || []).filter(r=>{
     const tier = String(r[3] || '').trim();
-    const record = String(r[7] || '');
-    const m = record.match(/(\\d+)전/);
-    const games = m ? Number(m[1]) : 0;
-
-    if (tier === '탈퇴' || games < 10) {
-      r.__totalRank = '-';
-      r.__tierRank = '-';
-    }
-    return r;
+    return tier !== '탈퇴';
   });
 
   try {
@@ -3244,7 +3239,7 @@ function getTierRankForPlayer(playerRow, allRows, H){
     }catch(e){ /* ignore, fallback */ }
 
     // sort by ELO desc
-    qualified.sort((a,b)=> rankNum((getClanRankRow(a[IDX_NAME])||{}).totalRank) - rankNum((getClanRankRow(b[IDX_NAME])||{}).totalRank));
+    qualified=> rankNum((getClanRankRow(a[IDX_NAME])||{}).totalRank) - rankNum((getClanRankRow(b[IDX_NAME])||{}).totalRank));
 
     const rank = qualified.findIndex(r => String(r[IDX_NAME]||'').split('/')[0].trim().toLowerCase() === myName) + 1;
 
@@ -3284,7 +3279,7 @@ function setupTierButtons(){
       }
       if(tierName === '전체'){
         // === v9_83: 전체 탭도 ELO 정렬 + 5경기 미만 아래로 ===
-        const rows = RANK_SRC.slice(1);
+        const // 원본 재생성 제거
         const IDX_ELO  = 9; // J
         const IDX_NAME = 1; // B
 
@@ -3313,7 +3308,7 @@ function setupTierButtons(){
           else unqualified.push(r);
         });
 
-        qualified.sort((a,b)=> rankNum((getClanRankRow(a[IDX_NAME])||{}).totalRank) - rankNum((getClanRankRow(b[IDX_NAME])||{}).totalRank));
+        qualified=> rankNum((getClanRankRow(a[IDX_NAME])||{}).totalRank) - rankNum((getClanRankRow(b[IDX_NAME])||{}).totalRank));
 
         qualified.forEach((r,i)=> { r[0] = i+1; });
         unqualified.forEach(r => { r[0] = '–'; });
@@ -3330,13 +3325,13 @@ function setupTierButtons(){
         return;
       }
 
-      const rows = RANK_SRC.slice(1);
+      const // 원본 재생성 제거
       const IDX_TIER = 3; // D
       const IDX_ELO  = 9; // J
       const IDX_NAME = 1; // B
 
       const same = rows.filter(r => String(r[IDX_TIER]||'').trim() === tierName);
-      same.sort((a,b)=> rankNum((getClanRankRow(a[IDX_NAME])||{}).tierRank) - rankNum((getClanRankRow(b[IDX_NAME])||{}).tierRank));
+      same=> rankNum((getClanRankRow(a[IDX_NAME])||{}).tierRank) - rankNum((getClanRankRow(b[IDX_NAME])||{}).tierRank));
 
       const MH = (MATCH_SRC && MATCH_SRC[0]) ? MATCH_SRC[0] : [];
       const MR = (MATCH_SRC && MATCH_SRC.length>1) ? MATCH_SRC.slice(1) : [];
@@ -3385,7 +3380,7 @@ document.addEventListener('DOMContentLoaded', setupTierButtons);
 const __orig_openPlayer_disabled = window.openPlayer;
 window.openPlayer_disabled = async function(bCellValue){
   if(!RANK_SRC.length) await loadRanking();
-  const H = RANK_SRC[0]||[]; const rows = RANK_SRC.slice(1);
+  const H = RANK_SRC[0]||[]; const // 원본 재생성 제거
   // we need tier rank for the selected player
   let id = String(bCellValue||'').split('/')[0].trim();
   // Find the row
@@ -3420,7 +3415,7 @@ function getOverallRankForPlayer(playerRow, allRows){
   const IDX_NAME = 1; // B
   const me = String(playerRow[IDX_NAME]||'').split('/')[0].trim().toLowerCase();
   const all = [...allRows];
-  all.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
+  all=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
   const pos = all.findIndex(r=> String(r[IDX_NAME]||'').split('/')[0].trim().toLowerCase() === me) + 1;
   return {overallRank: pos>0?pos:null, total: all.length};
 }
@@ -3466,15 +3461,15 @@ function pickSingleCrownRank(tierRank, overallRank){
       const name = btn.dataset.tier;
       (async ()=>{
         if(!RANK_SRC.length) await loadRanking();
-        const H = RANK_SRC[0]||[]; const rows = RANK_SRC.slice(1);
+        const H = RANK_SRC[0]||[]; const // 원본 재생성 제거
         const IDX_ELO = 9, IDX_TIER=3;
         let out = [];
         if(name === '전체'){
-          out = [...rows].sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
+          out = [...rows]=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
           out.forEach((r,i)=> r[0]=i+1);
         }else{
           out = rows.filter(r=> String(r[IDX_TIER]||'').trim()===name)
-                    .sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
+                    => parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
           out.forEach((r,i)=> r[0]=i+1);
         }
         drawRankRows(out);
@@ -3497,7 +3492,7 @@ function cleanOldRankPattern(eloRowEl){
 const __prev_openPlayer_v979 = window.openPlayer;
 window.openPlayer_disabled = async function(bCellValue){
   if(!RANK_SRC.length) await loadRanking();
-  const rows = RANK_SRC.slice(1);
+  const // 원본 재생성 제거
   const nameKey = String(bCellValue||'').split('/')[0].trim().toLowerCase();
   const row = rows.find(r=> String(r[1]||'').split('/')[0].trim().toLowerCase() === nameKey);
   await __prev_openPlayer_v979(bCellValue);
@@ -4669,7 +4664,7 @@ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
     const byLabel = {};
     const pickBestLabel = (labels)=>{
       // prefer the most descriptive label (longer) when duplicates exist
-      return labels.sort((a,b)=> b.length - a.length)[0];
+      return labels=> b.length - a.length)[0];
     };
 
     // group by season number first
@@ -4684,7 +4679,7 @@ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
       const cells = byNum[num];
       const label = pickBestLabel(cells.map(x=>x.label));
       // pick the top-most, left-most occurrence as anchor
-      cells.sort((a,b)=> (a.r-b.r) || (a.c-b.c));
+      cells=> (a.r-b.r) || (a.c-b.c));
       const anchor = cells[0];
 
       // Exp&& width
@@ -4732,7 +4727,7 @@ window.HOF_INLINE_REQ_TOKEN = HOF_INLINE_REQ_TOKEN;
     });
 
     const order = Object.values(byLabel)
-      .sort((a,b)=> (b.num-a.num) || String(b.label).localeCompare(String(a.label),'ko',{numeric:true}))
+      => (b.num-a.num) || String(b.label).localeCompare(String(a.label),'ko',{numeric:true}))
       .map(x=>x.label);
 
     return { byLabel, order };
@@ -7070,7 +7065,7 @@ function applySeasonGrouping(tableEl, leagueKey){
   });
 
   // Sort: most recent first (bigger season number first)
-  const sorted = seasons.slice().sort((a,b)=>{
+  const sorted = seasons.slice()=>{
     const na = extractSeasonNum(a), nb = extractSeasonNum(b);
     if(na!==nb) return nb-na;
     // If numbers tie, prefer later-looking year prefix (e.g. 19-20 > 17-18) if present
@@ -7158,7 +7153,7 @@ function renderSeasonBar(seasons, active, leagueKey){
   });
 
   // Sort: latest season first (bigger number first)
-  labels.sort((a,b)=>{
+  labels=>{
     const na = seasonNum(a), nb = seasonNum(b);
     if(na !== nb) return nb - na;
     return String(b).localeCompare(String(a), 'ko');
