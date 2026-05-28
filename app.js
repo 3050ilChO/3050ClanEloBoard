@@ -19,6 +19,11 @@ let eloChart = null;
 let RANK_SRC = [];
 let MATCH_SRC = [];
 // Older parts of the codebase may still reference this name.
+let MATCH_SRCH_SRC = [];
+let SCHED_CACHE = [];
+let ALL_CACHE = [];
+let MEMBERS_CACHE = [];
+
 // ==============================
 // Table renderer (AS-IS compatible)
 // Several pages call renderTable(); keep a single canonical implementation.
@@ -209,7 +214,87 @@ if (typeof window !== 'undefined' && typeof window.normalizeId !== 'function') {
 const normalizeId = (typeof window !== 'undefined' && window.normalizeId) ? window.normalizeId : (v)=>String(v??'').toLowerCase();
 
 
-// HOF removed (cleanup)
+// === Hall of Fame popup links (configurable) ===
+const HOF_LINKS = {
+  pro: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=1658280214#gid=1658280214",
+  tst: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=381201435#gid=381201435",
+  tsl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?gid=2130451924#gid=2130451924",
+  // New HOF menus
+  tpl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=TPL",
+  // New HOF menus (sheet-name based; works even if gid changes)
+  msl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=MSL",
+  tcl: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=TCL",
+  race: "https://docs.google.com/spreadsheets/d/1llp7MXLWxOgCUMdmvy3wnTGaf3uAfZam0TMXKGTy5ic/edit?sheet=종족최강전"
+};
+
+function initHOFButtons(){
+  const proBtn = document.getElementById('hofViewPro');
+  const tstBtn = document.getElementById('hofViewTST');
+  const tslBtn = document.getElementById('hofViewTSL');
+  const frame  = document.getElementById('hofFrame');
+  const openA  = document.getElementById('hofOpenNew');
+  const loading= document.getElementById('hofLoading');
+
+  // If HOF panel isn't on this build, silently ignore.
+  if(!frame || (!proBtn && !tstBtn && !tslBtn)) return;
+
+  function parseSheet(url){
+    try{
+      const u = new URL(url);
+      const parts = u.pathname.split('/').filter(Boolean);
+      const dIdx = parts.indexOf('d');
+      const id = (dIdx>=0 && parts[dIdx+1]) ? parts[dIdx+1] : null;
+      const gid = u.searchParams.get('gid') || (u.hash.match(/gid=(\d+)/)?.[1]) || '0';
+      return {id, gid};
+    }catch(e){ return {id:null, gid:'0'}; }
+  }
+  function toEmbed(url){
+    const {id, gid} = parseSheet(url);
+    if(!id) return url;
+    // NOTE: pubhtml works best if the sheet is published to web. If not, user can use "새창으로 열기".
+    return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?gid=${gid}&tqx=out:html`;
+  }
+
+  function setActive(which){
+    const map = {
+      pro: {btn: proBtn, label: '프로리그'},
+      tst: {btn: tstBtn, label: 'TST'},
+      tsl: {btn: tslBtn, label: 'TSL'}
+    };
+
+    [proBtn, tstBtn, tslBtn].forEach(b=>{
+      if(!b) return;
+      b.classList.remove('active');
+      b.setAttribute('aria-pressed','false');
+    });
+
+    const picked = map[which] || map.pro;
+    if(picked?.btn){
+      picked.btn.classList.add('active');
+      picked.btn.setAttribute('aria-pressed','true');
+    }
+    if(titleEl) titleEl.textContent = picked?.label || '프로리그';
+  }
+
+  function load(which){
+    const url = (which==='pro') ? HOF_LINKS.pro : (which==='tst') ? HOF_LINKS.tst : HOF_LINKS.tsl;
+    if(openA) openA.href = url || '#';
+    if(!url) return;
+
+    setActive(which);
+    if(loading){ loading.style.display='block'; loading.textContent='불러오는 중…'; }
+    frame.src = toEmbed(url);
+  }
+
+  frame.addEventListener('load', ()=>{ if(loading) loading.style.display='none'; });
+
+  proBtn && proBtn.addEventListener('click', ()=>load('pro'));
+  tstBtn && tstBtn.addEventListener('click', ()=>load('tst'));
+  tslBtn && tslBtn.addEventListener('click', ()=>load('tsl'));
+
+  // default
+  load('pro');
+}
 
 
 
@@ -227,6 +312,9 @@ const normalizeId = (typeof window !== 'undefined' && window.normalizeId) ? wind
 function $(id){
   return document.getElementById(id) || null;
 }
+const lc = s => String(s ?? '').toLowerCase();
+const normalize = (s) => String(s || '').trim().toLowerCase();
+
 
 // Use formatted values from GViz (c.f) to keep sheet formatting AS-IS
 function gvizURL({id, sheet, range, select}){
@@ -271,7 +359,30 @@ return [headers, ...rows];
 }
 
 
-// fetchGVIZMatrix removed (unused cleanup)
+async function fetchGVIZMatrix(cfg){
+  try{
+    const p = new URLSearchParams({ tqx: 'out:json', headers: '0' });
+    if (cfg.sheet) p.set('sheet', cfg.sheet);
+    if (cfg.range) p.set('range', cfg.range);
+    if (cfg.select) p.set('tq', String(cfg.select));
+    const base = `https://docs.google.com/spreadsheets/d/${cfg.id}/gviz/tq?${p.toString()}`;
+    const url = (window.USE_PROXY ? window.PROXY_URL : '') + base;
+
+    const res = await fetch(url, { cache: 'no-store' });
+    const txt = await res.text();
+    const json = JSON.parse(txt.replace(/^[^{]+/, '').replace(/\);?\s*$/, ''));
+    const rows = (json.table.rows||[]).map(r => (r.c||[]).map(c => {
+      if (!c) return '';
+      return (c.f != null ? c.f : (c.v != null ? c.v : ''));
+    }));
+    // Trim trailing empty rows
+    while(rows.length && rows[rows.length-1].every(v => !String(v||'').trim())) rows.pop();
+    return rows;
+  }catch(e){
+    console.error('GVIZ matrix error:', e);
+    return [];
+  }
+}
 
 function nl2br(s){
   return String(s||'').replace(/\r\n|\n|\r/g, '<br>');
@@ -610,7 +721,22 @@ async function loadRanking(){
   (function(){
   let rows = RANK_SRC.slice(1);
 
-  drawRankRows(rows);
+  function elo(v){ return Number(String(v||0).replace(/,/g,'')); }
+  function total(r){
+    const m = String(r[7]||'').match(/(\d+)전/);
+    return m ? Number(m[1]) : 0;
+  }
+
+  let ranked=[], unranked=[];
+  rows.forEach(r=>{ (total(r)>=10 ? ranked : unranked).push(r); });
+
+  ranked.sort((a,b)=> elo(b[9]) - elo(a[9]));
+  unranked.sort((a,b)=> elo(b[9]) - elo(a[9]));
+
+  ranked.forEach((r,i)=> r[0]=i+1);
+  unranked.forEach(r=> r[0]='-');
+
+  drawRankRows([...ranked,...unranked]);
 })();
   const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
   if(rankStatus) rankStatus.textContent=`불러오기 완료 • ${RANK_SRC.length-1}행`;
@@ -701,40 +827,12 @@ async function openPlayer(bCellValue){
   const row = rows.find(r=> normalizeId(String(r[1]||'').split('/')[0].trim())===normalizeId(id));
   if(!row){ if(body) body.innerHTML='<div class="err">선수를 찾을 수 없습니다.</div>'; activate('player'); return; }
 
-  const COL = { B:1, C:2, D:3, E:10, J:9, L:11 };
+  const COL = { B:1, C:2, D:3, J:9, L:11 };
   const playerName = String(row[COL.B]||'').split('/')[0].trim();
   const currentRace = String(row[COL.C]||'').trim().toUpperCase();
   const tier = String(row[COL.D]||'').trim();
-  const eloRaw = String(row[COL.E] ?? '').trim();
-  const eloText = (eloRaw.match(/[\d,.]+/) || ['-'])[0];
+  const eloText = String(row[COL.J] ?? '');
   const awardsRaw = String(row[COL.L] ?? '');
-
-  // ===== 클랜원전체명단 순위 불러오기 (시트값 고정 사용) =====
-  let tierRank = "-";
-  let totalRank = "-";
-
-  try{
-    const memberRankData = await fetchGVIZ({
-      id: "14FUpa0Hcgtx6J1ZByx-cXGfbF7_ze1edONz8Wt70Obw",
-      sheet: "클랜원전체명단",
-      range: "B:G"
-    });
-
-    if (memberRankData.length > 1) {
-      const memberRows = memberRankData.slice(1);
-
-      const found = memberRows.find(r =>
-        normalizeId(r[0]) === normalizeId(playerName)
-      );
-
-      if (found) {
-        tierRank = String(found[4] || '-').trim() || '-';
-        totalRank = String(found[5] || '-').trim() || '-';
-      }
-    }
-  }catch(e){
-    console.warn('member rank load error', e);
-  }
 
   const data = MATCH_SRC.length? MATCH_SRC : await fetchGVIZ(SHEETS.matches);
   const MH = data[0]||[]; const M = data.slice(1);
@@ -1035,9 +1133,7 @@ const leagueHtml = `
         <div class="row"><span class="badge">플레이어</span> <strong>${playerName}</strong></div>
         <div class="row"><span class="badge">주종</span> ${currentRace}</div>
         <div class="row"><span class="badge">티어</span> ${tier||'-'}</div>
-        <div class="row"><span class="badge">ELO</span> ${eloText}</div>
-        <div class="row"><span class="badge">티어랭킹</span> ${tierRank}위</div>
-        <div class="row"><span class="badge">전체랭킹</span> ${totalRank}위</div>
+        <div class="row"><span class="badge">ELO</span> ${eloText} (${row[0] ? row[0] + "위" : "-위"})</div>
       </div>
       <h3>상대 종족별 성적 (주종: ${currentRace})</h3>
       <table class="detail"><thead>
@@ -2088,6 +2184,8 @@ function normalizeId(v){
 */
 (function(){
   const $ = (id) => document.getElementById(id);
+  const normalize = (s) => String(s || '').trim().toLowerCase();
+
   function ensureChartLib(){ return (typeof Chart !== 'undefined'); }
   function destroyChart(refName){
     if (window[refName]) { try { window[refName].destroy(); } catch(e){} window[refName]=null; }
@@ -2941,7 +3039,50 @@ function renderOnce(sel, html) {
 
 
 // === 안전 복구용: drawRankRows 함수 재선언 (중복 방지) ===
+function drawRankRows(rows){
+  try {
+    const rankTable = document.getElementById('rankTable');
+    if (!rankTable) return;
+    const header = RANK_SRC[0] || [];
+    const thead = rankTable.querySelector('thead');
+    const tbody = rankTable.querySelector('tbody');
+    if (!thead || !tbody) return;
+    thead.innerHTML = '';
+    tbody.innerHTML = '';
 
+    const hr = document.createElement('tr');
+    (header.slice(0, 10) || []).forEach(h => {
+      const th = document.createElement('th');
+      th.textContent = h ?? '';
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      (r.slice(0, 10) || []).forEach((v, i) => {
+        const td = document.createElement('td');
+        if (i === 1 && v) {
+          const id = String(v).split('/')[0].trim();
+          const a = document.createElement('a');
+          a.href = '#';
+          a.textContent = id;
+          a.addEventListener('click', e => {
+            e.preventDefault();
+            openPlayer(String(v));
+          });
+          td.appendChild(a);
+        } else {
+          td.textContent = v ?? '';
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  } catch(e){
+    console.error('drawRankRows error', e);
+  }
+}
 
 
 
@@ -3066,7 +3207,7 @@ function setupTierButtons(){
         await loadRanking();
       }
       if(tierName === '전체'){
-        // === v9_83: 전체 탭도 ELO 정렬 +  아래로 ===
+        // === v9_83: 전체 탭도 ELO 정렬 + 5경기 미만 아래로 ===
         const rows = RANK_SRC.slice(1);
         const IDX_ELO  = 9; // J
         const IDX_NAME = 1; // B
@@ -3086,7 +3227,30 @@ function setupTierButtons(){
           return c;
         }
 
-        drawRankRows(rows);
+        const cloned = rows.map(r => r.slice(0));
+        const qualified = [];
+        const unqualified = [];
+
+        cloned.forEach(r => {
+          const games = gamesOf(r[IDX_NAME]);
+          if (games >= 5) qualified.push(r);
+          else unqualified.push(r);
+        });
+
+        qualified.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
+
+        qualified.forEach((r,i)=> { r[0] = i+1; });
+        unqualified.forEach(r => { r[0] = '–'; });
+
+        const finalRows = [...qualified, ...unqualified];
+        drawRankRows(finalRows);
+
+        const st = document.getElementById('rankStatus');
+        if(st){
+          const q = qualified.length;
+          const u = unqualified.length;
+          st.textContent = `전체 • 총 ${q+u}명 (랭킹 대상 ${q}명 / 5경기 미만 ${u}명)`;
+        }
         return;
       }
 
@@ -3113,13 +3277,65 @@ function setupTierButtons(){
         return c;
       }
 
-      drawRankRows(same);
+      const cloned = same.map(r => r.slice(0));
+      const qualified = [];
+      const unqualified = [];
+      cloned.forEach(r => {
+        const games = gamesOf(r[IDX_NAME]);
+        if(games >= 5){ qualified.push(r); }
+        else { unqualified.push(r); }
+      });
+
+      qualified.forEach((r, i) => { r[0] = i+1; });
+      unqualified.forEach(r => { r[0] = '–'; });
+
+      // 자격자는 위, 미자격자는 아래로 표시
+      const finalRows = [...qualified, ...unqualified];
+
+      drawRankRows(finalRows);
+
+      const st = document.getElementById('rankStatus');
+      if(st){
+        const q = qualified.length;
+        const u = unqualified.length;
+        st.textContent = `${tierName} 티어 • 총 ${q+u}명 (랭킹 대상 ${q}명 / 5경기 미만 ${u}명)`;
+      }
     })();
   });
 }
 document.addEventListener('DOMContentLoaded', setupTierButtons);
 
-
+// Patch openPlayer to show "(조커:1위)" style + crown
+const __orig_openPlayer = window.openPlayer;
+window.openPlayer = async function(bCellValue){
+  if(!RANK_SRC.length) await loadRanking();
+  const H = RANK_SRC[0]||[]; const rows = RANK_SRC.slice(1);
+  // we need tier rank for the selected player
+  let id = String(bCellValue||'').split('/')[0].trim();
+  // Find the row
+  const row = rows.find(r=> String(r[1]||'').split('/')[0].trim().toLowerCase() === id.toLowerCase());
+  // Call original logic
+  await __orig_openPlayer(bCellValue);
+  try{
+    if(!row) return;
+    const info = getTierRankForPlayer(row, rows, H);
+    // Find the ELO row container we rendered earlier
+    const body = document.getElementById('playerBody');
+    if(!body) return;
+    // Find the line that contains "ELO"
+    const rowsEls = Array.from(body.querySelectorAll('.row'));
+    const eloRow = rowsEls.find(el => /ELO/i.test(el.textContent||''));
+    if(eloRow){
+      // Append "(티어:순위)" if missing
+      const tierText = info.tierName ? ` (${info.tierName}:${info.tierRank??'-'}위)` : '';
+      if (!eloRow.textContent.includes(tierText)){
+        eloRow.innerHTML = eloRow.innerHTML + tierText;
+      }
+      // Append crown image if 1~3
+      decoratePlayerEloWithCrown(eloRow, info.tierRank);
+    }
+  }catch(e){ console.warn('decorate crown failed', e); }
+};
 
 
 // === v9_80: '전체' filter + overall rank label + single-crown guard ===
@@ -7296,288 +7512,4 @@ function renderTeamMenu(teams){
   });
 });
 
-
-
-
-// ================================
-// NEW RANKING SYSTEM
-// ================================
-
-const MEMBER_SHEET = {
-  id: "14FUpa0Hcgtx6J1ZByx-cXGfbF7_ze1edONz8Wt70Obw",
-  sheet: "클랜원전체명단",
-  range: "A:L"
-};
-
-let MEMBER_ROWS = [];
-
-function normalizePlayer(v){
-  return String(v || "")
-    .replace(/\s+/g,"")
-    .trim()
-    .toLowerCase();
-}
-
-async function fetchMemberSheet(){
-
-  const url =
-    `https://docs.google.com/spreadsheets/d/${MEMBER_SHEET.id}/gviz/tq?sheet=${encodeURIComponent(MEMBER_SHEET.sheet)}&range=${encodeURIComponent(MEMBER_SHEET.range)}&tqx=out:json`;
-
-  const res = await fetch(url);
-  const txt = await res.text();
-
-  const json = JSON.parse(
-    txt.substring(txt.indexOf("{"), txt.lastIndexOf("}") + 1)
-  );
-
-  MEMBER_ROWS = json.table.rows.map(r =>
-    (r.c || []).map(c => c ? (c.f ?? c.v ?? "") : "")
-  );
-}
-
-function convertPlayer(r){
-
-  return {
-    tier: r[0] || "-",
-    id: r[1] || "-",
-    race: r[2] || "-",
-    team: r[3] || "-",
-    elo: r[4] || "-",
-    tierRank: String(r[5] || "-").trim(),
-    totalRank: String(r[6] || "-").trim(),
-    zvz: r[7] || "-",
-    pvz: r[8] || "-",
-    tvz: r[9] || "-",
-    total: r[10] || "-",
-    winrate: r[11] || "-"
-  };
-}
-
-function isRanked(p){
-  return p.tierRank !== "-" && p.totalRank !== "-";
-}
-
-function getActiveTier(){
-
-  const btn = document.querySelector(".tier-btn.active");
-
-  if(!btn) return "전체";
-
-  return btn.textContent.trim();
-}
-
-function buildRankingData(){
-
-  const activeTier = getActiveTier();
-
-  let players = MEMBER_ROWS.map(convertPlayer);
-
-  if(activeTier !== "전체"){
-    players = players.filter(p => p.tier === activeTier);
-  }
-
-  const ranked = players.filter(isRanked);
-  const unranked = players.filter(p => !isRanked(p));
-
-  ranked.sort((a,b)=>{
-
-    const av =
-      activeTier === "전체"
-      ? Number(a.totalRank)
-      : Number(a.tierRank);
-
-    const bv =
-      activeTier === "전체"
-      ? Number(b.totalRank)
-      : Number(b.tierRank);
-
-    return av - bv;
-  });
-
-  return [...ranked, ...unranked];
-}
-
-function renderRanking(){
-
-  const tbody = document.querySelector("#rankTable tbody");
-
-  if(!tbody) return;
-
-  tbody.innerHTML = "";
-
-  const activeTier = getActiveTier();
-
-  const rows = buildRankingData();
-
-  rows.forEach(p=>{
-
-    const rankText =
-      activeTier === "전체"
-      ? (p.totalRank || "-")
-      : (p.tierRank || "-");
-
-    const tr = document.createElement("tr");
-
-    tr.innerHTML = `
-      <td>${rankText}</td>
-      <td>
-        <a href="#"
-           class="player-link"
-           data-player="${p.id}">
-           ${p.id}
-        </a>
-      </td>
-      <td>${p.race}</td>
-      <td>${p.tier}</td>
-      <td>${p.zvz}</td>
-      <td>${p.pvz}</td>
-      <td>${p.tvz}</td>
-      <td>${p.total}</td>
-      <td>${p.winrate}</td>
-      <td>${p.elo}</td>
-    `;
-
-    tbody.appendChild(tr);
-  });
-
-  bindPlayerLinks();
-}
-
-function bindPlayerLinks(){
-
-  document.querySelectorAll(".player-link").forEach(a=>{
-
-    a.onclick = function(e){
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      openPlayer(this.dataset.player);
-    };
-  });
-}
-
-function openPlayer(playerId){
-
-  const player =
-    MEMBER_ROWS
-      .map(convertPlayer)
-      .find(p =>
-        normalizePlayer(p.id) ===
-        normalizePlayer(playerId)
-      );
-
-  if(!player) return;
-
-  const title =
-    document.getElementById("playerTitle");
-
-  const body =
-    document.getElementById("playerBody");
-
-  if(!title || !body) return;
-
-  title.innerText = player.id;
-
-  body.innerHTML = `
-
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
-
-      <div style="background:#f8f9fb;border-radius:14px;padding:18px;text-align:center;">
-        <div style="font-size:13px;color:#777;margin-bottom:8px;">티어</div>
-        <div style="font-size:24px;font-weight:700;">${player.tier}</div>
-      </div>
-
-      <div style="background:#f8f9fb;border-radius:14px;padding:18px;text-align:center;">
-        <div style="font-size:13px;color:#777;margin-bottom:8px;">티어랭킹</div>
-        <div style="font-size:24px;font-weight:700;">
-          ${player.tierRank === "-" ? "-" : player.tierRank + "위"}
-        </div>
-      </div>
-
-      <div style="background:#f8f9fb;border-radius:14px;padding:18px;text-align:center;">
-        <div style="font-size:13px;color:#777;margin-bottom:8px;">전체랭킹</div>
-        <div style="font-size:24px;font-weight:700;">
-          ${player.totalRank === "-" ? "-" : player.totalRank + "위"}
-        </div>
-      </div>
-
-      <div style="background:#f8f9fb;border-radius:14px;padding:18px;text-align:center;">
-        <div style="font-size:13px;color:#777;margin-bottom:8px;">ELO</div>
-        <div style="font-size:24px;font-weight:700;">${player.elo}</div>
-      </div>
-
-    </div>
-
-    <table class="detail-table" style="width:100%;border-collapse:collapse;">
-
-      <tr>
-        <th style="padding:14px;border-bottom:1px solid #eee;text-align:left;">저그전</th>
-        <td style="padding:14px;border-bottom:1px solid #eee;">${player.zvz}</td>
-      </tr>
-
-      <tr>
-        <th style="padding:14px;border-bottom:1px solid #eee;text-align:left;">프로토스전</th>
-        <td style="padding:14px;border-bottom:1px solid #eee;">${player.pvz}</td>
-      </tr>
-
-      <tr>
-        <th style="padding:14px;border-bottom:1px solid #eee;text-align:left;">테란전</th>
-        <td style="padding:14px;border-bottom:1px solid #eee;">${player.tvz}</td>
-      </tr>
-
-      <tr>
-        <th style="padding:14px;border-bottom:1px solid #eee;text-align:left;">총전적</th>
-        <td style="padding:14px;border-bottom:1px solid #eee;">${player.total}</td>
-      </tr>
-
-      <tr>
-        <th style="padding:14px;text-align:left;">승률</th>
-        <td style="padding:14px;">${player.winrate}</td>
-      </tr>
-
-    </table>
-  `;
-
-  if(typeof activate === "function"){
-    activate("player");
-  }
-
-  const rankingPanel =
-    document.getElementById("rankingPanel");
-
-  const playerPanel =
-    document.getElementById("playerPanel");
-
-  if(rankingPanel)
-    rankingPanel.style.display = "none";
-
-  if(playerPanel)
-    playerPanel.style.display = "block";
-}
-
-document.addEventListener(
-  "click",
-  function(e){
-
-    const btn = e.target.closest(".tier-btn");
-
-    if(!btn) return;
-
-    setTimeout(()=>{
-      renderRanking();
-    }, 10);
-  },
-  true
-);
-
-document.addEventListener(
-  "DOMContentLoaded",
-  async ()=>{
-
-    await fetchMemberSheet();
-
-    renderRanking();
-  }
-);
 
