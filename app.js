@@ -1775,24 +1775,48 @@ async function loadProRank(){
           const inline = document.createElement('div');
           inline.className = 'rank-inline';
 
-          // badge
-          if (rowRank === 1 || rowRank === 2 || rowRank === 3){
-            const crown = document.createElement('img');
-            crown.className = 'rank-badge';
-            crown.alt = 'crown';
-            crown.src = (rowRank === 1) ? 'crown_gold.png' : (rowRank === 2) ? 'crown_silver.png' : 'crown_bronze.png';
-            inline.appendChild(crown);
-          } else if (rowRank === 4){
-            const star = document.createElement('span');
-            star.className = 'rank-star-inline';
-            star.textContent = '*';
-            inline.appendChild(star);
-          } else {
-            const spacer = document.createElement('span');
-            spacer.className = 'rank-spacer';
-            spacer.textContent = '';
-            inline.appendChild(spacer);
-          }
+// badge
+if (rowRank === 1 || rowRank === 2 || rowRank === 3){
+
+  const crown = document.createElement('img');
+  crown.className = 'rank-badge';
+  crown.alt = 'crown';
+  crown.src =
+    (rowRank === 1)
+      ? 'crown_gold.png'
+      : (rowRank === 2)
+      ? 'crown_silver.png'
+      : 'crown_bronze.png';
+
+  inline.appendChild(crown);
+
+} else if (rowRank === 4){
+
+  const star = document.createElement('span');
+  star.className = 'rank-star-inline';
+  star.style.color = '#00c853'; // 초록
+  star.textContent = '*';
+
+  inline.appendChild(star);
+
+} else if (rowRank === 5){
+
+  const star = document.createElement('span');
+  star.className = 'rank-star-inline';
+  star.style.color = '#a855f7'; // 보라
+  star.textContent = '*';
+
+  inline.appendChild(star);
+
+} else {
+
+  const spacer = document.createElement('span');
+  spacer.className = 'rank-spacer';
+  spacer.textContent = '';
+
+  inline.appendChild(spacer);
+
+}
 
           const num = document.createElement('span');
           num.className = 'rank-num';
