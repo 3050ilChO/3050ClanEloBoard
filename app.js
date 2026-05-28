@@ -755,7 +755,6 @@ async function loadRanking(){
 
   // 페이지 이동시 동일 배열 사용
   window.currentRankRows = rows;
-  window.ALL_RANK_ROWS = rows.map(r => [...r]);
 
   // 절대 재정렬 금지
   drawRankRows(rows);
@@ -3335,6 +3334,7 @@ function setupTierButtons(){
 
         qualified.sort((a,b)=> rankNum((getClanRankRow(a[IDX_NAME])||{}).totalRank) - rankNum((getClanRankRow(b[IDX_NAME])||{}).totalRank));
 
+        qualified.forEach((r,i)=> { r[0] = i+1; });
         unqualified.forEach(r => { r[0] = '–'; });
 
         const finalRows = [...qualified, ...unqualified];
@@ -3381,6 +3381,7 @@ function setupTierButtons(){
         else { unqualified.push(r); }
       });
 
+      qualified.forEach((r, i) => { r[0] = i+1; });
       unqualified.forEach(r => { r[0] = '–'; });
 
       // 자격자는 위, 미자격자는 아래로 표시
