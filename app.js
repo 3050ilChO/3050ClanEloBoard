@@ -755,11 +755,9 @@ async function loadRanking(){
 
   // 페이지 이동시 동일 배열 사용
   window.currentRankRows = rows;
+  window.ALL_RANK_ROWS = rows.map(r => r.slice(0));
 
-  // 전체 랭킹 원본 백업 (티어 이동 후 전체 복귀용)
-  window.ALL_RANK_ROWS = [...rows];
-
-// 절대 재정렬 금지
+  // 절대 재정렬 금지
   drawRankRows(rows);
 })();
   const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
@@ -3337,8 +3335,7 @@ function setupTierButtons(){
 
         qualified.sort((a,b)=> rankNum((getClanRankRow(a[IDX_NAME])||{}).totalRank) - rankNum((getClanRankRow(b[IDX_NAME])||{}).totalRank));
 
-        qualified.forEach((r,i)=> { r[0] = i+1; });
-        unqualified.forEach(r => { r[0] = '–'; });
+        // 시트 원본 순위 유지 (전체 메뉴 클릭시 순위 안바뀌게 수정)
 
         const finalRows = [...qualified, ...unqualified];
         drawRankRows(finalRows);
@@ -3384,8 +3381,7 @@ function setupTierButtons(){
         else { unqualified.push(r); }
       });
 
-      qualified.forEach((r, i) => { r[0] = i+1; });
-      unqualified.forEach(r => { r[0] = '–'; });
+      // 시트 원본 순위 유지 (티어 이동 후 전체 복귀시 순위 꼬임 방지)
 
       // 자격자는 위, 미자격자는 아래로 표시
       const finalRows = [...qualified, ...unqualified];
