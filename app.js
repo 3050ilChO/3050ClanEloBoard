@@ -7380,17 +7380,17 @@ document.addEventListener('click', function(e){
 });
 
 
-// player detail hard fix
+// player detail click fix
 document.addEventListener('click', function(e){
   const a = e.target.closest('.player-link');
   if(!a) return;
 
   e.preventDefault();
 
-  const name = (a.textContent || '').trim();
+  const player = (a.textContent || '').trim();
 
-  if(name && typeof openPlayer === 'function'){
-    openPlayer(name);
+  if(player && typeof openPlayer === 'function'){
+    openPlayer(player);
   }
 }, true);
 
