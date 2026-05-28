@@ -765,10 +765,10 @@ async function loadRanking(){
 $('rankRefresh')?.addEventListener('click', loadRanking);
 $('rankSearchBtn')?.addEventListener('click', ()=>{
   const q = lc($('rankSearch').value || '').trim();
-  if (!q) { drawRankRows(RANK_SRC.slice(1)); return; }
+  if (!q) { drawRankRows(window.currentRankRows || []); return; }
 
   // 정확 일치 결과만
-  const rows = (RANK_SRC.slice(1) || []).filter(r => {
+  const rows = ((window.currentRankRows || [])).filter(r => {
     const id = lc(String(r[1] || '').split('/')[0].trim());
     return id === q;
   });
@@ -777,7 +777,7 @@ $('rankSearchBtn')?.addEventListener('click', ()=>{
     drawRankRows(rows);
   } else {
     // 없으면 추천 (시작문자 일치)만 보여줌
-    const suggest = (RANK_SRC.slice(1) || []).filter(r => {
+    const suggest = ((window.currentRankRows || [])).filter(r => {
       const id = lc(String(r[1] || '').split('/')[0].trim());
       return id === q; // 수정: 정확히 일치할 때만 이동 (자동이동 버그 수정)
     });
@@ -790,7 +790,7 @@ $('rankSearch')?.addEventListener('keydown', e=>{
     const q = lc($('rankSearch').value || '').trim();
     if (!q) return;
     // 정확 일치 우선 이동
-    const matchRow = (RANK_SRC.slice(1) || []).find(r => {
+    const matchRow = ((window.currentRankRows || [])).find(r => {
       const id = lc(String(r[1] || '').split('/')[0].trim());
       return id === q; // exact match only
     });
@@ -799,7 +799,7 @@ $('rankSearch')?.addEventListener('keydown', e=>{
       return;
     }
     // 일치 없으면 추천(시작문자 일치) 목록만 표로 표시
-    const suggest = (RANK_SRC.slice(1) || []).filter(r => {
+    const suggest = ((window.currentRankRows || [])).filter(r => {
       const id = lc(String(r[1] || '').split('/')[0].trim());
       return id === q; // 수정: 정확히 일치할 때만 이동 (자동이동 버그 수정)
     });
@@ -3111,6 +3111,12 @@ function renderOnce(sel, html) {
 
 // === 안전 복구용: drawRankRows 함수 재선언 (중복 방지) ===
 function drawRankRows(rows){
+
+  rows = (rows || []).filter(r=>{
+    const tier = String(r[3] || '').trim();
+    return tier !== '탈퇴';
+  });
+
   try {
     const rankTable = document.getElementById('rankTable');
     if (!rankTable) return;
