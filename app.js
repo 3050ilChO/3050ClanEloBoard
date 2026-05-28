@@ -729,14 +729,13 @@ async function loadRanking(){
     const tier = String(copy[3] || '').trim();
     const record = String(copy[7] || '');
 
-    const gamesMatch = record.match(/(\d+)전/);
+    const gamesMatch = record.match(/(\\d+)전/);
     const games = gamesMatch ? Number(gamesMatch[1]) : 0;
 
     const isRankTarget =
       tier !== '탈퇴' &&
       games >= 10;
 
-    // 시트 순위 그대로 사용
     copy.__tierRank = isRankTarget
       ? (clan.tierRank || '-')
       : '-';
