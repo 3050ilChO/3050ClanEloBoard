@@ -719,24 +719,18 @@ async function loadRanking(){
   MATCH_SRCH_SRC = MATCH_SRC;
   if(!RANK_SRC.length){ if(rankStatus) rankStatus.textContent='불러오기 실패(권한/네트워크/CORS 확인)'; return; }
   (function(){
-  let rows = RANK_SRC.slice(1);
+  let rows = RANK_SRC.slice(1).map(r => r.slice(0));
 
-  function elo(v){ return Number(String(v||0).replace(/,/g,'')); }
-  function total(r){
-    const m = String(r[7]||'').match(/(\d+)전/);
-    return m ? Number(m[1]) : 0;
-  }
+  const rankValue = (v)=>{
+    const s = String(v ?? '').trim();
+    if(!s || s === '-' || s === '–') return Number.MAX_SAFE_INTEGER;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+  };
 
-  let ranked=[], unranked=[];
-  rows.forEach(r=>{ (total(r)>=10 ? ranked : unranked).push(r); });
+  rows.sort((a,b)=> rankValue(a[6]) - rankValue(b[6]));
 
-  ranked.sort((a,b)=> elo(b[9]) - elo(a[9]));
-  unranked.sort((a,b)=> elo(b[9]) - elo(a[9]));
-
-  ranked.forEach((r,i)=> r[0]=i+1);
-  unranked.forEach(r=> r[0]='-');
-
-  drawRankRows([...ranked,...unranked]);
+  drawRankRows(rows);
 })();
   const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
   if(rankStatus) rankStatus.textContent=`불러오기 완료 • ${RANK_SRC.length-1}행`;
@@ -1133,7 +1127,7 @@ const leagueHtml = `
         <div class="row"><span class="badge">플레이어</span> <strong>${playerName}</strong></div>
         <div class="row"><span class="badge">주종</span> ${currentRace}</div>
         <div class="row"><span class="badge">티어</span> ${tier||'-'}</div>
-        <div class="row"><span class="badge">ELO</span> ${eloText}</div>
+        <div class="row"><span class="badge">ELO</span> ${row[4] || '-'}</div>
         <div class="row"><span class="badge">티어랭킹</span> ${row[5] || '-'}</div>
         <div class="row"><span class="badge">전체랭킹</span> ${row[6] || '-'}</div>
       </div>
@@ -3196,113 +3190,44 @@ function decoratePlayerEloWithCrown(containerEl, tierRank){
 function setupTierButtons(){
   const host = document.getElementById('tierFilters');
   if(!host) return;
-  host.addEventListener('click', (e)=>{
+
+  const rankValue = (v)=>{
+    const s = String(v ?? '').trim();
+    if(!s || s === '-' || s === '–') return Number.MAX_SAFE_INTEGER;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+  };
+
+  host.addEventListener('click', async (e)=>{
     const btn = e.target.closest('.tier-btn');
     if(!btn) return;
-    // UI state
+
     host.querySelectorAll('.tier-btn').forEach(b=> b.classList.remove('active'));
     btn.classList.add('active');
+
+    if(!RANK_SRC.length){
+      await loadRanking();
+    }
+
     const tierName = btn.dataset.tier;
+    const rows = RANK_SRC.slice(1).map(r => r.slice(0));
 
-    (async () => {
-      if(!RANK_SRC.length || !MATCH_SRC.length){
-        await loadRanking();
-      }
-      if(tierName === '전체'){
-        // === v9_83: 전체 탭도 ELO 정렬 + 5경기 미만 아래로 ===
-        const rows = RANK_SRC.slice(1);
-        const IDX_ELO  = 9; // J
-        const IDX_NAME = 1; // B
+    let finalRows = [];
 
-        const MH = (MATCH_SRC && MATCH_SRC[0]) ? MATCH_SRC[0] : [];
-        const MR = (MATCH_SRC && MATCH_SRC.length>1) ? MATCH_SRC.slice(1) : [];
-        const iW = findIdx(MH, /승자\s*선수|winner/i);
-        const iL = findIdx(MH, /패자\s*선수|loser/i);
-        function gamesOf(rawName){
-          const name = String(rawName||'').split('/')[0].trim().toLowerCase();
-          if(!name) return 0;
-          let c = 0;
-          for(const r of MR){
-            const w = lc(r[iW]||''); const l = lc(r[iL]||'');
-            if(w===name || l===name) c++;
-          }
-          return c;
-        }
+    if(tierName === '전체'){
+      finalRows = rows.sort((a,b)=> rankValue(a[6]) - rankValue(b[6]));
+    }else{
+      finalRows = rows
+        .filter(r => String(r[0] || '').trim() === tierName)
+        .sort((a,b)=> rankValue(a[5]) - rankValue(b[5]));
+    }
 
-        const cloned = rows.map(r => r.slice(0));
-        const qualified = [];
-        const unqualified = [];
+    drawRankRows(finalRows);
 
-        cloned.forEach(r => {
-          const games = gamesOf(r[IDX_NAME]);
-          if (games >= 5) qualified.push(r);
-          else unqualified.push(r);
-        });
-
-        qualified.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
-
-        qualified.forEach((r,i)=> { r[0] = i+1; });
-        unqualified.forEach(r => { r[0] = '–'; });
-
-        const finalRows = [...qualified, ...unqualified];
-        drawRankRows(finalRows);
-
-        const st = document.getElementById('rankStatus');
-        if(st){
-          const q = qualified.length;
-          const u = unqualified.length;
-          st.textContent = `전체 • 총 ${q+u}명 (랭킹 대상 ${q}명 / 5경기 미만 ${u}명)`;
-        }
-        return;
-      }
-
-      const rows = RANK_SRC.slice(1);
-      const IDX_TIER = 3; // D
-      const IDX_ELO  = 9; // J
-      const IDX_NAME = 1; // B
-
-      const same = rows.filter(r => String(r[IDX_TIER]||'').trim() === tierName);
-      same.sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
-
-      const MH = (MATCH_SRC && MATCH_SRC[0]) ? MATCH_SRC[0] : [];
-      const MR = (MATCH_SRC && MATCH_SRC.length>1) ? MATCH_SRC.slice(1) : [];
-      const iW = findIdx(MH, /승자\s*선수|winner/i);
-      const iL = findIdx(MH, /패자\s*선수|loser/i);
-      function gamesOf(rawName){
-        const name = String(rawName||'').split('/')[0].trim().toLowerCase();
-        if(!name) return 0;
-        let c = 0;
-        for(const r of MR){
-          const w = lc(r[iW]||''); const l = lc(r[iL]||'');
-          if(w===name || l===name) c++;
-        }
-        return c;
-      }
-
-      const cloned = same.map(r => r.slice(0));
-      const qualified = [];
-      const unqualified = [];
-      cloned.forEach(r => {
-        const games = gamesOf(r[IDX_NAME]);
-        if(games >= 5){ qualified.push(r); }
-        else { unqualified.push(r); }
-      });
-
-      qualified.forEach((r, i) => { r[0] = i+1; });
-      unqualified.forEach(r => { r[0] = '–'; });
-
-      // 자격자는 위, 미자격자는 아래로 표시
-      const finalRows = [...qualified, ...unqualified];
-
-      drawRankRows(finalRows);
-
-      const st = document.getElementById('rankStatus');
-      if(st){
-        const q = qualified.length;
-        const u = unqualified.length;
-        st.textContent = `${tierName} 티어 • 총 ${q+u}명 (랭킹 대상 ${q}명 / 5경기 미만 ${u}명)`;
-      }
-    })();
+    const st = document.getElementById('rankStatus');
+    if(st){
+      st.textContent = `${tierName} • ${finalRows.length}명`;
+    }
   });
 }
 document.addEventListener('DOMContentLoaded', setupTierButtons);
