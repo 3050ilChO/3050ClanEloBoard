@@ -725,6 +725,7 @@ async function loadRanking(){
     const copy = [...r];
     const clan = getClanRankRow(copy[1]) || {};
     copy[9] = clan.elo || copy[9];
+
     const tier = String(copy[3] || '').trim();
     const record = String(copy[7] || '');
 
@@ -735,15 +736,19 @@ async function loadRanking(){
       tier !== '탈퇴' &&
       games >= 10;
 
-    copy.__tierRank =
-      isRankTarget ? (clan.tierRank || '-') : '-';
+    // 시트 순위 그대로 사용
+    copy.__tierRank = isRankTarget
+      ? (clan.tierRank || '-')
+      : '-';
 
-    copy.__totalRank =
-      isRankTarget ? (clan.totalRank || '-') : '-';
+    copy.__totalRank = isRankTarget
+      ? (clan.totalRank || '-')
+      : '-';
     return copy;
   });
 
-  // 시트 순서 그대로 유지 (홈페이지에서 랭킹 재정렬 금지)
+  // 시트 순서 유지
+
   drawRankRows(rows);
 })();
   const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
