@@ -1178,8 +1178,8 @@ const leagueHtml = `
         <div class="row"><span class="badge">주종</span> ${currentRace}</div>
         <div class="row"><span class="badge">티어</span> ${tier||'-'}</div>
         <div class="row"><span class="badge">ELO</span> ${detailElo}</div>
-        <div class="row"><span class="badge">티어랭킹</span> ${row[5] && row[5] !== '-' ? row[5] + '위' : '-'}</div>
-        <div class="row"><span class="badge">전체랭킹</span> ${row[6] && row[6] !== '-' ? row[6] + '위' : '-'}</div>
+        <div class="row"><span class="badge">티어랭킹</span> ${detailTierRank && detailTierRank !== '-' ? detailTierRank + '위' : '-'}</div>
+        <div class="row"><span class="badge">전체랭킹</span> ${detailTotalRank && detailTotalRank !== '-' ? detailTotalRank + '위' : '-'}</div>
       </div>
       <h3>상대 종족별 성적 (주종: ${currentRace})</h3>
       <table class="detail"><thead>
