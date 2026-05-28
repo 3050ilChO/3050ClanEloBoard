@@ -2941,51 +2941,76 @@ function renderOnce(sel, html) {
 
 
 // === 안전 복구용: drawRankRows 함수 재선언 (중복 방지) ===
+
 function drawRankRows(rows){
-  try {
-    const rankTable = document.getElementById('rankTable');
-    if (!rankTable) return;
-    const header = RANK_SRC[0] || [];
-    const thead = rankTable.querySelector('thead');
-    const tbody = rankTable.querySelector('tbody');
-    if (!thead || !tbody) return;
-    thead.innerHTML = '';
-    tbody.innerHTML = '';
+  const tbody = document.querySelector('#rankTable tbody');
+  if(!tbody) return;
 
-    const hr = document.createElement('tr');
-    (header.slice(0, 10) || []).forEach(h => {
-      const th = document.createElement('th');
-      th.textContent = h ?? '';
-      hr.appendChild(th);
-    });
-    thead.appendChild(hr);
+  tbody.innerHTML = '';
 
-    rows.forEach(r => {
-      const tr = document.createElement('tr');
-      (r.slice(0, 10) || []).forEach((v, i) => {
-        const td = document.createElement('td');
-        if (i === 1 && v) {
-          const id = String(v).split('/')[0].trim();
-          const a = document.createElement('a');
-          a.href = '#';
-          a.className = 'playerName';
-          a.textContent = id;
-          a.addEventListener('click', e => {
-            e.preventDefault();
-            openPlayer(String(v));
-          });
-          td.appendChild(a);
-        } else {
-          td.textContent = v ?? '';
-        }
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
+  const safeRows = Array.isArray(rows) ? [...rows] : [];
+
+  const IDX_TOTAL = 7;
+  const ranked = [];
+  const unranked = [];
+
+  safeRows.forEach(r=>{
+    const rec = String(r[IDX_TOTAL] || '');
+    const m = rec.match(/(\d+)전/);
+    const total = m ? parseInt(m[1],10) : 0;
+
+    if(total >= 10) ranked.push(r);
+    else unranked.push(r);
+  });
+
+  const activeTierBtn = document.querySelector('.tier-btn.active');
+  const activeTier = activeTierBtn ? activeTierBtn.textContent.trim() : '전체';
+
+  if(activeTier !== '전체'){
+    ranked.forEach((r,i)=>{
+      r[0] = i + 1;
     });
-  } catch(e){
-    console.error('drawRankRows error', e);
   }
+
+  unranked.forEach(r=>{
+    r[0] = '-';
+  });
+
+  const finalRows = [...ranked, ...unranked];
+
+  finalRows.forEach(r=>{
+    const tr = document.createElement('tr');
+
+    r.slice(0,10).forEach((v,idx)=>{
+      const td = document.createElement('td');
+
+      if(idx === 1){
+        const a = document.createElement('a');
+        a.href = '#';
+        a.className = 'player-link';
+        a.textContent = v;
+
+        a.addEventListener('click', e=>{
+          e.preventDefault();
+          e.stopPropagation();
+
+          if(typeof openPlayer === 'function'){
+            openPlayer(v);
+          }
+        });
+
+        td.appendChild(a);
+      }else{
+        td.textContent = v ?? '';
+      }
+
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  });
 }
+
 
 
 
