@@ -712,90 +712,17 @@ async function buildRaceWinrate(){
 
 
 
-
-async function loadRanking(){
-  try{
-    if(rankStatus) rankStatus.textContent='시트에서 데이터를 불러오는 중…';
-
-    [RANK_SRC, MATCH_SRC] = await Promise.all([
-      fetchGVIZ(SHEETS.rank),
-      fetchGVIZ(SHEETS.matches)
-    ]);
-
-    MATCH_SRCH_SRC = MATCH_SRC;
-
-    if(!RANK_SRC.length){
-      if(rankStatus) rankStatus.textContent='불러오기 실패';
-      return;
-    }
-
-    await loadClanRankCache();
-
-    const rows = RANK_SRC
-      .slice(1)
-      .map(r=>{
-        const copy = [...r];
-
-        const tier = String(copy[3] || '').trim();
-
-        if(tier === '탈퇴') return null;
-
-        const record = String(copy[7] || '');
-        const m = record.match(/(\\d+)전/);
-        const games = m ? Number(m[1]) : 0;
-
-        const clan = getClanRankRow(copy[1]) || {};
-
-        copy.__tierRank = '-';
-        copy.__totalRank = '-';
-
-        if(games >= 10){
-          copy.__tierRank = clan.tierRank || '-';
-          copy.__totalRank = clan.totalRank || '-';
-        }
-
-        return copy;
-      })
-      .filter(Boolean);
-
-    window.currentRankRows = rows;
-
-    drawRankRows(window.currentRankRows);
-
-    const dl = $('playerList');
-    if(dl){
-      dl.innerHTML = '';
-
-      rows.forEach(r=>{
-        const id = String(r[1]||'').split('/')[0].trim();
-
-        if(!id) return;
-
-        const opt = document.createElement('option');
-        opt.value = id;
-        dl.appendChild(opt);
-      });
-    }
-
-    if(rankStatus){
-      rankStatus.textContent = `불러오기 완료 • ${rows.length}명`;
-    }
-
-  }catch(e){
-    console.error('loadRanking error', e);
-
-    if(rankStatus){
-      rankStatus.textContent='데이터 로드 오류';
-    }
-  }
+)();
+  const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
+  if(rankStatus) rankStatus.textContent=`불러오기 완료 • ${RANK_SRC.length-1}행`;
 }
 $('rankRefresh')?.addEventListener('click', loadRanking);
 $('rankSearchBtn')?.addEventListener('click', ()=>{
   const q = lc($('rankSearch').value || '').trim();
-  if (!q) { drawRankRows(window.currentRankRows || []); return; }
+  if (!q) { drawRankRows(RANK_SRC.slice(1)); return; }
 
   // 정확 일치 결과만
-  const rows = (window.currentRankRows || []).filter(r => {
+  const rows = (RANK_SRC.slice(1) || []).filter(r => {
     const id = lc(String(r[1] || '').split('/')[0].trim());
     return id === q;
   });
@@ -804,7 +731,7 @@ $('rankSearchBtn')?.addEventListener('click', ()=>{
     drawRankRows(rows);
   } else {
     // 없으면 추천 (시작문자 일치)만 보여줌
-    const suggest = (window.currentRankRows || []).filter(r => {
+    const suggest = (RANK_SRC.slice(1) || []).filter(r => {
       const id = lc(String(r[1] || '').split('/')[0].trim());
       return id === q; // 수정: 정확히 일치할 때만 이동 (자동이동 버그 수정)
     });
@@ -817,7 +744,7 @@ $('rankSearch')?.addEventListener('keydown', e=>{
     const q = lc($('rankSearch').value || '').trim();
     if (!q) return;
     // 정확 일치 우선 이동
-    const matchRow = (window.currentRankRows || []).find(r => {
+    const matchRow = (RANK_SRC.slice(1) || []).find(r => {
       const id = lc(String(r[1] || '').split('/')[0].trim());
       return id === q; // exact match only
     });
@@ -826,7 +753,7 @@ $('rankSearch')?.addEventListener('keydown', e=>{
       return;
     }
     // 일치 없으면 추천(시작문자 일치) 목록만 표로 표시
-    const suggest = (window.currentRankRows || []).filter(r => {
+    const suggest = (RANK_SRC.slice(1) || []).filter(r => {
       const id = lc(String(r[1] || '').split('/')[0].trim());
       return id === q; // 수정: 정확히 일치할 때만 이동 (자동이동 버그 수정)
     });
@@ -869,12 +796,7 @@ function getClanRankRow(playerId){
   return rows.find(r => normalizeId(r.id) === key) || null;
 }
 
-function rankNum(v){
-  const s = String(v||'').trim();
-  if(!s || s==='-') return 999999;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : 999999;
-}
+
 
 // ===== Player Detail =====
 function findIdx(header, regex){ return header.findIndex(h=> regex.test(String(h))); }
@@ -1546,7 +1468,7 @@ try {
       if (recent5Chart && typeof recent5Chart.destroy === 'function') {
         try { recent5Chart.destroy(); } catch(e){}
       }
-      const labels = last10.map((_,i)=>`G${i+1}`);
+      const labels = last10.map((_,i)=>`G${}`);
       const data = last10.map(g => g.res === 'W' ? 1 : -1);
       const colors = last10.map(g => g.res === 'W' ? '#3498db' : '#e74c3c');
 
@@ -3137,50 +3059,7 @@ function renderOnce(sel, html) {
 
 
 // === 안전 복구용: drawRankRows 함수 재선언 (중복 방지) ===
-function drawRankRows(rows){
-  try {
-    const rankTable = document.getElementById('rankTable');
-    if (!rankTable) return;
-    const header = RANK_SRC[0] || [];
-    const thead = rankTable.querySelector('thead');
-    const tbody = rankTable.querySelector('tbody');
-    if (!thead || !tbody) return;
-    thead.innerHTML = '';
-    tbody.innerHTML = '';
 
-    const hr = document.createElement('tr');
-    (header.slice(0, 10) || []).forEach(h => {
-      const th = document.createElement('th');
-      th.textContent = h ?? '';
-      hr.appendChild(th);
-    });
-    thead.appendChild(hr);
-
-    rows.forEach(r => {
-      const tr = document.createElement('tr');
-      (r.slice(0, 10) || []).forEach((v, i) => {
-        const td = document.createElement('td');
-        if (i === 1 && v) {
-          const id = String(v).split('/')[0].trim();
-          const a = document.createElement('a');
-          a.href = '#';
-          a.textContent = id;
-          a.addEventListener('click', e => {
-            e.preventDefault();
-            openPlayer(String(v));
-          });
-          td.appendChild(a);
-        } else {
-          td.textContent = v ?? '';
-        }
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    });
-  } catch(e){
-    console.error('drawRankRows error', e);
-  }
-}
 
 
 
@@ -3266,7 +3145,7 @@ function getTierRankForPlayer(playerRow, allRows, H){
     }catch(e){ /* ignore, fallback */ }
 
     // sort by ELO desc
-    qualified.sort((a,b)=> rankNum((getClanRankRow(a[IDX_NAME])||{}).totalRank) - rankNum((getClanRankRow(b[IDX_NAME])||{}).totalRank));
+    
 
     const rank = qualified.findIndex(r => String(r[IDX_NAME]||'').split('/')[0].trim().toLowerCase() === myName) + 1;
 
@@ -3335,9 +3214,9 @@ function setupTierButtons(){
           else unqualified.push(r);
         });
 
-        qualified.sort((a,b)=> rankNum((getClanRankRow(a[IDX_NAME])||{}).totalRank) - rankNum((getClanRankRow(b[IDX_NAME])||{}).totalRank));
+        
 
-        qualified.forEach((r,i)=> { r[0] = i+1; });
+        qualified.forEach((r,i)=> { r[0] = ; });
         unqualified.forEach(r => { r[0] = '–'; });
 
         const finalRows = [...qualified, ...unqualified];
@@ -3358,7 +3237,7 @@ function setupTierButtons(){
       const IDX_NAME = 1; // B
 
       const same = rows.filter(r => String(r[IDX_TIER]||'').trim() === tierName);
-      same.sort((a,b)=> rankNum((getClanRankRow(a[IDX_NAME])||{}).tierRank) - rankNum((getClanRankRow(b[IDX_NAME])||{}).tierRank));
+      
 
       const MH = (MATCH_SRC && MATCH_SRC[0]) ? MATCH_SRC[0] : [];
       const MR = (MATCH_SRC && MATCH_SRC.length>1) ? MATCH_SRC.slice(1) : [];
@@ -3384,7 +3263,7 @@ function setupTierButtons(){
         else { unqualified.push(r); }
       });
 
-      qualified.forEach((r, i) => { r[0] = i+1; });
+      qualified.forEach((r, i) => { r[0] = ; });
       unqualified.forEach(r => { r[0] = '–'; });
 
       // 자격자는 위, 미자격자는 아래로 표시
@@ -3493,11 +3372,11 @@ function pickSingleCrownRank(tierRank, overallRank){
         let out = [];
         if(name === '전체'){
           out = [...rows].sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
-          out.forEach((r,i)=> r[0]=i+1);
+          out.forEach((r,i)=> r[0]=);
         }else{
           out = rows.filter(r=> String(r[IDX_TIER]||'').trim()===name)
                     .sort((a,b)=> parseEloText(b[IDX_ELO]) - parseEloText(a[IDX_ELO]));
-          out.forEach((r,i)=> r[0]=i+1);
+          out.forEach((r,i)=> r[0]=);
         }
         drawRankRows(out);
         const st = document.getElementById('rankStatus');
@@ -4143,7 +4022,7 @@ rows.forEach(tr=>{
             if(!t) continue;
             if(labels.some(rx=>rx.test(t))){
               // take the next meaningful cell(s)
-              for(let j=i+1;j<cells.length;j++){
+              for(let j=;j<cells.length;j++){
                 const v = cleanVal(cells[j]);
                 if(v && !isUrl(v) && !isImgish(v)) return v;
               }
@@ -5231,7 +5110,7 @@ function renderStageCardsFromBlockData(blockData, leagueKey){
     const rawTitle = headerRow[c];
     let title = rawTitle;
     if(!/스테이지/.test(title)){
-      const L = letters[idx] || String(idx+1);
+      const L = letters[idx] || String();
       title = `${L}스테이지(${rawTitle})`;
     }
     const win = winRow[c] || '';
@@ -6130,7 +6009,7 @@ const stageRe = /(스테이지|16강|32강|64강|8강|4강|준결승|결승|3.?4
       }
       // If already has "스테이지" keep it
       if(/스테이지/i.test(t)) return t;
-      return t || ((k==='tpl' || k==='tcl' || k==='msl') ? '' : `스테이지${idx+1}`);
+      return t || ((k==='tpl' || k==='tcl' || k==='msl') ? '' : `스테이지${}`);
     };
 
     let built = 0;
@@ -7413,7 +7292,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       for(let i=0;i<starts.length;i++){
         const start = starts[i].col;
-        const end = (i < starts.length-1 ? starts[i+1].col : Math.max(start+4, row.length));
+        const end = (i < starts.length-1 ? starts[].col : Math.max(start+4, row.length));
         const width = Math.max(4, end - start); // expect Tier+T+P+Z
         const name = starts[i].name;
         if (seen.has(name)) continue;
@@ -7610,4 +7489,139 @@ function renderTeamMenu(teams){
   });
 });
 
+
+
+
+// =====================================================
+// CLEAN REBUILT RANK SYSTEM
+// =====================================================
+
+window.currentRankRows = [];
+
+async function loadRanking(){
+
+  const tbody = document.querySelector('#rankTable tbody');
+
+  try{
+
+    const data = await fetchGVIZ(SHEETS.rank);
+
+    if(!data || data.length < 2){
+      throw new Error('rank data empty');
+    }
+
+    const rows = data
+      .slice(1)
+      .map(r=>{
+
+        const copy = [...r];
+
+        // A열 전체랭킹 / M열 티어랭킹
+        copy.__totalRank = String(copy[0] || '-').trim();
+        copy.__tierRank  = String(copy[12] || '-').trim();
+
+        return copy;
+      })
+      .filter(r=>String(r[1]||'').trim() !== '');
+
+    // 절대 재정렬 금지
+    window.currentRankRows = rows;
+
+    drawRankRows(window.currentRankRows);
+
+  }catch(e){
+
+    console.error('loadRanking error', e);
+
+    if(tbody){
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="20" style="padding:30px;text-align:center;color:red;">
+            데이터 로드 실패
+          </td>
+        </tr>
+      `;
+    }
+  }
+}
+
+function drawRankRows(rows){
+
+  const tbody = document.querySelector('#rankTable tbody');
+
+  if(!tbody) return;
+
+  tbody.innerHTML = '';
+
+  rows.forEach(row=>{
+
+    const tr = document.createElement('tr');
+
+    tr.innerHTML = `
+      <td>${row.__totalRank || '-'}</td>
+      <td>${row[1] || '-'}</td>
+      <td>${row[2] || '-'}</td>
+      <td>${row[3] || '-'}</td>
+      <td>${row[4] || '-'}</td>
+      <td>${row[5] || '-'}</td>
+      <td>${row[6] || '-'}</td>
+      <td>${row[7] || '-'}</td>
+      <td>${row[8] || '-'}</td>
+      <td>${row[9] || '-'}</td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+}
+
+// 검색
+document.getElementById('rankSearchBtn')?.addEventListener('click', ()=>{
+
+  const q = String(document.getElementById('rankSearch')?.value || '')
+    .trim()
+    .toLowerCase();
+
+  if(!q){
+    drawRankRows(window.currentRankRows);
+    return;
+  }
+
+  const filtered = window.currentRankRows.filter(r=>{
+    return String(r[1] || '').toLowerCase().includes(q);
+  });
+
+  drawRankRows(filtered);
+});
+
+// 전체 버튼
+document.querySelectorAll('[data-tier-btn]').forEach(btn=>{
+
+  btn.addEventListener('click', ()=>{
+
+    const tier = btn.dataset.tierBtn;
+
+    if(tier === '전체'){
+      drawRankRows(window.currentRankRows);
+      return;
+    }
+
+    const filtered = window.currentRankRows.filter(r=>{
+      return String(r[3] || '').trim() === tier;
+    });
+
+    drawRankRows(filtered);
+  });
+});
+
+// 5위 보라색 별
+function getRankBadge(rank){
+
+  rank = Number(rank);
+
+  if(rank === 5){
+    return '<span style="color:#8b5cf6;font-weight:900;">★</span>';
+  }
+
+  return rank;
+}
 
