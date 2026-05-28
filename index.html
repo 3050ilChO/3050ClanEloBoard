@@ -348,7 +348,79 @@
 </div>
 
 <!-- ✅ app.js 로드 -->
-<script src="app.js?v=1074"></script>
+```html
+<!-- 기존 app.js 제거 -->
+<!-- <script src="app.js?v=1074"></script> -->
+
+<!-- 분리형 JS 구조 -->
+<script src="js/utils.js?v=1"></script>
+<script src="js/core.js?v=1"></script>
+<script src="js/logos.js?v=1"></script>
+<script src="js/dashboard.js?v=1"></script>
+<script src="js/ranking.js?v=1"></script>
+<script src="js/player.js?v=1"></script>
+<script src="js/schedule.js?v=1"></script>
+<script src="js/tierboard.js?v=1"></script>
+<script src="js/hof.js?v=1"></script>
+<script src="js/charts.js?v=1"></script>
+
+<!-- 기존 hash 이동 스크립트 유지 -->
+<script>
+(function () {
+  function goHash() {
+    const hash = (location.hash || "").replace("#", "").trim();
+    if (!hash) return;
+
+    const btn =
+      document.querySelector(`.tab-btn[data-target="${hash}"]`) ||
+      document.querySelector(`.mobile-item[data-target="${hash}"]`);
+
+    if (btn) btn.click();
+
+    const panel = document.getElementById(hash);
+    if (panel) {
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      panel.classList.add("active");
+    }
+  }
+
+  window.addEventListener("load", () => {
+    goHash();
+    setTimeout(goHash, 50);
+    setTimeout(goHash, 200);
+    setTimeout(goHash, 600);
+  });
+
+  window.addEventListener("hashchange", goHash);
+})();
+</script>
+
+<script>
+window.addEventListener('load', () => {
+  const dateEl = document.getElementById("currentDate");
+  if (dateEl) {
+    const today = new Date();
+    const yoil = ['일','월','화','수','목','금','토'][today.getDay()];
+    const formatted = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')} (${yoil})`;
+    dateEl.textContent = formatted;
+  }
+  setTimeout(() => document.getElementById('loadingScreen')?.remove(), 3000);
+});
+</script>
+
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+  anchor.addEventListener('click', function (e) {
+    const target = document.querySelector(this.getAttribute('href'));
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+});
+</script>
+```
+
 
 <!-- ✅ (추가) PC/모바일 모두 #hash 탭으로 "바로 열기" -->
 <script>
