@@ -23,7 +23,6 @@ let MATCH_SRCH_SRC = [];
 let SCHED_CACHE = [];
 let ALL_CACHE = [];
 let MEMBERS_CACHE = [];
-window.ALL_RANK_ROWS = [];
 
 // ==============================
 // Table renderer (AS-IS compatible)
@@ -754,14 +753,11 @@ async function loadRanking(){
   })
   .filter(Boolean);
 
-// 전체 원본 저장
-window.ALL_RANK_ROWS = [...rows];
+  // 페이지 이동시 동일 배열 사용
+  window.currentRankRows = rows;
 
-// 현재 화면용
-window.currentRankRows = [...rows];
-
-// 절대 재정렬 금지
-drawRankRows(window.ALL_RANK_ROWS);
+  // 절대 재정렬 금지
+  drawRankRows(rows);
 })();
   const dl=$('playerList'); if(dl){ dl.innerHTML=''; RANK_SRC.slice(1).forEach(r=>{ const id=String(r[1]||'').split('/')[0].trim(); if(!id) return; const opt=document.createElement('option'); opt.value=id; dl.appendChild(opt); }); }
   if(rankStatus) rankStatus.textContent=`불러오기 완료 • ${RANK_SRC.length-1}행`;
@@ -769,11 +765,7 @@ drawRankRows(window.ALL_RANK_ROWS);
 $('rankRefresh')?.addEventListener('click', loadRanking);
 $('rankSearchBtn')?.addEventListener('click', ()=>{
   const q = lc($('rankSearch').value || '').trim();
-  if (!q) {
-  window.currentRankRows = [...window.ALL_RANK_ROWS];
-  drawRankRows(window.ALL_RANK_ROWS);
-  return;
-}
+  if (!q) { drawRankRows(RANK_SRC.slice(1)); return; }
 
   // 정확 일치 결과만
   const rows = (RANK_SRC.slice(1) || []).filter(r => {
@@ -3142,7 +3134,6 @@ function renderOnce(sel, html) {
 
 
 // === 안전 복구용: drawRankRows 함수 재선언 (중복 방지) ===
-window.currentRankRows = [...filtered];
 function drawRankRows(rows){
   try {
     const rankTable = document.getElementById('rankTable');
