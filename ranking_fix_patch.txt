@@ -1,0 +1,110 @@
+// ===============================
+// setupTierButtons() 내부 전체 교체
+// ===============================
+
+function setupTierButtons(){
+  const host = document.getElementById('tierFilters');
+  if(!host) return;
+
+  host.addEventListener('click', async (e)=>{
+    const btn = e.target.closest('.tier-btn');
+    if(!btn) return;
+
+    host.querySelectorAll('.tier-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const tierName = btn.dataset.tier;
+
+    if(!RANK_SRC.length || !MATCH_SRC.length){
+      await loadRanking();
+    }
+
+    const rows = (window.currentRankRows || []).slice();
+
+    // 전체
+    if(tierName === '전체'){
+      drawRankRows(rows);
+
+      const st = document.getElementById('rankStatus');
+      if(st){
+        const ranked = rows.filter(r => r[0] !== '-').length;
+        const unranked = rows.filter(r => r[0] === '-').length;
+
+        st.textContent =
+          `전체 • 총 ${rows.length}명 (랭킹 대상 ${ranked}명 / 10전 미만 ${unranked}명)`;
+      }
+      return;
+    }
+
+    // 티어 필터
+    const filtered = rows.filter(r =>
+      String(r[3] || '').trim() === tierName
+    );
+
+    drawRankRows(filtered);
+
+    const st = document.getElementById('rankStatus');
+    if(st){
+      st.textContent = `${tierName} • ${filtered.length}명`;
+    }
+  });
+}
+
+
+// ===============================
+// loadRanking() 내부 rows 생성 교체
+// ===============================
+
+let rows = RANK_SRC.slice(1)
+  .map(r=>{
+    const copy = r.slice(0);
+
+    const tier = String(copy[3] || '').trim();
+
+    // 탈퇴 제외
+    if(tier === '탈퇴'){
+      return null;
+    }
+
+    const record = String(copy[7] || '');
+    const m = record.match(/(\d+)전/);
+    const games = m ? Number(m[1]) : 0;
+
+    // 10전 미만
+    if(games < 10){
+      copy[0] = '-';
+    }
+
+    return copy;
+  })
+  .filter(Boolean);
+
+// 전역 공통 배열
+window.currentRankRows = rows;
+
+// 절대 재정렬 금지
+drawRankRows(window.currentRankRows);
+
+
+// ===============================
+// drawRankRows() 맨 위 추가
+// ===============================
+
+rows = (rows || []).filter(r=>{
+  return String(r[3] || '').trim() !== '탈퇴';
+});
+
+
+// ===============================
+// 아래 코드 전부 삭제
+// ===============================
+
+// rows.sort(
+// qualified.sort(
+// same.sort(
+// rankNum(
+// idx + 1
+// r[0] = i+1
+// RANK_SRC.slice(1)
+// drawRankRows(finalRows)
+
