@@ -3335,8 +3335,7 @@ function setupTierButtons(){
 
         qualified.sort((a,b)=> rankNum((getClanRankRow(a[IDX_NAME])||{}).totalRank) - rankNum((getClanRankRow(b[IDX_NAME])||{}).totalRank));
 
-        // 순위 재계산 제거
-unqualified.forEach(r => { r[0] = '–'; });
+        unqualified.forEach(r => { r[0] = '–'; });
 
         const finalRows = [...qualified, ...unqualified];
         drawRankRows(finalRows);
@@ -3382,8 +3381,7 @@ unqualified.forEach(r => { r[0] = '–'; });
         else { unqualified.push(r); }
       });
 
-      // 순위 재계산 제거
-unqualified.forEach(r => { r[0] = '–'; });
+      unqualified.forEach(r => { r[0] = '–'; });
 
       // 자격자는 위, 미자격자는 아래로 표시
       const finalRows = [...qualified, ...unqualified];
