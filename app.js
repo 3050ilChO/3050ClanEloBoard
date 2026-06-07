@@ -992,16 +992,19 @@ const S11H = S11[0] || [];
 const S11R = S11.slice(1);
 
 const s11Player = S11R.filter(r => {
-  const pid = normalizeId(r[2]); // C열: 승자선수
-  return pid === you;
+  const win = normalizeId(r[2]);  // C열: 승자
+  const lose = normalizeId(r[5]); // F열: 패자
+  return win === you || lose === you;
 });
 
 let s11W = 0, s11L = 0;
+
 s11Player.forEach(r => {
-  const win = normalizeId(r[2]);  // 승자선수 (C열)
-  const lose = normalizeId(r[5]); // 패자선수 (F열)
+  const win = normalizeId(r[2]);
+  const lose = normalizeId(r[5]);
+
   if (win === you) s11W++;
-  else if (lose === you) s11L++;
+  if (lose === you) s11L++;
 });
 
 let s11Html = "";
